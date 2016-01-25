@@ -126,10 +126,10 @@ makeAxiomType lmap x v (Axiom _ xs _ lhs rhs)
 
     llhs = case runToLogic lmap' mkErr (coreToLogic lhs) of
        Left e -> e
-       Right e -> panic Nothing $ show e
+       Right e -> panic (Just $ srcSpan x) $ show e
     lrhs = case runToLogic lmap' mkErr (coreToLogic rhs) of
        Left e -> e
-       Right e -> panic Nothing $ show e
+       Right e -> panic (Just $ srcSpan x) $ show e
     ref = F.Reft (F.vv_, F.PAtom F.Eq llhs lrhs)
 
     -- nargs = dropWhile isClassType $ ty_args $ toRTypeRep $ ((ofType $ varType vv) :: RRType ())
