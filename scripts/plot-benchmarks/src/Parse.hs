@@ -82,6 +82,7 @@ dumpLogs out dps = sequence_ $ fmap dumpLog dps
          let dps'' = encodeByName
                         (V.fromList [csvOutName,
                                      csvOutDate,
+                                     csvOutHash,
                                      csvOutTime,
                                      csvOutPass])
                         dps'
