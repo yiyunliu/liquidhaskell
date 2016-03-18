@@ -12,6 +12,7 @@ import Data.Time.LocalTime
 data Benchmark =
    Benchmark { benchName :: String,
                benchTimestamp :: LocalTime,
+               benchHash :: String,
                benchTime :: Double,
                benchPass :: Bool
                }
@@ -37,8 +38,10 @@ toBenchMap f = foldl' fn Map.empty f
 instance FromRecord Benchmark where
    parseRecord r = Benchmark
                    <$> r .! 0
-                   <*> pure (error ("Shouldn't be evaluated until after"
-                                    ++ " reassignment!"))
+                   <*> pure (error ("Timestamp shouldn't be evaluated until"
+                                    ++ " after reassignment!"))
+                   <*> pure (error ("Git hash shouldn't be evaluated until"
+                                    ++ " after reassignment!"))
                    <*> r .! 1
                    <*> do asStr <- r .! 2
                           return $ read asStr {- Since the test suite
@@ -46,11 +49,13 @@ instance FromRecord Benchmark where
 
 csvOutName = "Name"
 csvOutDate = "Committer Date"
+csvOutHash = "Git Hash"
 csvOutTime = "Time (Seconds)"
 csvOutPass = "Success"
 
 instance ToNamedRecord (LocalTime, Benchmark) where
    toNamedRecord (_, bm) = namedRecord [csvOutName .= benchName bm,
                                    csvOutDate .= (show $ benchTimestamp bm),
+                                   csvOutDate .= (benchHash bm),
                                    csvOutTime .= (benchTime bm),
                                    csvOutPass .= (show $ benchPass bm)]

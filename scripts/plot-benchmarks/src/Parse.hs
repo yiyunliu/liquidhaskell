@@ -10,6 +10,7 @@ import qualified Data.ByteString.Lazy.Char8 as BS
 import Data.Time.Clock.POSIX
 import Data.Time.LocalTime
 import System.FilePath
+import Text.Regex.Posix
 
 gulpLogs :: FilePath -> IO [V.Vector Benchmark]
 gulpLogs f = do
@@ -25,15 +26,20 @@ parseLog p = do
    file <- BS.readFile p
    let (hdr, csv) = splitHeader file delimiter
    timezone <- getCurrentTimeZone
-   case (getEpochTime hdr) of
-      Nothing -> return $ Left "missing timestamp!"
-      Just ts -> case (decode HasHeader csv) of
+   let timestamp = getEpochTime hdr
+   let gitHash = getGitHash hdr
+   case (timestamp, gitHash) of
+      (Nothing, Nothing) -> return $ Left "Missing timestamp and git hash!"
+      (Nothing, _) -> return $ Left "Missing timestamp!"
+      (_, Nothing) -> return $ Left "Missing git hash!"
+      (Just ts, Just gh) -> case (decode HasHeader csv) of
          Right bm ->
             return $ Right $ fmap
                (\a -> a {benchTimestamp = utcToLocalTime
                                              timezone
                                              $ posixSecondsToUTCTime
-                                               $ realToFrac ts})
+                                               $ realToFrac ts,
+                         benchHash = gh})
                bm
 
 delimiter :: String
@@ -41,9 +47,17 @@ delimiter = take 80 $ repeat '-'
 
 getEpochTime :: [String] -> Maybe Int
 getEpochTime s = do
-   elm <- find (isPrefixOf "Epoch Timestamp:") s
-   elm' <- stripPrefix "Epoch Timestamp:" elm
-   return (read elm' :: Int)
+   let pat = "Epoch Timestamp: "
+   elm <- find (\e -> e =~ pat :: Bool) s
+   let (_, _, res) = elm =~ pat :: (String, String, String)
+   return (read res :: Int)
+
+getGitHash :: [String] -> Maybe String
+getGitHash s = do
+   let pat = "[[:space:]]*[(][[:print:]]*[)][[:space:]]*[:][[:space:]]*"
+   elm <- find (\e -> e =~ pat :: Bool) s
+   let (_, _, res) = elm =~ pat :: (String, String, String)
+   return res
 
 splitHeader :: BS.ByteString -> String -> ([String], BS.ByteString)
 splitHeader msg delim = (hdr, BS.pack $ unlines csv)
