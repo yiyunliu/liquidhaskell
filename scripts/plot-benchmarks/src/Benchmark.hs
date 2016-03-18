@@ -49,6 +49,7 @@ instance FromRecord Benchmark where
 
 csvOutName = "Name"
 csvOutDate = "Committer Date"
+csvOutHash :: Name
 csvOutHash = "Git Hash"
 csvOutTime = "Time (Seconds)"
 csvOutPass = "Success"
@@ -56,6 +57,6 @@ csvOutPass = "Success"
 instance ToNamedRecord (LocalTime, Benchmark) where
    toNamedRecord (_, bm) = namedRecord [csvOutName .= benchName bm,
                                    csvOutDate .= (show $ benchTimestamp bm),
-                                   csvOutDate .= (benchHash bm),
+                                   csvOutHash .= (benchHash bm),
                                    csvOutTime .= (benchTime bm),
                                    csvOutPass .= (show $ benchPass bm)]
