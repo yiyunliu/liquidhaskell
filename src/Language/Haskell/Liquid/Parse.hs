@@ -742,14 +742,12 @@ iMeasureP = measureP
 
 instanceP
   = do c  <- locUpperIdP
-       t  <- locUpperIdP
-       as <- classParams
-       ts <- sepBy tyBindP semi
-       return $ RI c (RApp t ((`RVar` mempty) <$> as) [] mempty) ts
-  where
-    classParams
-       =  (reserved "where" >> return [])
-      <|> (liftM2 (:) lowerIdP classParams)
+       t  <- do tc <- locUpperIdP
+                return (RApp tc [] [] mempty)
+             <|> parens bareTypeP
+       reserved "where"
+       ts <- grabs tyBindP
+       return $ RI c t ts
 
 classP :: Parser (RClass BareType)
 classP

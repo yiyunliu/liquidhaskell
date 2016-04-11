@@ -9,8 +9,8 @@ type List a = [a]
 {-@ type ListN a N = { v:[a] | len v == N } @-}
 
 {-@ instance Monoid (List a) where
-      mempty  :: ListN a 0
-      mappend :: xs:[a] -> ys:[a] -> ListN a {len xs + len ys}
+      mempty  :: (ListN a 0)
+      mappend :: xs:[a] -> ys:[a] -> (ListN a {len xs + len ys})
       mconcat :: List (List a) -> List a
   @-}
 
