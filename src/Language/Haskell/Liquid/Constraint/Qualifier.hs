@@ -11,7 +11,6 @@ import TyCon
 
 import Prelude hiding (error)
 
-import Language.Haskell.Liquid.Bare
 import Language.Haskell.Liquid.Types.RefType
 import Language.Haskell.Liquid.GHC.Misc  (getSourcePos)
 import Language.Haskell.Liquid.Types.PredType
@@ -31,7 +30,7 @@ import Debug.Trace
 specificationQualifiers :: Int -> GhcInfo -> SEnv Sort -> [Qualifier]
 -----------------------------------------------------------------------------------
 specificationQualifiers k info lEnv
-  = [ q | (x, t) <- (tySigs $ spec info) ++ (asmSigs $ spec info) ++ (inSigs $ spec info) ++ (ctors $ spec info)
+  = [ q | (x, t) <- (tySigs $ cmpSpec info) ++ (asmSigs $ cmpSpec info) ++ (inSigs $ cmpSpec info) ++ (ctors $ cmpSpec info)
         , x `S.member` (S.fromList $ defVars info ++
                                      -- NOTE: this mines extra, useful qualifiers but causes
                                      -- a significant increase in running time, so we hide it
@@ -41,7 +40,7 @@ specificationQualifiers k info lEnv
                                      else if info `hasOpt` scrapeImports
                                      then impVars info
                                      else [])
-        , q <- refTypeQuals lEnv (getSourcePos x) (tcEmbeds $ spec info) (val t)
+        , q <- refTypeQuals lEnv (getSourcePos x) (tcEmbeds $ cmpSpec info) (val t)
         -- NOTE: large qualifiers are VERY expensive, so we only mine
         -- qualifiers up to a given size, controlled with --max-params
         , length (q_params q) <= k + 1

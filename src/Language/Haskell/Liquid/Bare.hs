@@ -5,8 +5,7 @@
 -- in `RefType` -- they are different instances of `RType`
 
 module Language.Haskell.Liquid.Bare (
-    GhcSpec (..)
-  , makeGhcSpec
+    makeGhcSpec
   ) where
 
 import Language.Haskell.Liquid.Bare.GhcSpec

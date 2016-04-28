@@ -135,7 +135,7 @@ consAct info
        modify $ \st -> st { fEnv = fixEnv γ, fixCs = fcs , fixWfs = fws , annotMap = annot'}
   where
     expandProofsMode = autoproofs $ config info
-    τProof           = proofType $ spec info
+    τProof           = proofType $ tgtSpec info
     fixEnv           = feEnv . fenv
     mkSigs γ         = toListREnv (renv  γ) ++
                        toListREnv (assms γ) ++
@@ -156,9 +156,9 @@ addCombine τ γ
 initEnv :: GhcInfo -> CG CGEnv
 ------------------------------------------------------------------------------------
 initEnv info
-  = do let tce   = tcEmbeds sp
+  = do let tce   = tcEmbeds csp
        let fVars = impVars info
-       let dcs   = filter isConLikeId ((snd <$> freeSyms sp))
+       let dcs   = filter isConLikeId ((snd <$> freeSyms csp))
        let dcs'  = filter isConLikeId fVars
        defaults <- forM fVars $ \x -> liftM (x,) (trueTy $ varType x)
        dcsty    <- forM dcs   $ makeDataConTypes
@@ -169,23 +169,24 @@ initEnv info
        f1       <- refreshArgs'   defaults                   -- default TOP reftype      (for all vars)
        f1'      <- refreshArgs' $ makedcs dcsty
        f2       <- refreshArgs' $ assm info                  -- assumed refinements      (for imported vars)
-       f3       <- refreshArgs' $ vals asmSigs sp            -- assumed refinedments     (with `assume`)
-       f40      <- refreshArgs' $ vals ctors sp              -- constructor refinements  (for measures)
-       f5       <- refreshArgs' $ vals inSigs sp             -- internal refinements     (from Haskell measures)
-       (invs1, f41) <- mapSndM refreshArgs' $ makeAutoDecrDataCons dcsty  (autosize sp) dcs
-       (invs2, f42) <- mapSndM refreshArgs' $ makeAutoDecrDataCons dcsty' (autosize sp) dcs'
+       f3       <- refreshArgs' $ vals asmSigs csp           -- assumed refinedments     (with `assume`)
+       f40      <- refreshArgs' $ vals ctors csp             -- constructor refinements  (for measures)
+       f5       <- refreshArgs' $ vals inSigs csp            -- internal refinements     (from Haskell measures)
+       (invs1, f41) <- mapSndM refreshArgs' $ makeAutoDecrDataCons dcsty  (autosize tsp) dcs
+       (invs2, f42) <- mapSndM refreshArgs' $ makeAutoDecrDataCons dcsty' (autosize tsp) dcs'
        let f4    = mergeDataConTypes (mergeDataConTypes f40 (f41 ++ f42)) (filter (isDataConId . fst) f2)
        sflag    <- scheck <$> get
        let senv  = if sflag then f2 else []
-       let tx    = mapFst F.symbol . addRInv ialias . strataUnify senv . predsUnify sp
+       let tx    = mapFst F.symbol . addRInv ialias . strataUnify senv . predsUnify csp
        let bs    = (tx <$> ) <$> [f0 ++ f0', f1 ++ f1', f2, f3, f4, f5]
        lts      <- lits <$> get
        let tcb   = mapSnd (rTypeSort tce) <$> concat bs
-       let γ0    = measEnv sp (head bs) (cbs info) (tcb ++ lts) (bs!!3) (bs!!5) hs (invs1 ++ invs2)
+       let γ0    = measEnv csp (head bs) (cbs info) (tcb ++ lts) (bs!!3) (bs!!5) hs (invs1 ++ invs2)
        globalize <$> foldM (++=) γ0 [("initEnv", x, y) | (x, y) <- concat $ tail bs]
   where
-    sp           = spec info
-    ialias       = mkRTyConIAl $ ialiases sp
+    csp          = cmpSpec info
+    tsp          = tgtSpec info
+    ialias       = mkRTyConIAl $ ialiases csp
     vals f       = map (mapSnd val) . f
     mapSndM f (x,y) = (x,) <$> f y
     makedcs      = map strengthenDataConType
@@ -269,7 +270,7 @@ strataUnify senv (x, t) = (x, maybe t (mappend t) pt)
 
 -- NV : still some sigs do not get TyConInfo
 
-predsUnify :: GhcSpec -> (Var, RRType RReft) -> (Var, RRType RReft)
+predsUnify :: CompSpec -> (Var, RRType RReft) -> (Var, RRType RReft)
 predsUnify sp = second (addTyConInfo tce tyi) -- needed to eliminate some @RPropH@
   where
     tce            = tcEmbeds sp
@@ -279,7 +280,7 @@ predsUnify sp = second (addTyConInfo tce tyi) -- needed to eliminate some @RProp
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
 
-measEnv :: GhcSpec
+measEnv :: CompSpec
         -> [(F.Symbol, SpecType)]
         -> [CoreBind]
         -> [(F.Symbol, F.Sort)]
@@ -323,7 +324,7 @@ assmGrty :: (GhcInfo -> [Var]) -> GhcInfo -> [(Var, SpecType)]
 assmGrty f info = [ (x, val t) | (x, t) <- sigs, x `S.member` xs ]
   where
     xs          = S.fromList $ f info
-    sigs        = tySigs     $ spec info
+    sigs        = tySigs     $ cmpSpec info
 
 grtyTop :: GhcInfo
         -> State CGInfo [(Var, SpecType)]
@@ -331,8 +332,8 @@ grtyTop info     = forM topVs $ \v -> (v,) <$> trueTy (varType v)
   where
     topVs        = filter isTop $ defVars info
     isTop v      = isExportedId v && not (v `S.member` sigVs)
-    isExportedId = flip elemNameSet (exports $ spec info) . getName
-    sigVs        = S.fromList [v | (v,_) <- tySigs (spec info) ++ asmSigs (spec info) ++ inSigs (spec info)]
+    isExportedId = flip elemNameSet (exports $ tgtSpec info) . getName
+    sigVs        = S.fromList [v | (v,_) <- tySigs (cmpSpec info) ++ asmSigs (cmpSpec info) ++ inSigs (cmpSpec info)]
 
 initCGI :: Config -> GhcInfo -> CGInfo
 initCGI cfg info = CGInfo {
@@ -349,11 +350,11 @@ initCGI cfg info = CGInfo {
   , tyConInfo  = tyi
   , tyConEmbed = tce
   , kuts       = mempty -- F.ksEmpty
-  , lits       = coreBindLits tce info ++  (map (mapSnd F.sr_sort) $ map mkSort $ meas spc)
-  , termExprs  = M.fromList $ texprs spc
-  , specDecr   = decr spc
-  , specLVars  = lvars spc
-  , specLazy   = dictionaryVar `S.insert` lazy spc
+  , lits       = coreBindLits tce info ++  (map (mapSnd F.sr_sort) $ map mkSort $ meas csp)
+  , termExprs  = M.fromList $ texprs tsp
+  , specDecr   = decr tsp
+  , specLVars  = lvars tsp
+  , specLazy   = dictionaryVar `S.insert` lazy tsp
   , tcheck     = not $ notermination cfg
   , scheck     = strata cfg
   , trustghc   = trustinternals cfg
@@ -362,13 +363,14 @@ initCGI cfg info = CGInfo {
   , kvProf     = emptyKVProf
   , recCount   = 0
   , bindSpans  = M.empty
-  , autoSize   = autosize spc
+  , autoSize   = autosize tsp
   , allowHO    = higherorder cfg
   }
   where
-    tce        = tcEmbeds spc
-    spc        = spec info
-    tyi        = tyconEnv spc
+    tce        = tcEmbeds csp
+    csp        = cmpSpec info
+    tsp        = tgtSpec info
+    tyi        = tyconEnv csp
     mkSort = mapSnd (rTypeSortedReft tce . val)
 
 coreBindLits :: F.TCEmb TyCon -> GhcInfo -> [(F.Symbol, F.Sort)]
@@ -378,7 +380,7 @@ coreBindLits tce info
   where
     lconsts      = literalConst tce <$> literals (cbs info)
     dcons        = filter isDCon freeVs
-    freeVs       = impVars info ++ (snd <$> freeSyms (spec info))
+    freeVs       = impVars info ++ (snd <$> freeSyms (cmpSpec info))
     dconToSort   = typeSort tce . expandTypeSynonyms . varType
     dconToSym    = F.symbol . idDataCon
     isDCon x     = isDataConId x && not (hasBaseTypeVar x)

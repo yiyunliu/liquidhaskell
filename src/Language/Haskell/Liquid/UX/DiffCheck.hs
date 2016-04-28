@@ -44,17 +44,16 @@ import qualified Data.HashSet                           as S
 import qualified Data.HashMap.Strict                    as M
 import qualified Data.List                              as L
 import           System.Directory                       (copyFile, doesFileExist)
-import           Language.Fixpoint.Types                (tracepp, PPrint (..), FixResult (..), Located (..))
+import           Language.Fixpoint.Types                (tracepp, FixResult (..))
 -- import            Language.Fixpoint.Misc          (traceShow)
 import           Language.Fixpoint.Utils.Files
-import           Language.Haskell.Liquid.Types          (LocSpecType, ErrorResult, GhcSpec (..), AnnInfo (..), DataConP (..), Output (..))
+import           Language.Haskell.Liquid.Types          hiding (Def (..), D, LMap (..))
 import           Language.Haskell.Liquid.Misc           (mkGraph)
 import           Language.Haskell.Liquid.GHC.Misc
 import           Language.Haskell.Liquid.Types.Visitors
 import           Language.Haskell.Liquid.UX.Errors      ()
 import           Text.Parsec.Pos                        (sourceName, sourceLine, sourceColumn, SourcePos, newPos)
 import           Text.PrettyPrint.HughesPJ              (text, render, Doc)
-import           Language.Haskell.Liquid.Types.Errors
 import qualified Data.ByteString                        as B
 import qualified Data.ByteString.Lazy                   as LB
 
@@ -63,9 +62,10 @@ import qualified Data.ByteString.Lazy                   as LB
 --------------------------------------------------------------------------------
 
 -- | Main type of value returned for diff-check.
-data DiffCheck = DC { newBinds  :: [CoreBind]
-                    , oldOutput :: !(Output Doc)
-                    , newSpec   :: !GhcSpec
+data DiffCheck = DC { newBinds   :: [CoreBind]
+                    , oldOutput  :: !(Output Doc)
+                    , newCmpSpec :: !CompSpec
+                    , newTgtSpec :: !TargetSpec
                     }
 
 instance PPrint DiffCheck where
@@ -104,39 +104,39 @@ checkedVars              = concatMap names . newBinds
 --    file which correspond to top-level binders whose code has changed
 --    and their transitive dependencies.
 --------------------------------------------------------------------------------
-slice :: FilePath -> [CoreBind] -> GhcSpec -> IO (Maybe DiffCheck)
+slice :: FilePath -> [CoreBind] -> CompSpec -> TargetSpec -> IO (Maybe DiffCheck)
 --------------------------------------------------------------------------------
-slice target cbs sp = ifM (doesFileExist savedFile)
-                          doDiffCheck
-                          (return Nothing)
+slice target cbs csp tsp = ifM (doesFileExist savedFile)
+                               doDiffCheck
+                               (return Nothing)
   where
     savedFile       = extFileName Saved target
-    doDiffCheck     = sliceSaved target savedFile cbs sp
+    doDiffCheck     = sliceSaved target savedFile cbs csp tsp
 
-sliceSaved :: FilePath -> FilePath -> [CoreBind] -> GhcSpec -> IO (Maybe DiffCheck)
-sliceSaved target savedFile coreBinds spec = do
+sliceSaved :: FilePath -> FilePath -> [CoreBind] -> CompSpec -> TargetSpec -> IO (Maybe DiffCheck)
+sliceSaved target savedFile coreBinds csp tsp = do
   (is, lm) <- lineDiff target savedFile
   result   <- loadResult target
-  return    $ sliceSaved' target is lm (DC coreBinds result spec)
+  return    $ sliceSaved' target is lm (DC coreBinds result csp tsp)
 
 sliceSaved' :: FilePath -> [Int] -> LMap -> DiffCheck -> Maybe DiffCheck
-sliceSaved' srcF is lm (DC coreBinds result spec)
+sliceSaved' srcF is lm (DC coreBinds result csp tsp)
   | gDiff     = Nothing
-  | otherwise = Just $ DC cbs' res' sp'
+  | otherwise = Just $ DC cbs' res' csp' tsp
   where
-    gDiff     = globalDiff srcF is spec
+    gDiff     = globalDiff srcF is csp tsp
     cbs'      = thinWith sigs coreBinds $ diffVars is dfs
     sigs      = S.fromList $ M.keys sigm
-    sigm      = sigVars srcF is spec
+    sigm      = sigVars srcF is csp
     res'      = adjustOutput lm cm result
     cm        = checkedItv chDfs
-    dfs       = coreDefs coreBinds ++ specDefs srcF spec
+    dfs       = coreDefs coreBinds ++ specDefs srcF csp
     chDfs     = coreDefs cbs'
-    sp'       = assumeSpec sigm spec
+    csp'      = assumeSpec sigm csp
 
 -- Add the specified signatures for vars-with-preserved-sigs,
 -- whose bodies have been pruned from [CoreBind] into the "assumes"
-assumeSpec :: M.HashMap Var LocSpecType -> GhcSpec -> GhcSpec
+assumeSpec :: M.HashMap Var LocSpecType -> CompSpec -> CompSpec
 assumeSpec sigm sp = sp { asmSigs = M.toList $ M.union sigm assm }
   where
     assm           = M.fromList $ asmSigs sp
@@ -155,17 +155,17 @@ diffVars ls defs'    = tracePpr ("INCCHECK: diffVars lines = " ++ show ls ++ " d
       | i > end d    = go (i:is) ds
       | otherwise    = binder d : go (i:is) ds
 
-sigVars :: FilePath -> [Int] -> GhcSpec -> M.HashMap Var LocSpecType
+sigVars :: FilePath -> [Int] -> CompSpec -> M.HashMap Var LocSpecType
 sigVars srcF ls sp = M.fromList $ filter (ok . snd) $ specSigs sp
   where
     ok             = not . isDiff srcF ls
 
-globalDiff :: FilePath -> [Int] -> GhcSpec -> Bool
-globalDiff srcF ls spec = measDiff || invsDiff || dconsDiff
+globalDiff :: FilePath -> [Int] -> CompSpec -> TargetSpec -> Bool
+globalDiff srcF ls csp tsp = measDiff || invsDiff || dconsDiff
   where
-    measDiff  = tracepp "measDiff"  $ any (isDiff srcF ls) (snd <$> meas spec)
-    invsDiff  = tracepp "invsDiff"  $ any (isDiff srcF ls) (invariants spec)
-    dconsDiff = tracepp "dconsDiff" $ any (isDiff srcF ls) (dloc . snd <$> dconsP spec)
+    measDiff  = tracepp "measDiff"  $ any (isDiff srcF ls) (snd <$> meas csp)
+    invsDiff  = tracepp "invsDiff"  $ any (isDiff srcF ls) (invariants csp)
+    dconsDiff = tracepp "dconsDiff" $ any (isDiff srcF ls) (dloc . snd <$> dconsP tsp)
     dloc dc   = Loc (dc_loc dc) (dc_locE dc) ()
 
 isDiff :: FilePath -> [Int] -> Located a -> Bool
@@ -229,14 +229,14 @@ filterBinds cbs ys = filter f cbs
 
 
 --------------------------------------------------------------------------------
-specDefs :: FilePath -> GhcSpec -> [Def]
+specDefs :: FilePath -> CompSpec -> [Def]
 --------------------------------------------------------------------------------
 specDefs srcF  = map def . filter sameFile . specSigs
   where
     def (x, t) = D (line t) (lineE t) x
     sameFile   = (srcF ==) . file . snd
 
-specSigs :: GhcSpec -> [(Var, LocSpecType)]
+specSigs :: CompSpec -> [(Var, LocSpecType)]
 specSigs sp = tySigs sp ++ asmSigs sp ++ ctors sp
 
 --------------------------------------------------------------------------------

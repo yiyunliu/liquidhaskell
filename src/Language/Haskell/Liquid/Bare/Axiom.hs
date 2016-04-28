@@ -46,14 +46,12 @@ import Language.Haskell.Liquid.GHC.Misc (showPpr, sourcePosSrcSpan, dropModuleNa
 import Language.Haskell.Liquid.Types hiding (binders)
 
 
-import qualified Language.Haskell.Liquid.Measure as Ms
-
 import Language.Haskell.Liquid.Bare.Env
 
 
-makeAxiom :: F.TCEmb TyCon -> LogicMap -> [CoreBind] -> GhcSpec -> Ms.BareSpec -> LocSymbol
+makeAxiom :: F.TCEmb TyCon -> LogicMap -> [CoreBind] -> LocSymbol
           -> BareM ((Symbol, Located SpecType), [(Var, Located SpecType)], [HAxiom])
-makeAxiom tce lmap cbs _ _ x
+makeAxiom tce lmap cbs x
   = case filter ((val x `elem`) . map (dropModuleNames . simplesymbol) . binders) cbs of
         (NonRec v def:_)   -> do let anames = findAxiomNames x cbs 
                                  vts <- zipWithM (makeAxiomType tce lmap x) (reverse anames) (defAxioms anames v def)

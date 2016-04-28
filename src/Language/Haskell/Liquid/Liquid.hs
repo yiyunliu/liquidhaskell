@@ -125,7 +125,7 @@ liquidOne info = do
                  putStrLn "*************** Slicing Out Unchanged CoreBinds *****************"
   dc       <- prune cfg cbs' tgt info
   let cbs'' = maybe cbs' DC.newBinds dc
-  let info' = maybe info (\z -> info {spec = DC.newSpec z}) dc
+  let info' = maybe info (\z -> info {cmpSpec = DC.newCmpSpec z, tgtSpec = DC.newTgtSpec z}) dc
   let cgi   = {-# SCC "generateConstraints" #-} generateConstraints $! info' {cbs = cbs''}
   -- cgi `deepseq` whenLoud (donePhase Loud "generateConstraints")
   whenLoud  $ dumpCs cgi
@@ -149,12 +149,13 @@ pprintMany xs = vcat [ F.pprint x $+$ text " " | x <- xs ]
 
 prune :: Config -> [CoreBind] -> FilePath -> GhcInfo -> IO (Maybe DC.DiffCheck)
 prune cfg cbinds tgt info
-  | not (null vs) = return . Just $ DC.DC (DC.thin cbinds vs) mempty sp
-  | diffcheck cfg = DC.slice tgt cbinds sp
+  | not (null vs) = return . Just $ DC.DC (DC.thin cbinds vs) mempty csp tsp
+  | diffcheck cfg = DC.slice tgt cbinds csp tsp
   | otherwise     = return Nothing
   where
-    vs            = tgtVars sp
-    sp            = spec info
+    vs            = tgtVars tsp
+    csp           = cmpSpec info
+    tsp           = tgtSpec info
 
 
 solveCs :: Config -> FilePath -> CGInfo -> GhcInfo -> Maybe DC.DiffCheck -> IO (Output Doc)

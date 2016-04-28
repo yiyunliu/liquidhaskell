@@ -73,9 +73,9 @@ targetResultWith :: Testable f => f -> String -> FilePath -> TargetOpts -> IO Re
 targetResultWith f name path opts
   = do when (verbose opts) $
          printf "Testing %s\n" name
-       sp  <- getSpec (ghcOpts opts) path
+       (csp, tsp) <- getSpec (ghcOpts opts) path
        ctx <- mkContext (solver opts)
-       do r <- runTarget opts (initState path sp ctx) $ do
+       do r <- runTarget opts (initState path csp tsp ctx) $ do
                  ty <- safeFromJust "targetResultWith" . lookup (symbol name) <$> gets sigs
                  test f ty
           _ <- cleanupContext ctx

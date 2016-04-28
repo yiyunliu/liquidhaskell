@@ -26,7 +26,8 @@ module Language.Haskell.Liquid.Types (
 
   -- * Ghc Information
   , GhcInfo (..)
-  , GhcSpec (..)
+  , CompSpec (..)
+  , TargetSpec (..)
   , TargetVars (..)
 
   -- * Located Things
@@ -297,50 +298,69 @@ data GhcInfo = GI {
   , hqFiles  :: ![FilePath]
   , imports  :: ![String]
   , includes :: ![FilePath]
-  , spec     :: !GhcSpec
+  , cmpSpec  :: !CompSpec
+  , tgtSpec  :: !TargetSpec
   }
 
 instance HasConfig GhcInfo where
   getConfig = config
 
-
--- | The following is the overall type for /specifications/ obtained from
--- parsing the target source and dependent libraries
-
-data GhcSpec = SP {
-    tySigs     :: ![(Var, LocSpecType)]          -- ^ Asserted Reftypes
-  , asmSigs    :: ![(Var, LocSpecType)]          -- ^ Assumed Reftypes
-  , inSigs     :: ![(Var, LocSpecType)]          -- ^ Auto generated Signatures
-  , ctors      :: ![(Var, LocSpecType)]          -- ^ Data Constructor Measure Sigs
-  , meas       :: ![(Symbol, LocSpecType)]       -- ^ Measure Types
-                                                 -- eg.  len :: [a] -> Int
-  , invariants :: ![LocSpecType]                 -- ^ Data Type Invariants
-                                                 -- eg.  forall a. {v: [a] | len(v) >= 0}
-  , ialiases   :: ![(LocSpecType, LocSpecType)]  -- ^ Data Type Invariant Aliases
-  , dconsP     :: ![(DataCon, DataConP)]         -- ^ Predicated Data-Constructors
-                                                 -- e.g. see tests/pos/Map.hs
-  , tconsP     :: ![(TyCon, TyConP)]             -- ^ Predicated Type-Constructors
-                                                 -- eg.  see tests/pos/Map.hs
-  , freeSyms   :: ![(Symbol, Var)]               -- ^ List of `Symbol` free in spec and corresponding GHC var
-                                                 -- eg. (Cons, Cons#7uz) from tests/pos/ex1.hs
-  , tcEmbeds   :: TCEmb TyCon                    -- ^ How to embed GHC Tycons into fixpoint sorts
-                                                 -- e.g. "embed Set as Set_set" from include/Data/Set.spec
-  , qualifiers :: ![Qualifier]                   -- ^ Qualifiers in Source/Spec files
-                                                 -- e.g tests/pos/qualTest.hs
-  , tgtVars    :: ![Var]                         -- ^ Top-level Binders To Verify (empty means ALL binders)
-  , decr       :: ![(Var, [Int])]                -- ^ Lexicographically ordered size witnesses for termination
-  , texprs     :: ![(Var, [Located Expr])]       -- ^ Lexicographically ordered expressions for termination
-  , lvars      :: !(S.HashSet Var)               -- ^ Variables that should be checked in the environment they are used
-  , lazy       :: !(S.HashSet Var)               -- ^ Binders to IGNORE during termination checking
-  , autosize   :: !(S.HashSet TyCon)             -- ^ Binders to IGNORE during termination checking
-  , exports    :: !NameSet                       -- ^ `Name`s exported by the module being verified
-  , measures   :: [Measure SpecType DataCon]
+-- | Specifications associated with the module as a /unit of compilation/.
+data CompSpec = CS {
+    tySigs     :: ![(Var, LocSpecType)]
+    -- ^ Asserted Reftypes
+  , asmSigs    :: ![(Var, LocSpecType)]
+    -- ^ Assumed Reftypes
+  , inSigs     :: ![(Var, LocSpecType)]
+    -- ^ Auto generated Signatures
+  , ctors      :: ![(Var, LocSpecType)]
+    -- ^ Data Constructor Measure Sigs
+  , meas       :: ![(Symbol, LocSpecType)]
+    -- ^ Measure Types
+    -- eg.  len :: [a] -> Int
+  , invariants :: ![LocSpecType]
+    -- ^ Data Type Invariants
+    -- eg.  forall a. {v: [a] | len(v) >= 0}
+  , ialiases   :: ![(LocSpecType, LocSpecType)]
+    -- ^ Data Type Invariant Aliases
+  , freeSyms   :: ![(Symbol, Var)]
+    -- ^ List of `Symbol` free in spec and corresponding GHC var
+    -- eg. (Cons, Cons#7uz) from tests/pos/ex1.hs
+  , tcEmbeds   :: TCEmb TyCon
+    -- ^ How to embed GHC Tycons into fixpoint sorts
+    -- e.g. "embed Set as Set_set" from include/Data/Set.spec
+  , qualifiers :: ![Qualifier]
+    -- ^ Qualifiers in Source/Spec files
+    -- e.g tests/pos/qualTest.hs
   , tyconEnv   :: M.HashMap TyCon RTyCon
+    -- ^ Information attached to type constructors
   , dicts      :: DEnv Var SpecType
     -- ^ Dictionary Environment
   , axioms     :: [HAxiom]
     -- ^ Axioms from axiomatized functions
   , logicMap   :: LogicMap
+  }
+
+-- | Specifications associated with the module as a /verification target/.
+data TargetSpec = TS {
+    tgtVars    :: ![Var]
+    -- ^ Top-level Binders To Verify (empty means ALL binders)
+  , exports    :: !NameSet
+    -- ^ `Name`s exported by the module being verified
+  , dconsP     :: ![(DataCon, DataConP)]
+    -- ^ Predicated Data-Constructors
+    -- e.g. see tests/pos/Map.hs
+  , measures   :: [Measure SpecType DataCon]
+  , decr       :: ![(Var, [Int])]
+    -- ^ Lexicographically ordered size witnesses for termination
+  , texprs     :: ![(Var, [Located Expr])]
+    -- ^ Lexicographically ordered expressions for termination
+  , lvars      :: !(S.HashSet Var)
+    -- ^ Variables that should be checked in the environment they are used
+  , lazy       :: !(S.HashSet Var)
+    -- ^ Binders to IGNORE during termination checking
+  , autosize   :: !(S.HashSet TyCon)
+    -- ^ Binders to IGNORE during termination checking
   , proofType  :: Maybe Type
   }
 

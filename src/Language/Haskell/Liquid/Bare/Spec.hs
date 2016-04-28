@@ -253,8 +253,8 @@ makeInvariants' = mapM mkI
   where
     mkI t       = fmap generalize <$> mkLSpecType t
 
-makeSpecDictionaries :: F.TCEmb TyCon -> [Var] -> [(a, Ms.BareSpec)] -> GhcSpec
-                     -> BareM GhcSpec
+makeSpecDictionaries :: F.TCEmb TyCon -> [Var] -> [(a, Ms.BareSpec)] -> CompSpec
+                     -> BareM CompSpec
 makeSpecDictionaries embs vars specs sp
   = do ds <- (dfromList . concat)  <$>  mapM (makeSpecDictionary embs vars) specs
        return $ sp { dicts = ds }

@@ -28,7 +28,7 @@ import           Text.PrettyPrint.HughesPJ
 import qualified Data.List                                 as L
 import qualified Data.HashMap.Strict                       as M
 
-import           Language.Fixpoint.Misc                    (applyNonNull, group, safeHead)
+import           Language.Fixpoint.Misc                    (group, safeHead)
 import           Language.Fixpoint.SortCheck               (checkSorted, checkSortedReftFull, checkSortFull)
 import           Language.Fixpoint.Types                   hiding (Error, R)
 
@@ -57,27 +57,27 @@ import           Debug.Trace
 
 checkGhcSpec :: [(ModName, Ms.BareSpec)]
              -> SEnv SortedReft
-             -> GhcSpec
-             -> Either [Error] GhcSpec
+             -> CompSpec -> TargetSpec
+             -> [Error]
 
-checkGhcSpec specs env sp =  applyNonNull (Right sp) Left errors
+checkGhcSpec specs env csp tsp = errors
   where
-    errors           =  mapMaybe (checkBind "constructor"  emb tcEnv env) (dcons      sp)
-                     ++ mapMaybe (checkBind "measure"      emb tcEnv env) (meas       sp)
-                     ++ mapMaybe (checkBind "assumed type" emb tcEnv env) (asmSigs    sp)
-                     ++ mapMaybe (checkBind "class method" emb tcEnv env) (clsSigs    sp)
-                     ++ mapMaybe (checkInv  emb tcEnv env)               (invariants sp)
-                     ++ checkIAl  emb tcEnv env (ialiases   sp)
+    errors           =  mapMaybe (checkBind "constructor"  emb tcEnv env) (dcons      tsp)
+                     ++ mapMaybe (checkBind "measure"      emb tcEnv env) (meas       csp)
+                     ++ mapMaybe (checkBind "assumed type" emb tcEnv env) (asmSigs    csp)
+                     ++ mapMaybe (checkBind "class method" emb tcEnv env) (clsSigs    csp)
+                     ++ mapMaybe (checkInv                 emb tcEnv env) (invariants csp)
+                     ++ checkIAl                           emb tcEnv env  (ialiases   csp)
                      ++ checkMeasures emb env ms
-                     ++ checkClassMeasures (measures sp)
+                     ++ checkClassMeasures (measures tsp)
                      ++ mapMaybe checkMismatch                     sigs
-                     ++ checkDuplicate                             (tySigs sp)
-                     ++ checkQualifiers env                        (qualifiers sp)
-                     ++ checkDuplicate                             (asmSigs sp)
-                     ++ checkDupIntersect                          (tySigs sp) (asmSigs sp)
+                     ++ checkDuplicate                             (tySigs csp)
+                     ++ checkQualifiers env                        (qualifiers csp)
+                     ++ checkDuplicate                             (asmSigs csp)
+                     ++ checkDupIntersect                          (tySigs csp) (asmSigs csp)
                      ++ checkRTAliases "Type Alias" env            tAliases
                      ++ checkRTAliases "Pred Alias" env            eAliases
-                     ++ checkDuplicateFieldNames                   (dconsP sp)
+                     ++ checkDuplicateFieldNames                   (dconsP tsp)
                      ++ checkRefinedClasses                        rClasses rInsts
     rClasses         = concatMap (Ms.classes   . snd) specs
     rInsts           = concatMap (Ms.rinstance . snd) specs
@@ -87,11 +87,11 @@ checkGhcSpec specs env sp =  applyNonNull (Right sp) Left errors
                                          | (_, dcp) <- dconsP spec
                                          , let l     = dc_loc  dcp
                                          , let l'    = dc_locE dcp ]
-    emb              =  tcEmbeds sp
-    tcEnv            =  tyconEnv sp
-    ms               =  measures sp
+    emb              =  tcEmbeds csp
+    tcEnv            =  tyconEnv csp
+    ms               =  measures tsp
     clsSigs sp       =  [ (v, t) | (v, t) <- tySigs sp, isJust (isClassOpId_maybe v) ]
-    sigs             =  tySigs sp ++ asmSigs sp
+    sigs             =  tySigs csp ++ asmSigs csp
 
 
 checkQualifiers :: SEnv SortedReft -> [Qualifier] -> [Error]
