@@ -27,7 +27,9 @@ module Language.Haskell.Liquid.Types (
   -- * Ghc Information
   , GhcInfo (..)
   , CompSpec (..)
+  , emptyCompSpec
   , TargetSpec (..)
+  , emptyTargetSpec
   , TargetVars (..)
 
   -- * Located Things
@@ -307,13 +309,13 @@ instance HasConfig GhcInfo where
 
 -- | Specifications associated with the module as a /unit of compilation/.
 data CompSpec = CS {
-    tySigs     :: ![(Var, LocSpecType)]
+    tySigs     :: !(M.HashMap Var LocSpecType)
     -- ^ Asserted Reftypes
-  , asmSigs    :: ![(Var, LocSpecType)]
+  , asmSigs    :: !(M.HashMap Var LocSpecType)
     -- ^ Assumed Reftypes
-  , inSigs     :: ![(Var, LocSpecType)]
+  , inSigs     :: !(M.HashMap Var LocSpecType)
     -- ^ Auto generated Signatures
-  , ctors      :: ![(Var, LocSpecType)]
+  , ctors      :: !(M.HashMap Var LocSpecType)
     -- ^ Data Constructor Measure Sigs
   , meas       :: ![(Symbol, LocSpecType)]
     -- ^ Measure Types
@@ -341,6 +343,9 @@ data CompSpec = CS {
   , logicMap   :: LogicMap
   }
 
+emptyCompSpec :: CompSpec
+emptyCompSpec = CS mempty mempty mempty mempty [] [] [] [] mempty [] mempty mempty [] mempty
+
 -- | Specifications associated with the module as a /verification target/.
 data TargetSpec = TS {
     tgtVars    :: ![Var]
@@ -363,6 +368,9 @@ data TargetSpec = TS {
     -- ^ Binders to IGNORE during termination checking
   , proofType  :: Maybe Type
   }
+
+emptyTargetSpec :: TargetSpec
+emptyTargetSpec = TS [] mempty [] [] [] [] mempty mempty mempty Nothing
 
 data LogicMap = LM { logic_map :: M.HashMap Symbol LMap
                    , axiom_map :: M.HashMap Var Symbol

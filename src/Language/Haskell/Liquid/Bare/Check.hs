@@ -64,17 +64,17 @@ checkGhcSpec specs env csp tsp = errors
   where
     errors           =  mapMaybe (checkBind "constructor"  emb tcEnv env) (dcons      tsp)
                      ++ mapMaybe (checkBind "measure"      emb tcEnv env) (meas       csp)
-                     ++ mapMaybe (checkBind "assumed type" emb tcEnv env) (asmSigs    csp)
+                     ++ mapMaybe (checkBind "assumed type" emb tcEnv env) (M.toList $ asmSigs csp)
                      ++ mapMaybe (checkBind "class method" emb tcEnv env) (clsSigs    csp)
                      ++ mapMaybe (checkInv                 emb tcEnv env) (invariants csp)
                      ++ checkIAl                           emb tcEnv env  (ialiases   csp)
                      ++ checkMeasures emb env ms
                      ++ checkClassMeasures (measures tsp)
                      ++ mapMaybe checkMismatch                     sigs
-                     ++ checkDuplicate                             (tySigs csp)
+                     ++ checkDuplicate                             (M.toList $ tySigs csp)
                      ++ checkQualifiers env                        (qualifiers csp)
-                     ++ checkDuplicate                             (asmSigs csp)
-                     ++ checkDupIntersect                          (tySigs csp) (asmSigs csp)
+                     ++ checkDuplicate                             (M.toList $ asmSigs csp)
+                     ++ checkDupIntersect                          (M.toList $ tySigs csp) (M.toList $ asmSigs csp)
                      ++ checkRTAliases "Type Alias" env            tAliases
                      ++ checkRTAliases "Pred Alias" env            eAliases
                      ++ checkDuplicateFieldNames                   (dconsP tsp)
@@ -90,8 +90,8 @@ checkGhcSpec specs env csp tsp = errors
     emb              =  tcEmbeds csp
     tcEnv            =  tyconEnv csp
     ms               =  measures tsp
-    clsSigs sp       =  [ (v, t) | (v, t) <- tySigs sp, isJust (isClassOpId_maybe v) ]
-    sigs             =  tySigs csp ++ asmSigs csp
+    clsSigs sp       =  [ (v, t) | (v, t) <- M.toList $ tySigs sp, isJust (isClassOpId_maybe v) ]
+    sigs             =  M.toList (tySigs csp) ++ M.toList (asmSigs csp)
 
 
 checkQualifiers :: SEnv SortedReft -> [Qualifier] -> [Error]

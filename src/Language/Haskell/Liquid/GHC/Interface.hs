@@ -48,8 +48,9 @@ import Data.Bifunctor
 import Data.List hiding (intersperse)
 import Data.Maybe
 -- import Data.Function (on)
+import qualified Data.HashMap.Strict as M
 import qualified Data.HashSet as S
-import qualified Data.Map as M
+import Data.Map (elems)
 
 import System.Console.CmdArgs.Verbosity hiding (Loud)
 import System.Directory
@@ -260,7 +261,7 @@ loadDependenciesOf modName = do
 getSpecComments :: ParsedModule -> [(SourcePos, String)]
 getSpecComments parsed = mapMaybe getSpecComment comments
   where
-    comments = concat $ M.elems $ snd $ pm_annotations parsed
+    comments = concat $ elems $ snd $ pm_annotations parsed
 
 getSpecComment :: GHC.Located AnnotationComment -> Maybe (SourcePos, String)
 getSpecComment (GHC.L span (AnnBlockComment text))
@@ -503,11 +504,11 @@ definedVars = concatMap defs
 instance PPrint CompSpec where
   pprintTidy k spec = vcat
     [ "******* Type Signatures *********************"
-    , pprintLongList k (tySigs spec)
+    , pprintLongList k (M.toList $ tySigs spec)
     , "******* Assumed Type Signatures *************"
-    , pprintLongList k (asmSigs spec)
+    , pprintLongList k (M.toList $ asmSigs spec)
     , "******* DataCon Specifications (Measure) ****"
-    , pprintLongList k (ctors spec)
+    , pprintLongList k (M.toList $ ctors spec)
     , "******* Measure Specifications **************"
     , pprintLongList k (meas spec)                   ]
 

@@ -225,3 +225,6 @@ mapAccumM :: (Monad m, Traversable t) => (a -> b -> m (a, c)) -> a -> t b -> m (
 mapAccumM f acc0 xs =
   swap <$> runStateT (traverse (StateT . (\x acc -> swap <$> f acc x)) xs) acc0
 
+inserts :: (Foldable t, Eq k, Hashable k) => M.HashMap k v -> t (k, v) -> M.HashMap k v
+inserts = foldr (uncurry M.insert)
+

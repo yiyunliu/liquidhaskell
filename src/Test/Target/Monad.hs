@@ -163,12 +163,12 @@ initState fp csp tsp ctx = TargetState
     dcons = tidyF $ map (first symbol) (dconsP tsp)
 
     -- NOTE: we want to tidy all occurrences of nullary datacons in the signatures
-    cts   = subst su $ tidyF $ map (symbol *** val) (ctors csp)
-    sigs  = subst su $ tidyF $ map (symbol *** val) $ tySigs csp
+    cts   = subst su $ tidyF $ map (symbol *** val) $ M.toList $ ctors csp
+    sigs  = subst su $ tidyF $ map (symbol *** val) $ M.toList $ tySigs csp
 
     tyi   = tyconEnv csp
     free  = tidyS $ map (second symbol)
-          $ freeSyms csp ++ map (\(c,_) -> (symbol c, c)) (ctors csp)
+          $ freeSyms csp ++ map (\(c,_) -> (symbol c, c)) (M.toList $ ctors csp)
     meas  = measures tsp
     tidyF = map (first tidySymbol)
     tidyS = map (second tidySymbol)

@@ -137,9 +137,8 @@ sliceSaved' srcF is lm (DC coreBinds result csp tsp)
 -- Add the specified signatures for vars-with-preserved-sigs,
 -- whose bodies have been pruned from [CoreBind] into the "assumes"
 assumeSpec :: M.HashMap Var LocSpecType -> CompSpec -> CompSpec
-assumeSpec sigm sp = sp { asmSigs = M.toList $ M.union sigm assm }
+assumeSpec sigm sp = sp { asmSigs = M.union sigm $ asmSigs sp }
   where
-    assm           = M.fromList $ asmSigs sp
     -- sigm'       = trace ("INCCHECK: sigm = " ++ show zs) sigm
     -- zs          = M.keys sigm
 
@@ -237,7 +236,9 @@ specDefs srcF  = map def . filter sameFile . specSigs
     sameFile   = (srcF ==) . file . snd
 
 specSigs :: CompSpec -> [(Var, LocSpecType)]
-specSigs sp = tySigs sp ++ asmSigs sp ++ ctors sp
+specSigs sp = M.toList (tySigs  sp) ++
+              M.toList (asmSigs sp) ++
+              M.toList (ctors   sp)
 
 --------------------------------------------------------------------------------
 coreDefs     :: [CoreBind] -> [Def]

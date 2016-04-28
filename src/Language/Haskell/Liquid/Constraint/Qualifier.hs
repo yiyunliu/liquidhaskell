@@ -22,6 +22,7 @@ import Language.Fixpoint.Types
 -- import Control.Applicative      ((<$>))
 import Data.List                (delete, nub)
 import Data.Maybe               (catMaybes, fromMaybe)
+import qualified Data.HashMap.Strict as M
 import qualified Data.HashSet as S
 -- import Data.Bifunctor           (second)
 import Debug.Trace
@@ -30,7 +31,10 @@ import Debug.Trace
 specificationQualifiers :: Int -> GhcInfo -> SEnv Sort -> [Qualifier]
 -----------------------------------------------------------------------------------
 specificationQualifiers k info lEnv
-  = [ q | (x, t) <- (tySigs $ cmpSpec info) ++ (asmSigs $ cmpSpec info) ++ (inSigs $ cmpSpec info) ++ (ctors $ cmpSpec info)
+  = [ q | (x, t) <- (M.toList $ tySigs  $ cmpSpec info)  ++
+                    (M.toList $ asmSigs $ cmpSpec info) ++
+                    (M.toList $ inSigs  $ cmpSpec info)  ++
+                    (M.toList $ ctors   $ cmpSpec info)
         , x `S.member` (S.fromList $ defVars info ++
                                      -- NOTE: this mines extra, useful qualifiers but causes
                                      -- a significant increase in running time, so we hide it

@@ -187,7 +187,7 @@ initEnv info
     csp          = cmpSpec info
     tsp          = tgtSpec info
     ialias       = mkRTyConIAl $ ialiases csp
-    vals f       = map (mapSnd val) . f
+    vals f       = map (mapSnd val) . M.toList . f
     mapSndM f (x,y) = (x,) <$> f y
     makedcs      = map strengthenDataConType
 
@@ -324,7 +324,7 @@ assmGrty :: (GhcInfo -> [Var]) -> GhcInfo -> [(Var, SpecType)]
 assmGrty f info = [ (x, val t) | (x, t) <- sigs, x `S.member` xs ]
   where
     xs          = S.fromList $ f info
-    sigs        = tySigs     $ cmpSpec info
+    sigs        = M.toList $ tySigs $ cmpSpec info
 
 grtyTop :: GhcInfo
         -> State CGInfo [(Var, SpecType)]
@@ -333,7 +333,8 @@ grtyTop info     = forM topVs $ \v -> (v,) <$> trueTy (varType v)
     topVs        = filter isTop $ defVars info
     isTop v      = isExportedId v && not (v `S.member` sigVs)
     isExportedId = flip elemNameSet (exports $ tgtSpec info) . getName
-    sigVs        = S.fromList [v | (v,_) <- tySigs (cmpSpec info) ++ asmSigs (cmpSpec info) ++ inSigs (cmpSpec info)]
+    sigVs        = S.fromList $ concatMap M.keys $
+                   [tySigs (cmpSpec info), asmSigs (cmpSpec info), inSigs (cmpSpec info)]
 
 initCGI :: Config -> GhcInfo -> CGInfo
 initCGI cfg info = CGInfo {
