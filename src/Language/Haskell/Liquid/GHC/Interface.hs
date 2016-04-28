@@ -510,7 +510,7 @@ instance PPrint CompSpec where
     , "******* DataCon Specifications (Measure) ****"
     , pprintLongList k (M.toList $ ctors spec)
     , "******* Measure Specifications **************"
-    , pprintLongList k (meas spec)                   ]
+    , pprintLongList k (M.toList $ meas spec)        ]
 
 instance PPrint TargetSpec where
   pprintTidy k spec = vcat

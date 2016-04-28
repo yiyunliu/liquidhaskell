@@ -317,7 +317,7 @@ data CompSpec = CS {
     -- ^ Auto generated Signatures
   , ctors      :: !(M.HashMap Var LocSpecType)
     -- ^ Data Constructor Measure Sigs
-  , meas       :: ![(Symbol, LocSpecType)]
+  , meas       :: !(M.HashMap Symbol LocSpecType)
     -- ^ Measure Types
     -- eg.  len :: [a] -> Int
   , invariants :: ![LocSpecType]
@@ -325,7 +325,7 @@ data CompSpec = CS {
     -- eg.  forall a. {v: [a] | len(v) >= 0}
   , ialiases   :: ![(LocSpecType, LocSpecType)]
     -- ^ Data Type Invariant Aliases
-  , freeSyms   :: ![(Symbol, Var)]
+  , freeSyms   :: !(M.HashMap Symbol Var)
     -- ^ List of `Symbol` free in spec and corresponding GHC var
     -- eg. (Cons, Cons#7uz) from tests/pos/ex1.hs
   , tcEmbeds   :: TCEmb TyCon
@@ -344,7 +344,8 @@ data CompSpec = CS {
   }
 
 emptyCompSpec :: CompSpec
-emptyCompSpec = CS mempty mempty mempty mempty [] [] [] [] mempty [] mempty mempty [] mempty
+emptyCompSpec = CS mempty mempty mempty mempty mempty mempty mempty mempty
+                   mempty mempty mempty mempty mempty mempty
 
 -- | Specifications associated with the module as a /verification target/.
 data TargetSpec = TS {
@@ -370,7 +371,8 @@ data TargetSpec = TS {
   }
 
 emptyTargetSpec :: TargetSpec
-emptyTargetSpec = TS [] mempty [] [] [] [] mempty mempty mempty Nothing
+emptyTargetSpec = TS mempty mempty mempty mempty mempty mempty mempty mempty
+                     mempty Nothing
 
 data LogicMap = LM { logic_map :: M.HashMap Symbol LMap
                    , axiom_map :: M.HashMap Var Symbol

@@ -162,7 +162,7 @@ sigVars srcF ls sp = M.fromList $ filter (ok . snd) $ specSigs sp
 globalDiff :: FilePath -> [Int] -> CompSpec -> TargetSpec -> Bool
 globalDiff srcF ls csp tsp = measDiff || invsDiff || dconsDiff
   where
-    measDiff  = tracepp "measDiff"  $ any (isDiff srcF ls) (snd <$> meas csp)
+    measDiff  = tracepp "measDiff"  $ any (isDiff srcF ls) (M.elems $ meas csp)
     invsDiff  = tracepp "invsDiff"  $ any (isDiff srcF ls) (invariants csp)
     dconsDiff = tracepp "dconsDiff" $ any (isDiff srcF ls) (dloc . snd <$> dconsP tsp)
     dloc dc   = Loc (dc_loc dc) (dc_locE dc) ()

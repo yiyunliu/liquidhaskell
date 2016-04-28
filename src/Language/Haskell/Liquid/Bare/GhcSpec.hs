@@ -117,15 +117,16 @@ postProcess cbs specEnv csp@(CS {..}) tsp@(TS {..})
     inSigs'         = M.map (addTyConInfo tcEmbeds tyconEnv <$>) insigs
     dicts'          = dmapty (addTyConInfo tcEmbeds tyconEnv) dicts
     invs'           = (addTyConInfo tcEmbeds tyconEnv <$>) <$> invariants
-    meas'           = mapSnd (fmap (addTyConInfo tcEmbeds tyconEnv) . txRefSort tyconEnv tcEmbeds) <$> meas
+    meas'           = M.map (fmap (addTyConInfo tcEmbeds tyconEnv) . txRefSort tyconEnv tcEmbeds) meas
 
 ghcSpecEnv :: CompSpec -> SEnv SortedReft
-ghcSpecEnv sp        = fromListSEnv binds
+ghcSpecEnv sp        = fromMapSEnv binds
   where
     emb              = tcEmbeds sp
-    binds            =  [(x,        rSort t) | (x, Loc _ _ t) <- meas sp]
-                     ++ [(symbol v, rSort t) | (v, Loc _ _ t) <- M.toList $ ctors sp]
-                     ++ [(x,        vSort v) | (x, v) <- freeSyms sp, isConLikeId v]
+    binds            = M.unions [ rSort . val <$> meas sp
+                                , M.fromList $ (\(v, Loc _ _ t) -> (symbol v, rSort t)) <$> M.toList (ctors sp)
+                                , vSort <$> M.filter isConLikeId (freeSyms sp)
+                                ]
                      -- ++ [(val x   , rSort stringrSort) | Just (ELit x s) <- mkLit <$> lconsts, isString s]
     rSort            = rTypeSortedReft emb
     vSort            = rSort . varRSort
@@ -205,7 +206,7 @@ makeAxioms tce cbs spec sp
   = do lmap          <- logicEnv <$> get
        (ms, tys, as) <- unzip3 <$> mapM (makeAxiom tce lmap cbs) (S.toList $ Ms.axioms sp)
        lmap'         <- logicEnv <$> get
-       return $ spec { meas     = ms         ++  meas   spec
+       return $ spec { meas     = inserts (meas    spec) ms
                      , asmSigs  = inserts (asmSigs spec) (concat tys)
                      , axioms   = concat as  ++ axioms spec
                      , logicMap = lmap' }
@@ -246,7 +247,7 @@ makeGhcSpec1 vars defVars embs tyi exports name sigs asms cs' ms' cms' su sp
        return $ sp { tySigs     = M.filterWithKey (\v _ -> v `elem` vs) tySigs
                    , asmSigs    = M.filterWithKey (\v _ -> v `elem` vs) asmSigs
                    , ctors      = M.filterWithKey (\v _ -> v `elem` vs) ctors'
-                   , meas       = tx' $ tx $ ms' ++ varMeasures vars ++ cms' }
+                   , meas       = M.fromList $ tx' $ tx $ ms' ++ varMeasures vars ++ cms' }
     where
       tx   = fmap . mapSnd . subst $ su
       tx'  = fmap (mapSnd $ fmap uRType)
@@ -280,7 +281,7 @@ makeGhcSpec3 datacons embs syms (csp, tsp)
        return
          ( csp { tyconEnv   = tcEnv
                , tcEmbeds   = embs
-               , freeSyms   = [(symbol v, v) | (_, v) <- syms] }
+               , freeSyms   = M.fromList [(symbol v, v) | (_, v) <- syms] }
          , tsp { dconsP     = dcons' }
          )
 

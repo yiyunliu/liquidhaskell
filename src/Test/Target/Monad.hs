@@ -168,7 +168,7 @@ initState fp csp tsp ctx = TargetState
 
     tyi   = tyconEnv csp
     free  = tidyS $ map (second symbol)
-          $ freeSyms csp ++ map (\(c,_) -> (symbol c, c)) (M.toList $ ctors csp)
+          $ (M.toList $ freeSyms csp) ++ map (\c -> (symbol c, c)) (M.keys $ ctors csp)
     meas  = measures tsp
     tidyF = map (first tidySymbol)
     tidyS = map (second tidySymbol)

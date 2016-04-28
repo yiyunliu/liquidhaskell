@@ -582,7 +582,7 @@ initAEEnv info sigs
                      }
     where
       spc        = cmpSpec info
-      vs         = filter validVar (snd <$> freeSyms spc)
+      vs         = filter validVar (M.elems $ freeSyms spc)
       tp         = filter validExp (defVars info)
 
       isExported = flip elemNameSet (exports $ tgtSpec info) . getName

@@ -93,7 +93,7 @@ import           Language.Haskell.Liquid.Types.Meet
 import Language.Haskell.Liquid.GHC.Misc          ( isInternal, collectArguments, tickSrcSpan
                                                  , hasBaseTypeVar, showPpr, isDataConId)
 import           Language.Haskell.Liquid.Misc
-import           Language.Fixpoint.Misc
+import           Language.Fixpoint.Misc                        hiding (inserts)
 import           Language.Haskell.Liquid.Types.Literals
 
 import           Language.Haskell.Liquid.Constraint.Axioms
@@ -158,7 +158,7 @@ initEnv :: GhcInfo -> CG CGEnv
 initEnv info
   = do let tce   = tcEmbeds csp
        let fVars = impVars info
-       let dcs   = filter isConLikeId ((snd <$> freeSyms csp))
+       let dcs   = filter isConLikeId (M.elems $ freeSyms csp)
        let dcs'  = filter isConLikeId fVars
        defaults <- forM fVars $ \x -> liftM (x,) (trueTy $ varType x)
        dcsty    <- forM dcs   $ makeDataConTypes
@@ -291,9 +291,9 @@ measEnv :: CompSpec
         -> CGEnv
 measEnv sp xts cbs lts asms itys hs autosizes
   = CGE { cgLoc = Sp.empty
-        , renv  = fromListREnv (second val <$> meas sp) []
-        , syenv = F.fromListSEnv $ freeSyms sp
-        , fenv  = initFEnv $ lts ++ (second (rTypeSort tce . val) <$> meas sp)
+        , renv  = fromMapREnv (val <$> meas sp) mempty
+        , syenv = F.fromMapSEnv $ freeSyms sp
+        , fenv  = initFEnv $ inserts (rTypeSort tce . val <$> meas sp) lts
         , denv  = dicts sp
         , recs  = S.empty
         , invs  = mkRTyConInv    $ (invariants sp ++ autosizes)
@@ -351,7 +351,7 @@ initCGI cfg info = CGInfo {
   , tyConInfo  = tyi
   , tyConEmbed = tce
   , kuts       = mempty -- F.ksEmpty
-  , lits       = coreBindLits tce info ++  (map (mapSnd F.sr_sort) $ map mkSort $ meas csp)
+  , lits       = coreBindLits tce info ++ (map (mapSnd (F.sr_sort . mkSort)) $ M.toList $ meas csp)
   , termExprs  = M.fromList $ texprs tsp
   , specDecr   = decr tsp
   , specLVars  = lvars tsp
@@ -372,7 +372,7 @@ initCGI cfg info = CGInfo {
     csp        = cmpSpec info
     tsp        = tgtSpec info
     tyi        = tyconEnv csp
-    mkSort = mapSnd (rTypeSortedReft tce . val)
+    mkSort     = (rTypeSortedReft tce . val)
 
 coreBindLits :: F.TCEmb TyCon -> GhcInfo -> [(F.Symbol, F.Sort)]
 coreBindLits tce info
@@ -381,7 +381,7 @@ coreBindLits tce info
   where
     lconsts      = literalConst tce <$> literals (cbs info)
     dcons        = filter isDCon freeVs
-    freeVs       = impVars info ++ (snd <$> freeSyms (cmpSpec info))
+    freeVs       = impVars info ++ (M.elems $ freeSyms (cmpSpec info))
     dconToSort   = typeSort tce . expandTypeSynonyms . varType
     dconToSym    = F.symbol . idDataCon
     isDCon x     = isDataConId x && not (hasBaseTypeVar x)

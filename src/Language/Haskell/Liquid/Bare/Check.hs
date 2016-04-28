@@ -63,7 +63,7 @@ checkGhcSpec :: [(ModName, Ms.BareSpec)]
 checkGhcSpec specs env csp tsp = errors
   where
     errors           =  mapMaybe (checkBind "constructor"  emb tcEnv env) (dcons      tsp)
-                     ++ mapMaybe (checkBind "measure"      emb tcEnv env) (meas       csp)
+                     ++ mapMaybe (checkBind "measure"      emb tcEnv env) (M.toList $ meas    csp)
                      ++ mapMaybe (checkBind "assumed type" emb tcEnv env) (M.toList $ asmSigs csp)
                      ++ mapMaybe (checkBind "class method" emb tcEnv env) (clsSigs    csp)
                      ++ mapMaybe (checkInv                 emb tcEnv env) (invariants csp)
