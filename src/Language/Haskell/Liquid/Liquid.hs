@@ -111,7 +111,7 @@ liquidOne :: GhcInfo -> IO (Output Doc)
 ------------------------------------------------------------------------------
 liquidOne info = do
   whenNormal $ donePhase Loud "Extracted Core using GHC"
-  let cfg   = config $ spec info
+  let cfg   = config info
   let tgt   = target info
   whenLoud  $ do putStrLn "**** Config **************************************************"
                  print cfg

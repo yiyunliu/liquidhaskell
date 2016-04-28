@@ -41,6 +41,6 @@ targetQuals info cgi = spcQs ++ genQs
   where
     spcQs     = qualifiers spc
     genQs     = specificationQualifiers n info (fEnv cgi)
-    n         = maxParams $ config spc
+    n         = maxParams $ config info
     spc       = spec info
     -- lEnv      = F.fromListSEnv $ lits cgi

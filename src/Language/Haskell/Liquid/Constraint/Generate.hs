@@ -110,7 +110,7 @@ generateConstraints      :: GhcInfo -> CGInfo
 generateConstraints info = {-# SCC "ConsGen" #-} execState act $ initCGI cfg info
   where
     act                  = consAct info
-    cfg                  = config $ spec info
+    cfg                  = config info
 
 consAct :: GhcInfo -> CG ()
 consAct info
@@ -134,7 +134,7 @@ consAct info
        let annot' = if sflag then subsS smap <$> annot else annot
        modify $ \st -> st { fEnv = fixEnv γ, fixCs = fcs , fixWfs = fws , annotMap = annot'}
   where
-    expandProofsMode = autoproofs $ config $ spec info
+    expandProofsMode = autoproofs $ config info
     τProof           = proofType $ spec info
     fixEnv           = feEnv . fenv
     mkSigs γ         = toListREnv (renv  γ) ++
@@ -165,7 +165,7 @@ initEnv info
        dcsty'   <- forM dcs'  $ makeDataConTypes
        (hs,f0)  <- refreshHoles $ grty info                  -- asserted refinements     (for defined vars)
        f0''     <- refreshArgs' =<< grtyTop info             -- default TOP reftype      (for exported vars without spec)
-       let f0'   = if notruetypes $ config sp then [] else f0''
+       let f0'   = if notruetypes $ config info then [] else f0''
        f1       <- refreshArgs'   defaults                   -- default TOP reftype      (for all vars)
        f1'      <- refreshArgs' $ makedcs dcsty
        f2       <- refreshArgs' $ assm info                  -- assumed refinements      (for imported vars)

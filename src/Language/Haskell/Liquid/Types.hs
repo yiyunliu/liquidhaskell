@@ -288,6 +288,7 @@ data GhcInfo = GI {
     target   :: !FilePath
   , targetMod:: !ModuleName
   , env      :: !HscEnv
+  , config   :: !Config
   , cbs      :: ![CoreBind]
   , derVars  :: ![Var]
   , impVars  :: ![Var]
@@ -300,7 +301,7 @@ data GhcInfo = GI {
   }
 
 instance HasConfig GhcInfo where
-  getConfig = getConfig . spec
+  getConfig = config
 
 
 -- | The following is the overall type for /specifications/ obtained from
@@ -332,7 +333,6 @@ data GhcSpec = SP {
   , lvars      :: !(S.HashSet Var)               -- ^ Variables that should be checked in the environment they are used
   , lazy       :: !(S.HashSet Var)               -- ^ Binders to IGNORE during termination checking
   , autosize   :: !(S.HashSet TyCon)             -- ^ Binders to IGNORE during termination checking
-  , config     :: !Config                        -- ^ Configuration Options
   , exports    :: !NameSet                       -- ^ `Name`s exported by the module being verified
   , measures   :: [Measure SpecType DataCon]
   , tyconEnv   :: M.HashMap TyCon RTyCon
@@ -343,9 +343,6 @@ data GhcSpec = SP {
   , logicMap   :: LogicMap
   , proofType  :: Maybe Type
   }
-
-instance HasConfig GhcSpec where
-  getConfig = config
 
 data LogicMap = LM { logic_map :: M.HashMap Symbol LMap
                    , axiom_map :: M.HashMap Var Symbol

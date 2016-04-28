@@ -150,7 +150,7 @@ makeGhcSpec' cfg cbs vars defVars exports specs
        quals   <- mconcat <$> mapM makeQualifiers specs
        syms                                    <- makeSymbols (varInModule name) (vars ++ map fst cs') xs' (sigs ++ asms ++ cs') ms' (invs ++ (snd <$> ialias))
        let su  = mkSubst [ (x, mkVarExpr v) | (x, v) <- syms]
-       makeGhcSpec0 cfg defVars exports name (emptySpec cfg)
+       makeGhcSpec0 cfg defVars exports name emptySpec
          >>= makeGhcSpec1 vars defVars embs tyi exports name sigs (recSs ++ asms) cs' ms' cms' su
          >>= makeGhcSpec2 invs ialias measures su
          >>= makeGhcSpec3 (datacons ++ cls) tycons embs syms
@@ -209,8 +209,8 @@ makeAxioms tce cbs spec sp
                      , axioms   = concat as  ++ axioms spec
                      , logicMap = lmap' }
 
-emptySpec     :: Config -> GhcSpec
-emptySpec cfg = SP [] [] [] [] [] [] [] [] [] [] mempty [] [] [] [] mempty mempty mempty cfg mempty [] mempty mempty [] mempty Nothing
+emptySpec     :: GhcSpec
+emptySpec = SP [] [] [] [] [] [] [] [] [] [] mempty [] [] [] [] mempty mempty mempty mempty [] mempty mempty [] mempty Nothing
 
 
 makeGhcSpec0 :: Config
@@ -221,8 +221,7 @@ makeGhcSpec0 :: Config
              -> BareM GhcSpec
 makeGhcSpec0 cfg defVars exports name sp
   = do targetVars <- makeTargetVars name defVars $ binders cfg
-       return      $ sp { config = cfg
-                        , exports = exports
+       return      $ sp { exports = exports
                         , tgtVars = targetVars }
 
 makeGhcSpec1 :: [Var]
