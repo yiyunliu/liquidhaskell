@@ -1,3 +1,9 @@
 module spec Foreign.Marshal.Alloc where
 
-Foreign.Marshal.Alloc.allocaBytes :: n:Nat -> (PtrN a n -> IO b) -> IO b
+import GHC.Ptr
+import GHC.Types
+
+allocaBytes
+    :: n:Nat
+    -> (PtrN a n -> GHC.Types.IO b)
+    -> GHC.Types.IO b

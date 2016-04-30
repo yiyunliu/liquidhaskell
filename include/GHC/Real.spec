@@ -1,6 +1,12 @@
 module spec GHC.Real where
 
-GHC.Real.fromIntegral    :: (GHC.Real.Integral a, GHC.Num.Num b) => x:a -> {v:b|v=x}
+import GHC.Num
+import GHC.Types
+
+fromIntegral
+    :: (GHC.Real.Integral a, GHC.Num.Num b)
+    => x:a
+    -> {v:b|v~~x}
 
 class (GHC.Num.Num a) => GHC.Real.Fractional a where
   (GHC.Real./)   :: x:a -> y:{v:a | v /= 0} -> {v:a | v == x / y}
@@ -28,4 +34,5 @@ class (GHC.Real.Real a, GHC.Enum.Enum a) => GHC.Real.Integral a where
   GHC.Real.toInteger :: x:a -> {v:GHC.Integer.Type.Integer | v = x}
 
 // fixpoint can't handle (x mod y), only (x mod c) so we need to be more clever here
+// if you uncomment this, fully qualify the name
 // mod :: x:a -> y:a -> {v:a | v = (x mod y) }

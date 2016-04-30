@@ -1,182 +1,196 @@
 module spec Data.ByteString.Char8 where
 
-assume empty :: { bs : Data.ByteString.ByteString | bslen bs == 0 }
+import Data.ByteString
 
-assume singleton
-    :: Char -> { bs : Data.ByteString.ByteString | bslen bs == 1 }
+import GHC.Base
+import GHC.Num
 
-assume pack
-    :: w8s : [Char]
+empty
+    :: { bs : Data.ByteString.ByteString | bslen bs == 0 }
+
+singleton
+    :: GHC.Types.Char
+    -> { bs : Data.ByteString.ByteString | bslen bs == 1 }
+
+pack
+    :: w8s : [GHC.Types.Char]
     -> { bs : Data.ByteString.ByteString | bslen bs == len w8s }
 
-assume unpack
+unpack
     :: bs : Data.ByteString.ByteString
-    -> { w8s : [Char] | len w8s == bslen bs }
+    -> { w8s : [GHC.Types.Char] | len w8s == bslen bs }
 
-assume cons
-    :: Char
+cons
+    :: GHC.Types.Char
     -> i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | bslen o == bslen i + 1 }
 
-assume snoc
+snoc
     :: i : Data.ByteString.ByteString
-    -> Char
+    -> GHC.Types.Char
     -> { o : Data.ByteString.ByteString | bslen o == bslen i + 1 }
 
-assume append
+append
     :: l : Data.ByteString.ByteString
     -> r : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | bslen o == bslen l + bslen r }
 
-head :: { bs : Data.ByteString.ByteString | 1 <= bslen bs } -> Char
+head
+    :: { bs : Data.ByteString.ByteString | 1 <= bslen bs } -> GHC.Types.Char
 
-assume uncons
+uncons
     :: i : Data.ByteString.ByteString
-    -> Maybe (Char, { o : Data.ByteString.ByteString | bslen o == bslen i - 1 })
+    -> Data.Maybe.Maybe (GHC.Types.Char, { o : Data.ByteString.ByteString | bslen o == bslen i - 1 })
 
-assume unsnoc
+unsnoc
     :: i : Data.ByteString.ByteString
-    -> Maybe ({ o : Data.ByteString.ByteString | bslen o == bslen i - 1 }, Char)
+    -> Data.Maybe.Maybe ({ o : Data.ByteString.ByteString | bslen o == bslen i - 1 }, GHC.Types.Char)
 
-last :: { bs : Data.ByteString.ByteString | 1 <= bslen bs } -> Char
+last
+    :: { bs : Data.ByteString.ByteString | 1 <= bslen bs } -> GHC.Types.Char
 
-tail :: { bs : Data.ByteString.ByteString | 1 <= bslen bs } -> Char
+tail
+    :: { bs : Data.ByteString.ByteString | 1 <= bslen bs } -> GHC.Types.Char
 
-init :: { bs : Data.ByteString.ByteString | 1 <= bslen bs } -> Char
+init
+    :: { bs : Data.ByteString.ByteString | 1 <= bslen bs } -> GHC.Types.Char
 
-assume null
+null
     :: bs : Data.ByteString.ByteString
-    -> { b : Bool | Prop b <=> bslen bs == 0 }
+    -> { b : GHC.Types.Bool | Prop b <=> bslen bs == 0 }
 
-assume length :: bs : Data.ByteString.ByteString -> { n : Int | bslen bs == n }
+length
+    :: bs : Data.ByteString.ByteString -> { n : Nat | bslen bs == n }
 
-assume map
-    :: (Char -> Char)
+map
+    :: (GHC.Types.Char -> GHC.Types.Char)
     -> i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | bslen o == bslen i }
 
-assume reverse
+reverse
     :: i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | bslen o == bslen i }
 
-assume intersperse
-    :: Char
+intersperse
+    :: GHC.Types.Char
     -> i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | (bslen i == 0 <=> bslen o == 0) && (1 <= bslen i <=> bslen o == 2 * bslen i - 1) }
 
-assume intercalate
+intercalate
     :: l : Data.ByteString.ByteString
     -> rs : [Data.ByteString.ByteString]
     -> { o : Data.ByteString.ByteString | len rs == 0 ==> bslen o == 0 }
 
-assume transpose
+transpose
     :: is : [Data.ByteString.ByteString]
     -> { os : [{ bs : Data.ByteString.ByteString | bslen bs <= len is }] | len is == 0 ==> len os == 0}
 
 foldl1
-    :: (Char -> Char -> Char)
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
     -> { bs : Data.ByteString.ByteString | 1 <= bslen bs }
-    -> Char
+    -> GHC.Types.Char
 
 foldl1'
-    :: (Char -> Char -> Char)
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
     -> { bs : Data.ByteString.ByteString | 1 <= bslen bs }
-    -> Char
+    -> GHC.Types.Char
 
 foldr1
-    :: (Char -> Char -> Char)
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
     -> { bs : Data.ByteString.ByteString | 1 <= bslen bs }
-    -> Char
+    -> GHC.Types.Char
 
 foldr1'
-    :: (Char -> Char -> Char)
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
     -> { bs : Data.ByteString.ByteString | 1 <= bslen bs }
-    -> Char
+    -> GHC.Types.Char
 
-assume concat
+concat
     :: is : [Data.ByteString.ByteString]
     -> { o : Data.ByteString.ByteString | len is == 0 ==> bslen o }
 
-assume concatMap
-    :: (Char -> Data.ByteString.ByteString)
+concatMap
+    :: (GHC.Types.Char -> Data.ByteString.ByteString)
     -> i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | bslen i == 0 ==> bslen o == 0 }
 
-assume any :: (Char -> Bool)
+any
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> bs : Data.ByteString.ByteString
-    -> { b : Bool | bslen bs == 0 ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bslen bs == 0 ==> not (Prop b) }
 
-assume all :: (Char -> Bool)
+all
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> bs : Data.ByteString.ByteString
-    -> { b : Bool | bslen bs == 0 ==> Prop b }
+    -> { b : GHC.Types.Bool | bslen bs == 0 ==> Prop b }
 
 maximum
-    :: { bs : Data.ByteString.ByteString | 1 <= bslen bs } -> Char
+    :: { bs : Data.ByteString.ByteString | 1 <= bslen bs } -> GHC.Types.Char
 
 minimum
-    :: { bs : Data.ByteString.ByteString | 1 <= bslen bs } -> Char
+    :: { bs : Data.ByteString.ByteString | 1 <= bslen bs } -> GHC.Types.Char
 
-assume scanl
-    :: (Char -> Char -> Char)
-    -> Char
+scanl
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
+    -> GHC.Types.Char
     -> i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | bslen o == bslen i }
 
-assume scanl1
-    :: (Char -> Char -> Char)
+scanl1
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
     -> i : { i : Data.ByteString.ByteString | 1 <= bslen i }
     -> { o : Data.ByteString.ByteString | bslen o == bslen i }
 
-assume scanr
-    :: (Char -> Char -> Char)
-    -> Char
+scanr
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
+    -> GHC.Types.Char
     -> i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | bslen o == bslen i }
 
-assume scanr1
-    :: (Char -> Char -> Char)
+scanr1
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
     -> i : { i : Data.ByteString.ByteString | 1 <= bslen i }
     -> { o : Data.ByteString.ByteString | bslen o == bslen i }
 
-assume mapAccumL
-    :: (acc -> Char -> (acc, Char))
+mapAccumL
+    :: (acc -> GHC.Types.Char -> (acc, GHC.Types.Char))
     -> acc
     -> i : Data.ByteString.ByteString
     -> (acc, { o : Data.ByteString.ByteString | bslen o == bslen i })
 
-assume mapAccumR
-    :: (acc -> Char -> (acc, Char))
+mapAccumR
+    :: (acc -> GHC.Types.Char -> (acc, GHC.Types.Char))
     -> acc
     -> i : Data.ByteString.ByteString
     -> (acc, { o : Data.ByteString.ByteString | bslen o == bslen i })
 
-assume replicate
-    :: n : Int
-    -> Char
+replicate
+    :: n : GHC.Types.Int
+    -> GHC.Types.Char
     -> { bs : Data.ByteString.ByteString | bslen bs == n }
 
-assume unfoldrN
-    :: n : Int
-    -> (a -> Maybe (Char, a))
+unfoldrN
+    :: n : GHC.Types.Int
+    -> (a -> Data.Maybe.Maybe (GHC.Types.Char, a))
     -> a
-    -> ({ bs : Data.ByteString.ByteString | bslen bs <= n }, Maybe a)
+    -> ({ bs : Data.ByteString.ByteString | bslen bs <= n }, Data.Maybe.Maybe a)
 
-assume take
-    :: n : Int
+take
+    :: n : GHC.Types.Int
     -> i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | (n <= 0 <=> bslen o == 0) &&
                                           ((0 <= n && n <= bslen i) <=> bslen o == n) &&
                                           (bslen i <= n <=> bslen o = bslen i) }
 
-assume drop
-    :: n : Int
+drop
+    :: n : GHC.Types.Int
     -> i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | (n <= 0 <=> bslen o == bslen i) &&
                                           ((0 <= n && n <= bslen i) <=> bslen o == bslen i - n) &&
                                           (bslen i <= n <=> bslen o == 0) }
 
-assume splitAt
-    :: n : Int
+splitAt
+    :: n : GHC.Types.Int
     -> i : Data.ByteString.ByteString
     -> ( { l : Data.ByteString.ByteString | (n <= 0 <=> bslen l == 0) &&
                                             ((0 <= n && n <= bslen i) <=> bslen l == n) &&
@@ -186,131 +200,131 @@ assume splitAt
                                             (bslen i <= n <=> bslen r == 0) }
        )
 
-assume takeWhile
-    :: (Char -> Bool)
+takeWhile
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | bslen o <= bslen i }
 
-assume dropWhile
-    :: (Char -> Bool)
+dropWhile
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | bslen o <= bslen i }
 
-assume span
-    :: (Char -> Bool)
+span
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.ByteString
     -> ( { l : Data.ByteString.ByteString | bslen l <= bslen i }
        , { r : Data.ByteString.ByteString | bslen r <= bslen i }
        )
 
-assume spanEnd
-    :: (Char -> Bool)
+spanEnd
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.ByteString
     -> ( { l : Data.ByteString.ByteString | bslen l <= bslen i }
        , { r : Data.ByteString.ByteString | bslen r <= bslen i }
        )
 
-assume break
-    :: (Char -> Bool)
+break
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.ByteString
     -> ( { l : Data.ByteString.ByteString | bslen l <= bslen i }
        , { r : Data.ByteString.ByteString | bslen r <= bslen i }
        )
 
-assume breakEnd
-    :: (Char -> Bool)
+breakEnd
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.ByteString
     -> ( { l : Data.ByteString.ByteString | bslen l <= bslen i }
        , { r : Data.ByteString.ByteString | bslen r <= bslen i }
        )
 
-assume group
+group
     :: i : Data.ByteString.ByteString
     -> [{ o : Data.ByteString.ByteString | 1 <= bslen o && bslen o <= bslen i }]
 
-assume groupBy
-    :: (Char -> Char -> Bool)
+groupBy
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.ByteString
     -> [{ o : Data.ByteString.ByteString | 1 <= bslen o && bslen o <= bslen i }]
 
-assume inits
+inits
     :: i : Data.ByteString.ByteString
     -> [{ o : Data.ByteString.ByteString | bslen o <= bslen i }]
 
-assume tails
+tails
     :: i : Data.ByteString.ByteString
     -> [{ o : Data.ByteString.ByteString | bslen o <= bslen i }]
 
-assume split
-    :: Char
+split
+    :: GHC.Types.Char
     -> i : Data.ByteString.ByteString
     -> [{ o : Data.ByteString.ByteString | bslen o <= bslen i }]
 
-assume splitWith
-    :: (Char -> Bool)
+splitWith
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.ByteString
     -> [{ o : Data.ByteString.ByteString | bslen o <= bslen i }]
 
-assume lines
+lines
     :: i : Data.ByteString.ByteString
     -> [{ o : Data.ByteString.ByteString | bslen o <= bslen i }]
 
-assume words
+words
     :: i : Data.ByteString.ByteString
     -> [{ o : Data.ByteString.ByteString | bslen o <= bslen i }]
 
-assume unlines
+unlines
     :: is : [Data.ByteString.ByteString]
     -> { o : Data.ByteString.ByteString | (len is == 0 <=> bslen o == 0) && bslen o >= len is }
 
-assume unwords
+unwords
     :: is : [Data.ByteString.ByteString]
     -> { o : Data.ByteString.ByteString | (len is == 0 ==> bslen o == 0) && (1 <= len is ==> bslen o >= len is - 1) }
 
-assume isPrefixOf
+isPrefixOf
     :: l : Data.ByteString.ByteString
     -> r : Data.ByteString.ByteString
-    -> { b : Bool | bslen l >= bslen r ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bslen l >= bslen r ==> not (Prop b) }
 
-assume isSuffixOf
+isSuffixOf
     :: l : Data.ByteString.ByteString
     -> r : Data.ByteString.ByteString
-    -> { b : Bool | bslen l > bslen r ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bslen l > bslen r ==> not (Prop b) }
 
-assume isInfixOf
+isInfixOf
     :: l : Data.ByteString.ByteString
     -> r : Data.ByteString.ByteString
-    -> { b : Bool | bslen l > bslen r ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bslen l > bslen r ==> not (Prop b) }
 
-assume breakSubstring
+breakSubstring
     :: il : Data.ByteString.ByteString
     -> ir : Data.ByteString.ByteString
     -> ( { ol : Data.ByteString.ByteString | bslen ol <= bslen ir && (bslen il > bslen ir ==> bslen ol == bslen ir)}
        , { or : Data.ByteString.ByteString | bslen or <= bslen ir && (bslen il > bslen ir ==> bslen or == 0) }
        )
 
-assume elem
-    :: Char
+elem
+    :: GHC.Types.Char
     -> bs : Data.ByteString.ByteString
-    -> { b : Bool | bslen b == 0 ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bslen b == 0 ==> not (Prop b) }
 
-assume notElem
-    :: Char
+notElem
+    :: GHC.Types.Char
     -> bs : Data.ByteString.ByteString
-    -> { b : Bool | bslen b == 0 ==> Prop b }
+    -> { b : GHC.Types.Bool | bslen b == 0 ==> Prop b }
 
-assume find
-    :: (Char -> Bool)
+find
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> bs : Data.ByteString.ByteString
-    -> Maybe { w8 : Char | bslen bs /= 0 }
+    -> Data.Maybe.Maybe { w8 : GHC.Types.Char | bslen bs /= 0 }
 
-assume filter
-    :: (Char -> Bool)
+filter
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | bslen o <= bslen i }
 
-assume partition
-    :: (Char -> Bool)
+partition
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.ByteString
     -> ( { l : Data.ByteString.ByteString | bslen l <= bslen i }
        , { r : Data.ByteString.ByteString | bslen r <= bslen i }
@@ -318,83 +332,83 @@ assume partition
 
 index
     :: bs : Data.ByteString.ByteString
-    -> { n : Int | 0 <= n && n < bslen bs }
-    -> Char
+    -> { n : GHC.Types.Int | 0 <= n && n < bslen bs }
+    -> GHC.Types.Char
 
-assume elemIndex
-    :: Char
+elemIndex
+    :: GHC.Types.Char
     -> bs : Data.ByteString.ByteString
-    -> Maybe { n : Int | 0 <= n && n < bslen bs }
+    -> Data.Maybe.Maybe { n : GHC.Types.Int | 0 <= n && n < bslen bs }
 
-assume elemIndices
-    :: Char
+elemIndices
+    :: GHC.Types.Char
     -> bs : Data.ByteString.ByteString
-    -> [{ n : Int | 0 <= n && n < bslen bs }]
+    -> [{ n : GHC.Types.Int | 0 <= n && n < bslen bs }]
 
-assume elemIndexEnd
-    :: Char
+elemIndexEnd
+    :: GHC.Types.Char
     -> bs : Data.ByteString.ByteString
-    -> Maybe { n : Int | 0 <= n && n < bslen bs }
+    -> Data.Maybe.Maybe { n : GHC.Types.Int | 0 <= n && n < bslen bs }
 
-assume findIndex
-    :: (Char -> Bool)
+findIndex
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> bs : Data.ByteString.ByteString
-    -> Maybe { n : Int | 0 <= n && n < bslen bs }
+    -> Data.Maybe.Maybe { n : GHC.Types.Int | 0 <= n && n < bslen bs }
 
-assume findIndices
-    :: (Char -> Bool)
+findIndices
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> bs : Data.ByteString.ByteString
-    -> [{ n : Int | 0 <= n && n < bslen bs }]
+    -> [{ n : GHC.Types.Int | 0 <= n && n < bslen bs }]
 
-assume count
-    :: Char
+count
+    :: GHC.Types.Char
     -> bs : Data.ByteString.ByteString
-    -> { n : Int | 0 <= n && n < bslen bs }
+    -> { n : GHC.Types.Int | 0 <= n && n < bslen bs }
 
-assume zip
+zip
     :: l : Data.ByteString.ByteString
     -> r : Data.ByteString.ByteString
-    -> { o : [(Char, Char)] | len o <= bslen l && len o <= bslen r }
+    -> { o : [(GHC.Types.Char, GHC.Types.Char)] | len o <= bslen l && len o <= bslen r }
 
-assume zipWith
-    :: (Char -> Char -> a)
+zipWith
+    :: (GHC.Types.Char -> GHC.Types.Char -> a)
     -> l : Data.ByteString.ByteString
     -> r : Data.ByteString.ByteString
     -> { o : [a] | len o <= bslen l && len o <= bslen r }
 
-assume unzip
-    :: i : [(Char, Char)]
+unzip
+    :: i : [(GHC.Types.Char, GHC.Types.Char)]
     -> ( { l : Data.ByteString.ByteString | bslen l == len i }
        , { r : Data.ByteString.ByteString | bslen r == len i }
        )
 
-assume sort
+sort
     :: i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | bslen o == bslen i }
 
-assume readInt
+readInt
     :: i : Data.ByteString.ByteString
-    -> Maybe { p : (Int, { o : Data.ByteString.ByteString | bslen o < bslen i}) | bslen i /= 0 }
+    -> Data.Maybe.Maybe { p : (GHC.Types.Int, { o : Data.ByteString.ByteString | bslen o < bslen i}) | bslen i /= 0 }
 
-assume readInteger
+readInteger
     :: i : Data.ByteString.ByteString
-    -> Maybe { p : (Integer, { o : Data.ByteString.ByteString | bslen o < bslen i}) | bslen i /= 0 }
+    -> Data.Maybe.Maybe { p : (GHC.Integer.Type.Integer, { o : Data.ByteString.ByteString | bslen o < bslen i}) | bslen i /= 0 }
 
-assume copy
+copy
     :: i : Data.ByteString.ByteString
     -> { o : Data.ByteString.ByteString | bslen o == bslen i }
 
-assume hGet
+hGet
     :: System.IO.Handle
-    -> n : { n : Int | 0 <= n }
-    -> IO { bs : Data.ByteString.ByteString | bslen bs == n || bslen bs == 0 }
+    -> n : { n : GHC.Types.Int | 0 <= n }
+    -> GHC.Types.IO { bs : Data.ByteString.ByteString | bslen bs == n || bslen bs == 0 }
 
-assume hGetSome
+hGetSome
     :: System.IO.Handle
-    -> n : { n : Int | 0 <= n }
-    -> IO { bs : Data.ByteString.ByteString | bslen bs <= n }
+    -> n : { n : GHC.Types.Int | 0 <= n }
+    -> GHC.Types.IO { bs : Data.ByteString.ByteString | bslen bs <= n }
 
-assume hGetNonBlocking
+hGetNonBlocking
     :: System.IO.Handle
-    -> n : { n : Int | 0 <= n }
-    -> IO { bs : Data.ByteString.ByteString | bslen bs <= n }
+    -> n : { n : GHC.Types.Int | 0 <= n }
+    -> GHC.Types.IO { bs : Data.ByteString.ByteString | bslen bs <= n }

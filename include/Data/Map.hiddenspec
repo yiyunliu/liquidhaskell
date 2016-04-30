@@ -1,27 +1,39 @@
 module spec Data.Map where
 
+import GHC.Base
+
 embed Data.Map.Map as Map_t
 
 ---------------------------------------------------------------------------------------
 -- | Logical Map Operators: Interpreted "natively" by the SMT solver ------------------
 ---------------------------------------------------------------------------------------
 
-measure Map_select :: forall k v. Data.Map.Map k v -> k -> v
+measure Map_select
+    :: forall k v. Data.Map.Map k v
+    -> k
+    -> v
 
-measure Map_store  :: forall k v. Data.Map.Map k v -> k -> v -> Data.Map.Map k v
+measure Map_store
+    :: forall k v. Data.Map.Map k v
+    -> k
+    -> v
+    -> Data.Map.Map k v
 
+assume Data.Map.insert
+    :: GHC.Classes.Ord k
+    => k:k
+    -> v:v
+    -> m:Data.Map.Map k v
+    -> {n:Data.Map.Map k v | n = Map_store m k v}
 
-insert :: Ord k => k:k -> v:v -> m:Data.Map.Map k v -> {n:Data.Map.Map k v | n = Map_store m k v}
+assume Data.Map.lookup
+    :: GHC.Classes.Ord k
+    => k:k
+    -> m:Data.Map.Map k v
+    -> Maybe {v:v | v = Map_select m k}
 
-lookup :: Ord k => k:k -> m:Data.Map.Map k v -> Maybe {v:v | v = Map_select m k}
-
-(!)    :: Ord k => m:Data.Map.Map k v -> k:k -> {v:v | v = Map_select m k}
-
-
-
-
-
-
-
-
-
+assume Data.Map.!
+    :: GHC.Classes.Ord k
+    => m:Data.Map.Map k v
+    -> k:k
+    -> {v:v | v = Map_select m k}

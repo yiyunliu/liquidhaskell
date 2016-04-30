@@ -1,38 +1,34 @@
 module spec GHC.Base where
 
-import GHC.CString
-import GHC.Prim
 import GHC.Classes
+import GHC.CString
+import GHC.IO.Handle
+import GHC.Num
+import GHC.Prim
 import GHC.Types
 
-embed GHC.Types.Int      as int
-embed Prop               as bool
+map
+    :: (a -> b)
+    -> xs:[a]
+    -> {v: [b] | len(v) = len(xs)}
 
-measure Prop   :: GHC.Types.Bool -> Prop
+++
+    :: xs:[a]
+    -> ys:[a]
+    -> {v:[a] | (len v) = (len xs) + (len ys)}
 
-measure autolen :: forall a. a -> GHC.Types.Int
-class measure len :: forall f a. f a -> GHC.Types.Int
-instance measure len :: forall a. [a] -> GHC.Types.Int
-len []     = 0
-len (y:ys) = 1 + len ys
+$
+    :: (a -> b)
+    -> a
+    -> b
 
-measure null :: forall a. [a] -> Prop
-null []     = true
-null (x:xs) = false
+id
+    :: x:a
+    -> {v:a | v = x}
 
-measure fst :: (a,b) -> a
-fst (a,b) = a
-
-measure snd :: (a,b) -> b
-snd (a,b) = b
-
-qualif Fst(v:a, y:b): (v = (fst y)) 
-qualif Snd(v:a, y:b): (v = (snd y))
-
-
-invariant {v: [a] | len(v) >= 0 }
-map       :: (a -> b) -> xs:[a] -> {v: [b] | len(v) = len(xs)}
-(++)      :: xs:[a] -> ys:[a] -> {v:[a] | (len v) = (len xs) + (len ys)}
-
-($)       :: (a -> b) -> a -> b
-id        :: x:a -> {v:a | v = x}
+.
+    :: forall <p :: b -> c -> Prop, q :: a -> b -> Prop, r :: a -> c -> Prop>. 
+       {xcmp::a, wcmp::b<q xcmp> |- c<p wcmp> <: c<r xcmp>}
+       (ycmp:b -> c<p ycmp>)
+    -> (zcmp:a -> b<q zcmp>)
+    ->  xcmp:a -> c<r xcmp>

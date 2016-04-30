@@ -1,49 +1,56 @@
 module spec Data.ByteString.Lazy where
 
-measure bllen :: Data.ByteString.Lazy.ByteString -> { n : Data.Int.Int64 | 0 <= n }
+import Data.ByteString
+
+import GHC.Base
+
+measure bllen
+  :: Data.ByteString.Lazy.ByteString
+  -> { n : Data.Int.Int64 | 0 <= n }
 
 invariant { bs : Data.ByteString.Lazy.ByteString | 0 <= bllen bs }
 
-assume empty :: { bs : Data.ByteString.Lazy.ByteString | bllen bs == 0 }
+empty
+    :: { bs : Data.ByteString.Lazy.ByteString | bllen bs == 0 }
 
-assume singleton
+singleton
     :: Data.Word.Word8 -> { bs : Data.ByteString.Lazy.ByteString | bllen bs == 1 }
 
-assume pack
+pack
     :: w8s : [Data.Word.Word8]
     -> { bs : Data.ByteString.ByteString | bllen bs == len w8s }
 
-assume unpack
+unpack
     :: bs : Data.ByteString.Lazy.ByteString
     -> { w8s : [Data.Word.Word8] | len w8s == bllen bs }
 
-assume fromStrict
+fromStrict
     :: i : Data.ByteString.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bslen i }
 
-assume toStrict
+toStrict
     :: i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.ByteString | bslen o == bllen i }
 
-assume fromChunks
+fromChunks
     :: i : [Data.ByteString.ByteString]
     -> { o : Data.ByteString.Lazy.ByteString | len i == 0 <=> bllen o == 0 }
 
-assume toChunks
+toChunks
     :: i : Data.ByteString.Lazy.ByteString
     -> { os : [{ o : Data.ByteString.ByteString | bslen o <= bllen i}] | len os == 0 <=> bllen i == 0 }
 
-assume cons
+cons
     :: Data.Word.Word8
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i + 1 }
 
-assume snoc
+snoc
     :: i : Data.ByteString.Lazy.ByteString
     -> Data.Word.Word8
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i + 1 }
 
-assume append
+append
     :: l : Data.ByteString.Lazy.ByteString
     -> r : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen l + bllen r }
@@ -52,13 +59,13 @@ head
     :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
     -> Data.Word.Word8
 
-assume uncons
+uncons
     :: i : Data.ByteString.Lazy.ByteString
-    -> Maybe (Data.Word.Word8, { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i - 1 })
+    -> Data.Maybe.Maybe (Data.Word.Word8, { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i - 1 })
 
-assume unsnoc
+unsnoc
     :: i : Data.ByteString.Lazy.ByteString
-    -> Maybe ({ o : Data.ByteString.Lazy.ByteString | bllen o == bllen i - 1 }, Data.Word.Word8)
+    -> Data.Maybe.Maybe ({ o : Data.ByteString.Lazy.ByteString | bllen o == bllen i - 1 }, Data.Word.Word8)
 
 last
     :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
@@ -72,33 +79,34 @@ init
     :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
     -> Data.Word.Word8
 
-assume null
+null
     :: bs : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | Prop b <=> bllen bs == 0 }
+    -> { b : GHC.Types.Bool | Prop b <=> bllen bs == 0 }
 
-assume length
-    :: bs : Data.ByteString.Lazy.ByteString -> { n : Data.Int.Int64 | bllen bs == n }
+length
+    :: bs : Data.ByteString.Lazy.ByteString
+    -> { n : Nat64 | bllen bs == n }
 
-assume map
+map
     :: (Data.Word.Word8 -> Data.Word.Word8)
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume reverse
+reverse
     :: i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume intersperse
+intersperse
     :: Data.Word.Word8
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | (bllen i == 0 <=> bllen o == 0) && (1 <= bllen i <=> bllen o == 2 * bllen i - 1) }
 
-assume intercalate
+intercalate
     :: l : Data.ByteString.Lazy.ByteString
     -> rs : [Data.ByteString.Lazy.ByteString]
     -> { o : Data.ByteString.Lazy.ByteString | len rs == 0 ==> bllen o == 0 }
 
-assume transpose
+transpose
     :: is : [Data.ByteString.Lazy.ByteString]
     -> { os : [{ bs : Data.ByteString.Lazy.ByteString | bllen bs <= len is }] | len is == 0 ==> len os == 0}
 
@@ -122,87 +130,93 @@ foldr1'
     -> { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
     -> Data.Word.Word8
 
-assume concat
+concat
     :: is : [Data.ByteString.Lazy.ByteString]
     -> { o : Data.ByteString.Lazy.ByteString | len is == 0 ==> bllen o }
 
-assume concatMap
+concatMap
     :: (Data.Word.Word8 -> Data.ByteString.Lazy.ByteString)
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen i == 0 ==> bllen o == 0 }
 
-assume any :: (Data.Word.Word8 -> Bool)
+any
+    :: (Data.Word.Word8 -> GHC.Types.Bool)
     -> bs : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen bs == 0 ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bllen bs == 0 ==> not (Prop b) }
 
-assume all :: (Data.Word.Word8 -> Bool)
+all
+    :: (Data.Word.Word8 -> GHC.Types.Bool)
     -> bs : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen bs == 0 ==> Prop b }
+    -> { b : GHC.Types.Bool | bllen bs == 0 ==> Prop b }
 
-maximum :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs } -> Data.Word.Word8
+maximum
+    :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
+    -> Data.Word.Word8
 
-minimum :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs } -> Data.Word.Word8
+minimum
+    :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
+    -> Data.Word.Word8
 
-assume scanl
+scanl
     :: (Data.Word.Word8 -> Data.Word.Word8 -> Data.Word.Word8)
     -> Data.Word.Word8
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume scanl1
+scanl1
     :: (Data.Word.Word8 -> Data.Word.Word8 -> Data.Word.Word8)
     -> i : { i : Data.ByteString.Lazy.ByteString | 1 <= bllen i }
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume scanr
+scanr
     :: (Data.Word.Word8 -> Data.Word.Word8 -> Data.Word.Word8)
     -> Data.Word.Word8
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume scanr1
+scanr1
     :: (Data.Word.Word8 -> Data.Word.Word8 -> Data.Word.Word8)
     -> i : { i : Data.ByteString.Lazy.ByteString | 1 <= bllen i }
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume mapAccumL
+mapAccumL
     :: (acc -> Data.Word.Word8 -> (acc, Data.Word.Word8))
     -> acc
     -> i : Data.ByteString.Lazy.ByteString
     -> (acc, { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i })
 
-assume mapAccumR
+mapAccumR
     :: (acc -> Data.Word.Word8 -> (acc, Data.Word.Word8))
     -> acc
     -> i : Data.ByteString.Lazy.ByteString
     -> (acc, { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i })
 
-assume replicate
+replicate
     :: n : Data.Int.Int64
     -> Data.Word.Word8
     -> { bs : Data.ByteString.Lazy.ByteString | bllen bs == n }
 
-assume unfoldrN
-    :: n : Int
-    -> (a -> Maybe (Data.Word.Word8, a))
+unfoldrN
+    :: n : GHC.Types.Int
+    -> (a -> Data.Maybe.Maybe (Data.Word.Word8, a))
     -> a
-    -> ({ bs : Data.ByteString.Lazy.ByteString | bllen bs <= n }, Maybe a)
+    -> ({ bs : Data.ByteString.Lazy.ByteString | bllen bs <= n }, Data.Maybe.Maybe a)
 
-assume take
+take
     :: n : Data.Int.Int64
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | (n <= 0 ==> bllen o == 0) &&
                                                ((0 <= n && n <= bllen i) <=> bllen o == n) &&
                                                (bllen i <= n <=> bllen o = bllen i) }
 
-assume drop
+drop
     :: n : Data.Int.Int64
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | (n <= 0 <=> bllen o == bllen i) &&
                                                ((0 <= n && n <= bllen i) <=> bllen o == bllen i - n) &&
                                                (bllen i <= n <=> bllen o == 0) }
 
-assume splitAt
+splitAt
     :: n : Data.Int.Int64
     -> i : Data.ByteString.Lazy.ByteString
     -> ( { l : Data.ByteString.Lazy.ByteString | (n <= 0 <=> bllen l == 0) &&
@@ -213,114 +227,115 @@ assume splitAt
                                                  (bllen i <= n <=> bllen r == 0) }
        )
 
-assume takeWhile
-    :: (Data.Word.Word8 -> Bool)
+takeWhile
+    :: (Data.Word.Word8 -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }
 
-assume dropWhile
-    :: (Data.Word.Word8 -> Bool)
+dropWhile
+    :: (Data.Word.Word8 -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }
 
-assume span
-    :: (Data.Word.Word8 -> Bool)
+span
+    :: (Data.Word.Word8 -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> ( { l : Data.ByteString.Lazy.ByteString | bllen l <= bllen i }
        , { r : Data.ByteString.Lazy.ByteString | bllen r <= bllen i }
        )
 
-assume spanEnd
-    :: (Data.Word.Word8 -> Bool)
+spanEnd
+    :: (Data.Word.Word8 -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> ( { l : Data.ByteString.Lazy.ByteString | bllen l <= bllen i }
        , { r : Data.ByteString.Lazy.ByteString | bllen r <= bllen i }
        )
 
-assume break
-    :: (Data.Word.Word8 -> Bool)
+break
+    :: (Data.Word.Word8 -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> ( { l : Data.ByteString.Lazy.ByteString | bllen l <= bllen i }
        , { r : Data.ByteString.Lazy.ByteString | bllen r <= bllen i }
        )
 
-assume breakEnd
-    :: (Data.Word.Word8 -> Bool)
+breakEnd
+    :: (Data.Word.Word8 -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> ( { l : Data.ByteString.Lazy.ByteString | bllen l <= bllen i }
        , { r : Data.ByteString.Lazy.ByteString | bllen r <= bllen i }
        )
-assume group
+
+group
     :: i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | 1 <= bllen o && bllen o <= bllen i }]
 
-assume groupBy
-    :: (Data.Word.Word8 -> Data.Word.Word8 -> Bool)
+groupBy
+    :: (Data.Word.Word8 -> Data.Word.Word8 -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | 1 <= bllen o && bllen o <= bllen i }]
 
-assume inits
+inits
     :: i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }]
 
-assume tails
+tails
     :: i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }]
 
-assume split
+split
     :: Data.Word.Word8
     -> i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }]
 
-assume splitWith
-    :: (Data.Word.Word8 -> Bool)
+splitWith
+    :: (Data.Word.Word8 -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }]
 
-assume isPrefixOf
+isPrefixOf
     :: l : Data.ByteString.Lazy.ByteString
     -> r : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen l >= bllen r ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bllen l >= bllen r ==> not (Prop b) }
 
-assume isSuffixOf
+isSuffixOf
     :: l : Data.ByteString.Lazy.ByteString
     -> r : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen l >= bllen r ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bllen l >= bllen r ==> not (Prop b) }
 
-assume isInfixOf
+isInfixOf
     :: l : Data.ByteString.Lazy.ByteString
     -> r : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen l >= bllen r ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bllen l >= bllen r ==> not (Prop b) }
 
-assume breakSubstring
+breakSubstring
     :: il : Data.ByteString.Lazy.ByteString
     -> ir : Data.ByteString.Lazy.ByteString
     -> ( { ol : Data.ByteString.Lazy.ByteString | bllen ol <= bllen ir && (bllen il > bllen ir ==> bllen ol == bllen ir)}
        , { or : Data.ByteString.Lazy.ByteString | bllen or <= bllen ir && (bllen il > bllen ir ==> bllen or == 0) }
        )
 
-assume elem
+elem
     :: Data.Word.Word8
     -> bs : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen b == 0 ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bllen b == 0 ==> not (Prop b) }
 
-assume notElem
+notElem
     :: Data.Word.Word8
     -> bs : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen b == 0 ==> Prop b }
+    -> { b : GHC.Types.Bool | bllen b == 0 ==> Prop b }
 
-assume find
-    :: (Data.Word.Word8 -> Bool)
+find
+    :: (Data.Word.Word8 -> GHC.Types.Bool)
     -> bs : Data.ByteString.Lazy.ByteString
-    -> Maybe { w8 : Data.Word.Word8 | bllen bs /= 0 }
+    -> Data.Maybe.Maybe { w8 : Data.Word.Word8 | bllen bs /= 0 }
 
-assume filter
-    :: (Data.Word.Word8 -> Bool)
+filter
+    :: (Data.Word.Word8 -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }
 
-assume partition
-    :: (Data.Word.Word8 -> Bool)
+partition
+    :: (Data.Word.Word8 -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> ( { l : Data.ByteString.Lazy.ByteString | bllen l <= bllen i }
        , { r : Data.ByteString.Lazy.ByteString | bllen r <= bllen i }
@@ -331,67 +346,67 @@ index
     -> { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
     -> Data.Word.Word8
 
-assume elemIndex
+elemIndex
     :: Data.Word.Word8
     -> bs : Data.ByteString.Lazy.ByteString
-    -> Maybe { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
+    -> Data.Maybe.Maybe { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
 
-assume elemIndices
+elemIndices
     :: Data.Word.Word8
     -> bs : Data.ByteString.Lazy.ByteString
     -> [{ n : Data.Int.Int64 | 0 <= n && n < bllen bs }]
 
-assume elemIndexEnd
+elemIndexEnd
     :: Data.Word.Word8
     -> bs : Data.ByteString.Lazy.ByteString
-    -> Maybe { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
+    -> Data.Maybe.Maybe { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
 
-assume findIndex
+findIndex
     :: (Data.Word.Word8 -> Bool)
     -> bs : Data.ByteString.Lazy.ByteString
-    -> Maybe { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
+    -> Data.Maybe.Maybe { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
 
-assume findIndices
+findIndices
     :: (Data.Word.Word8 -> Bool)
     -> bs : Data.ByteString.Lazy.ByteString
     -> [{ n : Data.Int.Int64 | 0 <= n && n < bllen bs }]
 
-assume count
+count
     :: Data.Word.Word8
     -> bs : Data.ByteString.Lazy.ByteString
     -> { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
 
-assume zip
+zip
     :: l : Data.ByteString.Lazy.ByteString
     -> r : Data.ByteString.Lazy.ByteString
     -> { o : [(Data.Word.Word8, Data.Word.Word8)] | len o <= bllen l && len o <= bllen r }
 
-assume zipWith
+zipWith
     :: (Data.Word.Word8 -> Data.Word.Word8 -> a)
     -> l : Data.ByteString.Lazy.ByteString
     -> r : Data.ByteString.Lazy.ByteString
     -> { o : [a] | len o <= bllen l && len o <= bllen r }
 
-assume unzip
+unzip
     :: i : [(Data.Word.Word8, Data.Word.Word8)]
     -> ( { l : Data.ByteString.Lazy.ByteString | bllen l == len i }
        , { r : Data.ByteString.Lazy.ByteString | bllen r == len i }
        )
 
-assume sort
+sort
     :: i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume copy
+copy
     :: i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume hGet
+hGet
     :: System.IO.Handle
-    -> n : { n : Int | 0 <= n }
-    -> IO { bs : Data.ByteString.Lazy.ByteString | bllen bs == n || bllen bs == 0 }
+    -> n : { n : GHC.Types.Int | 0 <= n }
+    -> GHC.Types.IO { bs : Data.ByteString.Lazy.ByteString | bllen bs == n || bllen bs == 0 }
 
-assume hGetNonBlocking
+hGetNonBlocking
     :: System.IO.Handle
-    -> n : { n : Int | 0 <= n }
-    -> IO { bs : Data.ByteString.Lazy.ByteString | bllen bs <= n }
+    -> n : { n : GHC.Types.Int | 0 <= n }
+    -> GHC.Types.IO { bs : Data.ByteString.Lazy.ByteString | bllen bs <= n }

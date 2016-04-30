@@ -1,7 +1,8 @@
 module spec GHC.CString where
 
 import GHC.Prim 
+import GHC.Types
 
-GHC.CString.unpackCString#
-  :: x:GHC.Prim.Addr#
-  -> {v:[Char] | v ~~ x && len v == strLen x}
+unpackCString#
+    :: x:GHC.Prim.Addr#
+    -> {v:[GHC.Types.Char] | v ~~ x && len v == strLen x}

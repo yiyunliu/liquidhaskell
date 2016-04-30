@@ -1,52 +1,70 @@
 module spec Data.Text.Fusion.Common where
 
-measure slen :: Data.Text.Fusion.Internal.Stream a
-             -> GHC.Types.Int
+import GHC.Base
 
-cons :: GHC.Types.Char
-     -> s:Data.Text.Fusion.Internal.Stream Char
-     -> {v:Data.Text.Fusion.Internal.Stream Char | (slen v) = (1 + (slen s))}
+measure slen
+    :: Data.Text.Fusion.Internal.Stream a
+    -> GHC.Types.Int
 
-snoc :: s:Data.Text.Fusion.Internal.Stream Char
-     -> GHC.Types.Char
-     -> {v:Data.Text.Fusion.Internal.Stream Char | (slen v) = (1 + (slen s))}
+cons
+    :: GHC.Types.Char
+    -> s:Data.Text.Fusion.Internal.Stream GHC.Types.Char
+    -> {v:Data.Text.Fusion.Internal.Stream GHC.Types.Char | (slen v) = (1 + (slen s))}
 
-compareLengthI :: s:Data.Text.Fusion.Internal.Stream Char
-               -> l:GHC.Types.Int
-               -> {v:GHC.Types.Ordering | ((v = GHC.Types.EQ) <=> ((slen s) = l))}
+snoc
+    :: s:Data.Text.Fusion.Internal.Stream GHC.Types.Char
+    -> GHC.Types.Char
+    -> {v:Data.Text.Fusion.Internal.Stream GHC.Types.Char | (slen v) = (1 + (slen s))}
 
-isSingleton :: s:Data.Text.Fusion.Internal.Stream Char
-            -> {v:GHC.Types.Bool | ((Prop v) <=> ((slen s) = 1))}
+compareLengthI
+    :: s:Data.Text.Fusion.Internal.Stream GHC.Types.Char
+    -> l:GHC.Types.Int
+    -> {v:GHC.Types.Ordering | ((v = GHC.Types.EQ) <=> ((slen s) = l))}
 
-singleton   :: GHC.Types.Char
-            -> {v:Data.Text.Fusion.Internal.Stream Char | (slen v) = 1}
+isSingleton
+    :: s:Data.Text.Fusion.Internal.Stream Char
+    -> {v:GHC.Types.Bool | ((Prop v) <=> ((slen s) = 1))}
 
-streamList   :: l:[a]
-             -> {v:Data.Text.Fusion.Internal.Stream a | (slen v) = (len l)}
+singleton
+    :: GHC.Types.Char
+    -> {v:Data.Text.Fusion.Internal.Stream GHC.Types.Char | (slen v) = 1}
 
-unstreamList :: s:Data.Text.Fusion.Internal.Stream a
-             -> {v:[a] | (len v) = (slen s)}
+streamList
+    :: l:[a]
+    -> {v:Data.Text.Fusion.Internal.Stream a | (slen v) = (len l)}
 
-map :: (GHC.Types.Char -> GHC.Types.Char)
-    -> s:Data.Text.Fusion.Internal.Stream Char
-    -> {v:Data.Text.Fusion.Internal.Stream Char | (slen v) = (slen s)}
+unstreamList
+    :: s:Data.Text.Fusion.Internal.Stream a
+    -> {v:[a] | (len v) = (slen s)}
 
-filter :: (GHC.Types.Char -> GHC.Types.Bool)
-       -> s:Data.Text.Fusion.Internal.Stream Char
-       -> {v:Data.Text.Fusion.Internal.Stream Char | (slen v) <= (slen s)}
+map
+    :: (GHC.Types.Char -> GHC.Types.Char)
+    -> s:Data.Text.Fusion.Internal.Stream GHC.Types.Char
+    -> {v:Data.Text.Fusion.Internal.Stream GHC.Types.Char | (slen v) = (slen s)}
 
-intersperse :: GHC.Types.Char
-            -> s:Data.Text.Fusion.Internal.Stream Char
-            -> {v:Data.Text.Fusion.Internal.Stream Char | (slen v) > (slen s)}
+filter
+    :: (GHC.Types.Char -> GHC.Types.Bool)
+    -> s:Data.Text.Fusion.Internal.Stream GHC.Types.Char
+    -> {v:Data.Text.Fusion.Internal.Stream GHC.Types.Char | (slen v) <= (slen s)}
 
-replicateCharI :: l:GHC.Types.Int
-               -> GHC.Types.Char
-               -> {v:Data.Text.Fusion.Internal.Stream Char | (slen v) = l}
+intersperse
+    :: GHC.Types.Char
+    -> s:Data.Text.Fusion.Internal.Stream GHC.Types.Char
+    -> {v:Data.Text.Fusion.Internal.Stream GHC.Types.Char | (slen v) > (slen s)}
 
-toCaseFold :: s:Data.Text.Fusion.Internal.Stream Char
-           -> {v:Data.Text.Fusion.Internal.Stream Char | (slen v) >= (slen s)}
+replicateCharI
+    :: l:GHC.Types.Int
+    -> GHC.Types.Char
+    -> {v:Data.Text.Fusion.Internal.Stream GHC.Types.Char | (slen v) = l}
 
-toUpper    :: s:Data.Text.Fusion.Internal.Stream Char
-           -> {v:Data.Text.Fusion.Internal.Stream Char | (slen v) >= (slen s)}
-toLower    :: s:Data.Text.Fusion.Internal.Stream Char
-           -> {v:Data.Text.Fusion.Internal.Stream Char | (slen v) >= (slen s)}
+toCaseFold
+    :: s:Data.Text.Fusion.Internal.Stream GHC.Types.Char
+    -> {v:Data.Text.Fusion.Internal.Stream GHC.Types.Char | (slen v) >= (slen s)}
+
+toUpper
+    :: s:Data.Text.Fusion.Internal.Stream GHC.Types.Char
+    -> {v:Data.Text.Fusion.Internal.Stream GHC.Types.Char | (slen v) >= (slen s)}
+
+toLower
+    :: s:Data.Text.Fusion.Internal.Stream GHC.Types.Char
+    -> {v:Data.Text.Fusion.Internal.Stream GHC.Types.Char | (slen v) >= (slen s)}

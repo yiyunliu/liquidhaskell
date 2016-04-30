@@ -1,3 +1,10 @@
 module spec Foreign.Marshal.Array where
 
-Foreign.Marshal.Array.allocaArray :: Foreign.Storable.Storable a => n:Int -> ((PtrN a n) -> IO b) -> IO b
+import GHC.Ptr
+import GHC.Types
+
+allocaArray
+    :: Foreign.Storable.Storable a
+    => n:GHC.Types.Int
+    -> ((PtrN a n) -> GHC.Types.IO b)
+    -> GHC.Types.IO b

@@ -1,204 +1,218 @@
-module spec Data.ByteString.Lazy where
+module spec Data.ByteString.Lazy.Char8 where
 
-assume empty :: { bs : Data.ByteString.Lazy.ByteString | bllen bs == 0 }
+import Data.ByteString
+import Data.ByteString.Lazy
 
-assume singleton
-    :: Char -> { bs : Data.ByteString.Lazy.ByteString | bllen bs == 1 }
+import GHC.Base
+import GHC.Int
+import GHC.Num
 
-assume pack
-    :: w8s : [Char]
+empty
+    :: { bs : Data.ByteString.Lazy.ByteString | bllen bs == 0 }
+
+singleton
+    :: GHC.Types.Char -> { bs : Data.ByteString.Lazy.ByteString | bllen bs == 1 }
+
+pack
+    :: w8s : [GHC.Types.Char]
     -> { bs : Data.ByteString.ByteString | bllen bs == len w8s }
 
-assume unpack
+unpack
     :: bs : Data.ByteString.Lazy.ByteString
-    -> { w8s : [Char] | len w8s == bllen bs }
+    -> { w8s : [GHC.Types.Char] | len w8s == bllen bs }
 
-assume fromStrict
+fromStrict
     :: i : Data.ByteString.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bslen i }
 
-assume toStrict
+toStrict
     :: i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.ByteString | bslen o == bllen i }
 
-assume fromChunks
+fromChunks
     :: i : [Data.ByteString.ByteString]
     -> { o : Data.ByteString.Lazy.ByteString | len i == 0 <=> bllen o == 0 }
 
-assume toChunks
+toChunks
     :: i : Data.ByteString.Lazy.ByteString
     -> { os : [{ o : Data.ByteString.ByteString | bslen o <= bllen i}] | len os == 0 <=> bllen i == 0 }
 
-assume cons
-    :: Char
+cons
+    :: GHC.Types.Char
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i + 1 }
 
-assume snoc
+snoc
     :: i : Data.ByteString.Lazy.ByteString
-    -> Char
+    -> GHC.Types.Char
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i + 1 }
 
-assume append
+append
     :: l : Data.ByteString.Lazy.ByteString
     -> r : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen l + bllen r }
 
 head
     :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
-    -> Char
+    -> GHC.Types.Char
 
-assume uncons
+uncons
     :: i : Data.ByteString.Lazy.ByteString
-    -> Maybe (Char, { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i - 1 })
+    -> Data.Maybe.Maybe (GHC.Types.Char, { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i - 1 })
 
-assume unsnoc
+unsnoc
     :: i : Data.ByteString.Lazy.ByteString
-    -> Maybe ({ o : Data.ByteString.Lazy.ByteString | bllen o == bllen i - 1 }, Char)
+    -> Data.Maybe.Maybe ({ o : Data.ByteString.Lazy.ByteString | bllen o == bllen i - 1 }, GHC.Types.Char)
 
 last
     :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
-    -> Char
+    -> GHC.Types.Char
 
 tail
     :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
-    -> Char
+    -> GHC.Types.Char
 
 init
     :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
-    -> Char
+    -> GHC.Types.Char
 
-assume null
+null
     :: bs : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | Prop b <=> bllen bs == 0 }
+    -> { b : GHC.Types.Bool | Prop b <=> bllen bs == 0 }
 
-assume length
-    :: bs : Data.ByteString.Lazy.ByteString -> { n : Data.Int.Int64 | bllen bs == n }
+length
+    :: bs : Data.ByteString.Lazy.ByteString -> { n : Nat64 | bllen bs == n }
 
-assume map
-    :: (Char -> Char)
+map
+    :: (GHC.Types.Char -> GHC.Types.Char)
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume reverse
+reverse
     :: i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume intersperse
-    :: Char
+intersperse
+    :: GHC.Types.Char
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | (bllen i == 0 <=> bllen o == 0) && (1 <= bllen i <=> bllen o == 2 * bllen i - 1) }
 
-assume intercalate
+intercalate
     :: l : Data.ByteString.Lazy.ByteString
     -> rs : [Data.ByteString.Lazy.ByteString]
     -> { o : Data.ByteString.Lazy.ByteString | len rs == 0 ==> bllen o == 0 }
 
-assume transpose
+transpose
     :: is : [Data.ByteString.Lazy.ByteString]
     -> { os : [{ bs : Data.ByteString.Lazy.ByteString | bllen bs <= len is }] | len is == 0 ==> len os == 0}
 
 foldl1
-    :: (Char -> Char -> Char)
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
     -> { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
-    -> Char
+    -> GHC.Types.Char
 
 foldl1'
-    :: (Char -> Char -> Char)
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
     -> { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
-    -> Char
+    -> GHC.Types.Char
 
 foldr1
-    :: (Char -> Char -> Char)
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
     -> { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
-    -> Char
+    -> GHC.Types.Char
 
 foldr1'
-    :: (Char -> Char -> Char)
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
     -> { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
-    -> Char
+    -> GHC.Types.Char
 
-assume concat
+concat
     :: is : [Data.ByteString.Lazy.ByteString]
     -> { o : Data.ByteString.Lazy.ByteString | len is == 0 ==> bllen o }
 
-assume concatMap
-    :: (Char -> Data.ByteString.Lazy.ByteString)
+concatMap
+    :: (GHC.Types.Char -> Data.ByteString.Lazy.ByteString)
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen i == 0 ==> bllen o == 0 }
 
-assume any :: (Char -> Bool)
+any
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> bs : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen bs == 0 ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bllen bs == 0 ==> not (Prop b) }
 
-assume all :: (Char -> Bool)
+all
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> bs : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen bs == 0 ==> Prop b }
+    -> { b : GHC.Types.Bool | bllen bs == 0 ==> Prop b }
 
-maximum :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs } -> Char
+maximum
+    :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
+    -> GHC.Types.Char
 
-minimum :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs } -> Char
+minimum
+    :: { bs : Data.ByteString.Lazy.ByteString | 1 <= bllen bs }
+    -> GHC.Types.Char
 
-assume scanl
-    :: (Char -> Char -> Char)
-    -> Char
+scanl
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
+    -> GHC.Types.Char
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume scanl1
-    :: (Char -> Char -> Char)
+scanl1
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
     -> i : { i : Data.ByteString.Lazy.ByteString | 1 <= bllen i }
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume scanr
-    :: (Char -> Char -> Char)
-    -> Char
+scanr
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
+    -> GHC.Types.Char
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume scanr1
-    :: (Char -> Char -> Char)
+scanr1
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Char)
     -> i : { i : Data.ByteString.Lazy.ByteString | 1 <= bllen i }
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume mapAccumL
-    :: (acc -> Char -> (acc, Char))
+mapAccumL
+    :: (acc -> GHC.Types.Char -> (acc, GHC.Types.Char))
     -> acc
     -> i : Data.ByteString.Lazy.ByteString
     -> (acc, { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i })
 
-assume mapAccumR
-    :: (acc -> Char -> (acc, Char))
+mapAccumR
+    :: (acc -> GHC.Types.Char -> (acc, GHC.Types.Char))
     -> acc
     -> i : Data.ByteString.Lazy.ByteString
     -> (acc, { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i })
 
-assume replicate
+replicate
     :: n : Data.Int.Int64
-    -> Char
+    -> GHC.Types.Char
     -> { bs : Data.ByteString.Lazy.ByteString | bllen bs == n }
 
-assume unfoldrN
-    :: n : Int
-    -> (a -> Maybe (Char, a))
+unfoldrN
+    :: n : GHC.Types.Int
+    -> (a -> Data.Maybe.Maybe (GHC.Types.Char, a))
     -> a
-    -> ({ bs : Data.ByteString.Lazy.ByteString | bllen bs <= n }, Maybe a)
+    -> ({ bs : Data.ByteString.Lazy.ByteString | bllen bs <= n }, Data.Maybe.Maybe a)
 
-assume take
+take
     :: n : Data.Int.Int64
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | (n <= 0 ==> bllen o == 0) &&
                                                ((0 <= n && n <= bllen i) <=> bllen o == n) &&
                                                (bllen i <= n <=> bllen o = bllen i) }
 
-assume drop
+drop
     :: n : Data.Int.Int64
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | (n <= 0 <=> bllen o == bllen i) &&
                                                ((0 <= n && n <= bllen i) <=> bllen o == bllen i - n) &&
                                                (bllen i <= n <=> bllen o == 0) }
 
-assume splitAt
+splitAt
     :: n : Data.Int.Int64
     -> i : Data.ByteString.Lazy.ByteString
     -> ( { l : Data.ByteString.Lazy.ByteString | (n <= 0 <=> bllen l == 0) &&
@@ -209,130 +223,130 @@ assume splitAt
                                                  (bllen i <= n <=> bllen r == 0) }
        )
 
-assume takeWhile
-    :: (Char -> Bool)
+takeWhile
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }
 
-assume dropWhile
-    :: (Char -> Bool)
+dropWhile
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }
 
-assume span
-    :: (Char -> Bool)
+span
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> ( { l : Data.ByteString.Lazy.ByteString | bllen l <= bllen i }
        , { r : Data.ByteString.Lazy.ByteString | bllen r <= bllen i }
        )
 
-assume spanEnd
-    :: (Char -> Bool)
+spanEnd
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> ( { l : Data.ByteString.Lazy.ByteString | bllen l <= bllen i }
        , { r : Data.ByteString.Lazy.ByteString | bllen r <= bllen i }
        )
 
-assume break
-    :: (Char -> Bool)
+break
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> ( { l : Data.ByteString.Lazy.ByteString | bllen l <= bllen i }
        , { r : Data.ByteString.Lazy.ByteString | bllen r <= bllen i }
        )
 
-assume breakEnd
-    :: (Char -> Bool)
+breakEnd
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> ( { l : Data.ByteString.Lazy.ByteString | bllen l <= bllen i }
        , { r : Data.ByteString.Lazy.ByteString | bllen r <= bllen i }
        )
-assume group
+group
     :: i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | 1 <= bllen o && bllen o <= bllen i }]
 
-assume groupBy
-    :: (Char -> Char -> Bool)
+groupBy
+    :: (GHC.Types.Char -> GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | 1 <= bllen o && bllen o <= bllen i }]
 
-assume inits
+inits
     :: i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }]
 
-assume tails
+tails
     :: i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }]
 
-assume split
-    :: Char
+split
+    :: GHC.Types.Char
     -> i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }]
 
-assume splitWith
-    :: (Char -> Bool)
+splitWith
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }]
 
-assume lines
+lines
     :: i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }]
 
-assume words
+words
     :: i : Data.ByteString.Lazy.ByteString
     -> [{ o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }]
 
-assume unlines
+unlines
     :: is : [Data.ByteString.Lazy.ByteString]
     -> { o : Data.ByteString.Lazy.ByteString | (len is == 0 <=> bllen o == 0) && bllen o >= len is }
 
-assume unwords
+unwords
     :: is : [Data.ByteString.Lazy.ByteString]
     -> { o : Data.ByteString.Lazy.ByteString | (len is == 0 ==> bllen o == 0) && (1 <= len is ==> bllen o >= len is - 1) }
 
-assume isPrefixOf
+isPrefixOf
     :: l : Data.ByteString.Lazy.ByteString
     -> r : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen l >= bllen r ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bllen l >= bllen r ==> not (Prop b) }
 
-assume isSuffixOf
+isSuffixOf
     :: l : Data.ByteString.Lazy.ByteString
     -> r : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen l >= bllen r ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bllen l >= bllen r ==> not (Prop b) }
 
-assume isInfixOf
+isInfixOf
     :: l : Data.ByteString.Lazy.ByteString
     -> r : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen l >= bllen r ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bllen l >= bllen r ==> not (Prop b) }
 
-assume breakSubstring
+breakSubstring
     :: il : Data.ByteString.Lazy.ByteString
     -> ir : Data.ByteString.Lazy.ByteString
     -> ( { ol : Data.ByteString.Lazy.ByteString | bllen ol <= bllen ir && (bllen il > bllen ir ==> bllen ol == bllen ir)}
        , { or : Data.ByteString.Lazy.ByteString | bllen or <= bllen ir && (bllen il > bllen ir ==> bllen or == 0) }
        )
 
-assume elem
-    :: Char
+elem
+    :: GHC.Types.Char
     -> bs : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen b == 0 ==> not (Prop b) }
+    -> { b : GHC.Types.Bool | bllen b == 0 ==> not (Prop b) }
 
-assume notElem
-    :: Char
+notElem
+    :: GHC.Types.Char
     -> bs : Data.ByteString.Lazy.ByteString
-    -> { b : Bool | bllen b == 0 ==> Prop b }
+    -> { b : GHC.Types.Bool | bllen b == 0 ==> Prop b }
 
-assume find
-    :: (Char -> Bool)
+find
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> bs : Data.ByteString.Lazy.ByteString
-    -> Maybe { w8 : Char | bllen bs /= 0 }
+    -> Data.Maybe.Maybe { w8 : GHC.Types.Char | bllen bs /= 0 }
 
-assume filter
-    :: (Char -> Bool)
+filter
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o <= bllen i }
 
-assume partition
-    :: (Char -> Bool)
+partition
+    :: (GHC.Types.Char -> GHC.Types.Bool)
     -> i : Data.ByteString.Lazy.ByteString
     -> ( { l : Data.ByteString.Lazy.ByteString | bllen l <= bllen i }
        , { r : Data.ByteString.Lazy.ByteString | bllen r <= bllen i }
@@ -341,77 +355,77 @@ assume partition
 index
     :: bs : Data.ByteString.Lazy.ByteString
     -> { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
-    -> Char
+    -> GHC.Types.Char
 
-assume elemIndex
-    :: Char
+elemIndex
+    :: GHC.Types.Char
     -> bs : Data.ByteString.Lazy.ByteString
-    -> Maybe { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
+    -> Data.Maybe.Maybe { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
 
-assume elemIndices
-    :: Char
-    -> bs : Data.ByteString.Lazy.ByteString
-    -> [{ n : Data.Int.Int64 | 0 <= n && n < bllen bs }]
-
-assume elemIndexEnd
-    :: Char
-    -> bs : Data.ByteString.Lazy.ByteString
-    -> Maybe { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
-
-assume findIndex
-    :: (Char -> Bool)
-    -> bs : Data.ByteString.Lazy.ByteString
-    -> Maybe { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
-
-assume findIndices
-    :: (Char -> Bool)
+elemIndices
+    :: GHC.Types.Char
     -> bs : Data.ByteString.Lazy.ByteString
     -> [{ n : Data.Int.Int64 | 0 <= n && n < bllen bs }]
 
-assume count
-    :: Char
+elemIndexEnd
+    :: GHC.Types.Char
+    -> bs : Data.ByteString.Lazy.ByteString
+    -> Data.Maybe.Maybe { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
+
+findIndex
+    :: (GHC.Types.Char -> GHC.Types.Bool)
+    -> bs : Data.ByteString.Lazy.ByteString
+    -> Data.Maybe.Maybe { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
+
+findIndices
+    :: (GHC.Types.Char -> GHC.Types.Bool)
+    -> bs : Data.ByteString.Lazy.ByteString
+    -> [{ n : Data.Int.Int64 | 0 <= n && n < bllen bs }]
+
+count
+    :: GHC.Types.Char
     -> bs : Data.ByteString.Lazy.ByteString
     -> { n : Data.Int.Int64 | 0 <= n && n < bllen bs }
 
-assume zip
+zip
     :: l : Data.ByteString.Lazy.ByteString
     -> r : Data.ByteString.Lazy.ByteString
-    -> { o : [(Char, Char)] | len o <= bllen l && len o <= bllen r }
+    -> { o : [(GHC.Types.Char, GHC.Types.Char)] | len o <= bllen l && len o <= bllen r }
 
-assume zipWith
-    :: (Char -> Char -> a)
+zipWith
+    :: (GHC.Types.Char -> GHC.Types.Char -> a)
     -> l : Data.ByteString.Lazy.ByteString
     -> r : Data.ByteString.Lazy.ByteString
     -> { o : [a] | len o <= bllen l && len o <= bllen r }
 
-assume unzip
-    :: i : [(Char, Char)]
+unzip
+    :: i : [(GHC.Types.Char, GHC.Types.Char)]
     -> ( { l : Data.ByteString.Lazy.ByteString | bllen l == len i }
        , { r : Data.ByteString.Lazy.ByteString | bllen r == len i }
        )
 
-assume sort
+sort
     :: i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume readInt
+readInt
     :: i : Data.ByteString.Lazy.ByteString
-    -> Maybe { p : (Int, { o : Data.ByteString.Lazy.ByteString | bllen o < bllen i}) | bllen i /= 0 }
+    -> Data.Maybe.Maybe { p : (GHC.Types.Int, { o : Data.ByteString.Lazy.ByteString | bllen o < bllen i}) | bllen i /= 0 }
 
-assume readInteger
+readInteger
     :: i : Data.ByteString.Lazy.ByteString
-    -> Maybe { p : (Integer, { o : Data.ByteString.Lazy.ByteString | bllen o < bllen i}) | bllen i /= 0 }
+    -> Data.Maybe.Maybe { p : (GHC.Integer.Type.Integer, { o : Data.ByteString.Lazy.ByteString | bllen o < bllen i}) | bllen i /= 0 }
 
-assume copy
+copy
     :: i : Data.ByteString.Lazy.ByteString
     -> { o : Data.ByteString.Lazy.ByteString | bllen o == bllen i }
 
-assume hGet
+hGet
     :: System.IO.Handle
-    -> n : { n : Int | 0 <= n }
-    -> IO { bs : Data.ByteString.Lazy.ByteString | bllen bs == n || bllen bs == 0 }
+    -> n : { n : GHC.Types.Int | 0 <= n }
+    -> GHC.Types.IO { bs : Data.ByteString.Lazy.ByteString | bllen bs == n || bllen bs == 0 }
 
-assume hGetNonBlocking
+hGetNonBlocking
     :: System.IO.Handle
     -> n : { n : Int | 0 <= n }
-    -> IO { bs : Data.ByteString.Lazy.ByteString | bllen bs <= n }
+    -> GHC.Types.IO { bs : Data.ByteString.Lazy.ByteString | bllen bs <= n }
