@@ -83,7 +83,7 @@ getGhcInfo' :: Config -> FilePath -> ModName -> Ms.BareSpec -> Ghc (GhcInfo, Hsc
 getGhcInfo' cfg target name tgtSpec = do
   paths     <- importPaths <$> getSessionDynFlags
   liftIO     $ whenLoud $ putStrLn $ "paths = " ++ show paths
-  impSpecs  <- findAndLoadTargets cfg paths target
+  impSpecs  <- findAndLoadTargets cfg paths name target
   modGuts   <- makeMGIModGuts target
   hscEnv    <- getSession
   coreBinds <- liftIO $ anormalize (not $ nocaseexpand cfg) hscEnv modGuts
@@ -151,11 +151,11 @@ parseRootTarget cfg0 target = do
   cfg <- withPragmas cfg0 target $ Ms.pragmas tgtSpec
   return (cfg, ModName Target $ getModName name, tgtSpec)
 
-findAndLoadTargets :: Config -> [FilePath] -> FilePath -> Ghc [(ModName, Ms.BareSpec)]
-findAndLoadTargets cfg paths target = do
+findAndLoadTargets :: Config -> [FilePath] -> ModName -> FilePath -> Ghc [(ModName, Ms.BareSpec)]
+findAndLoadTargets cfg paths name target = do
   setTargets . return =<< guessTarget target Nothing
   impNames <- allDepNames <$> depanal [] False
-  impSpecs <- getSpecs cfg paths target impNames [Spec, Hs, LHs]
+  impSpecs <- getSpecs cfg paths name target impNames [Spec, Hs, LHs]
   liftIO $ whenNormal $ donePhase Loud "Parsed All Specifications"
   compileCFiles =<< liftIO (foldM (\c (f,_,s) -> withPragmas c f (Ms.pragmas s)) cfg impSpecs)
   impSpecs' <- forM impSpecs $ \(f, n, s) -> do
@@ -249,13 +249,14 @@ definedVars = concatMap defs
 --------------------------------------------------------------------------------
 type FileSpec = (FilePath, ModName, Ms.BareSpec)
 
-getSpecs :: Config -> [FilePath] -> FilePath -> [String] -> [Ext] -> Ghc [FileSpec]
-getSpecs cfg paths target names exts = do
+getSpecs :: Config -> [FilePath] -> ModName -> FilePath -> [String] -> [Ext] -> Ghc [FileSpec]
+getSpecs cfg paths name target names exts = do
   fSpecs <- getSpecs' cfg paths target names exts
   -- liftIO $ putStrLn $ "getSpecs    [RAW]: " ++ show [(f, n) | (f, n, _) <- fSpecs]
-  let fSpecs' = normalizeFileSpec fSpecs
+  let fSpecs'  = normalizeFileSpec fSpecs
+  let fSpecs'' = filter ((/= getModString name) . getModString . snd3) fSpecs'
   -- liftIO $ putStrLn $ "getSpecs [NORMAL]: " ++ showTable [(n, text f) | (f, n, _) <- fSpecs']
-  return fSpecs'
+  return fSpecs''
 
 -- showTable = render . pprintKVs Full . sortBy (compare `on` fst)
 
