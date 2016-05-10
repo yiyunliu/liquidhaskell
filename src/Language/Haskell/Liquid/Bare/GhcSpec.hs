@@ -241,21 +241,20 @@ makeGhcSpec1 :: [Var]
              -> Subst
              -> GhcSpec
              -> BareM GhcSpec
-makeGhcSpec1 vars defVars embs tyi exports name sigs asms cs' ms' cms' su sp
+makeGhcSpec1 vars _defVars embs tyi exports name sigs asms cs' ms' cms' su sp
   = do tySigs      <- makePluggedSigs name embs tyi exports $ tx sigs
        asmSigs     <- makePluggedAsmSigs embs tyi $ tx asms
        ctors       <- makePluggedAsmSigs embs tyi $ tx cs'
        lmap        <- logicEnv <$> get
        inlmap      <- inlines  <$> get
        let ctors'   = [ (x, txRefToLogic lmap inlmap <$> t) | (x, t) <- ctors ]
-       return $ sp { tySigs     = filter (\(v,_) -> v `elem` vs) tySigs
-                   , asmSigs    = filter (\(v,_) -> v `elem` vs) asmSigs
-                   , ctors      = filter (\(v,_) -> v `elem` vs) ctors'
+       return $ sp { tySigs     = tySigs
+                   , asmSigs    = asmSigs
+                   , ctors      = ctors'
                    , meas       = tx' $ tx $ ms' ++ varMeasures vars ++ cms' }
     where
       tx   = fmap . mapSnd . subst $ su
       tx'  = fmap (mapSnd $ fmap uRType)
-      vs   = vars ++ defVars
 
 makeGhcSpec2 :: Monad m
              => [(Maybe Var, LocSpecType)]

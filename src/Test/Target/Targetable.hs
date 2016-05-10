@@ -34,6 +34,7 @@ import           GHC.Generics
 import           GHC.Stack
 
 import           Language.Fixpoint.Types         hiding (prop, ofReft, reft)
+import qualified Language.Fixpoint.Types         as F
 import           Language.Haskell.Liquid.Types.RefType
 import           Language.Haskell.Liquid.Types   hiding (var)
 
@@ -252,6 +253,34 @@ instance Targetable Integer where
     let e = fromIntegral v
     b <- eval (reft t) e
     return (b, e)
+
+instance Targetable Double where
+  getType _ = FObj "GHC.Types.Double"
+  query _ d x t = -- fresh FInt >>= \x ->
+    do -- traceShowM ("query.int", var x)
+       -- traceShowM ("queyr.int", reft t)
+       constrain $ ofReft (reft t) (var x)
+       -- use the unfolding depth to constrain the range of Ints, like QuickCheck
+       constrain $ var x `ge` fromIntegral (negate d)
+       constrain $ var x `le` fromIntegral d
+       return x
+  toExpr d = ECon $ F.R d
+
+  decode v _ = read . T.unpack <$> getValue v
+
+  check v t = do
+    let e = toExpr v
+    b <- eval (reft t) e
+    return (b, e)
+
+instance Targetable Float where
+  getType _ = FObj "GHC.Types.Float"
+  query _ d x t = query (Proxy :: Proxy Double) d x t
+  toExpr  x = toExpr (realToFrac x :: Double)
+
+  decode v t = decode v t >>= \(x::Double) -> return . realToFrac $ x
+
+  check v t = check (realToFrac v :: Double) t
 
 instance Targetable Char where
   getType _ = FObj "GHC.Types.Char"
