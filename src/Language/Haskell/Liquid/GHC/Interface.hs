@@ -42,8 +42,10 @@ import Control.Monad
 import Data.List hiding (intersperse)
 import Data.Maybe
 -- import Data.Function (on)
+
 import qualified Data.HashSet        as S
 import qualified Data.HashMap.Strict as M
+import qualified Data.IntSet         as I
 
 import System.Console.CmdArgs.Verbosity hiding (Loud)
 import System.Directory
@@ -111,35 +113,199 @@ runLiquidGhc hscEnv cfg act =
     runGhc (Just libdir) $ do
       maybe (return ()) setSession hscEnv
       df <- getSessionDynFlags
-      (df',_,_) <- parseDynamicFlags df (map noLoc $ ghcOptions cfg)
-      loud <- liftIO isLoud
-      let df'' = df' { importPaths  = nub $ idirs cfg ++ importPaths df'
-                     , libraryPaths = nub $ idirs cfg ++ libraryPaths df'
-                     , includePaths = nub $ idirs cfg ++ includePaths df'
-                     , packageFlags = ExposePackage (PackageArg "ghc-prim")
-                                                    (ModRenaming True [])
-                                    : packageFlags df'
-                     -- , profAuto     = ProfAutoCalls
-                     , ghcLink      = LinkInMemory
-                     -- FIXME: this *should* be HscNothing, but that prevents us from
-                     -- looking up *unexported* names in another source module..
-                     , hscTarget    = HscInterpreted -- HscNothing
-                     , ghcMode      = CompManager
-                     -- prevent GHC from printing anything, unless in Loud mode
-                     , log_action   = if loud
-                                        then defaultLogAction
-                                        else \_ _ _ _ _ -> return ()
-                     -- redirect .hi/.o/etc files to temp directory
-                     , objectDir    = Just tmp
-                     , hiDir        = Just tmp
-                     , stubDir      = Just tmp
-                     } `xopt_set` Opt_MagicHash
-                       `xopt_set` Opt_DeriveGeneric
-                       `xopt_set` Opt_StandaloneDeriving
-                       `gopt_set` Opt_ImplicitImportQualified
-                       `gopt_set` Opt_PIC
+      df' <- parseUserDynFlags df $ ghcOptions cfg
+      df'' <- liftIO $ configureDynFlags cfg tmp df'
       _ <- setSessionDynFlags df''
       defaultCleanupHandler df'' act
+
+-- | Ignore warnings generated when applying user DynFlags (like the -O and
+-- interactive-mode conflict). Jump ahead and disable -Werr here, if set, to
+-- ensure DynFlag merge warnings don't kill us.
+parseUserDynFlags :: DynFlags -> [String] -> Ghc DynFlags
+parseUserDynFlags df opts = do
+  setSessionDynFlags dfNoWerr
+  (df', _, _) <- parseDynamicFlags dfNoWerr $ cmdLineLoc <$> opts
+  setSessionDynFlags df
+  return df'
+  where
+    dfNoWerr   = df `gopt_unset` Opt_WarnIsError
+    cmdLineLoc = mkGeneralLocated "<command line>"
+
+-- | Configure LiquidHaskell-specific DynFlags. Take care to set *safe*
+-- values for everything we should, so we aren't relying on any defaults
+-- that might get overwritten by the user's GHC options (which may be
+-- generated via Cabal and not intended for us).
+configureDynFlags :: Config -> FilePath -> DynFlags -> IO DynFlags
+configureDynFlags cfg tmp df = do
+  loud <- isLoud
+  let defaults = defaultDynFlags $ settings df
+  let dfWays = nub $ ways defaults ++
+                 if WayDyn `elem` ways df
+                   then [WayDyn]
+                   else []
+  -- MAINTENANCE NOTE: Please go through these again for each new GHC version!
+  return $ df
+    { ghcMode                  = CompManager
+    , ghcLink                  = LinkInMemory
+    -- FIXME: this *should* be HscNothing, but that prevents us from
+    -- looking up *unexported* names in another source module..
+    -- prevent GHC from printing anything, unless in Loud mode
+    , hscTarget                = HscInterpreted -- HscNothing
+    -- , settings              = <user>
+    -- , sigOf                 = <user>
+    , verbosity                = if loud
+                                   then max 3 $ verbosity df
+                                   else 0
+    -- TODO: Perhaps turning down simplifier phases could help
+    -- our analysis of the core?
+    , optLevel                 = optLevel defaults
+    , simplPhases              = simplPhases defaults
+    , maxSimplIterations       = maxSimplIterations defaults
+    , ruleCheck                = ruleCheck defaults
+    , strictnessBefore         = strictnessBefore defaults
+    -- TODO: Should we take advantage of parallelism here?
+    , parMakeCount             = parMakeCount defaults
+    , enableTimeStats          = enableTimeStats defaults
+    -- , ghcHeapSize           = <user>
+    -- , maxRelevantBinds      = <user>
+    , simplTickFactor          = simplTickFactor defaults
+    , specConstrThreshold      = specConstrThreshold defaults
+    , specConstrCount          = specConstrCount defaults
+    , specConstrRecursive      = specConstrRecursive defaults
+    , liberateCaseThreshold    = liberateCaseThreshold defaults
+    , floatLamArgs             = floatLamArgs defaults
+    , historySize              = historySize defaults
+    -- , cmdlineHcIncludes     = <user>
+    , importPaths              = nub $ idirs cfg ++ importPaths df
+    -- , mainModIs             = <user>
+    -- , mainFunIs             = <user>
+    -- , ctxtStkDepth          = <user>
+    -- , tyFunStkDepth         = <user>
+    -- , thisPackage           = <user>
+    , ways                     = dfWays
+    , buildTag                 = mkBuildTag dfWays
+    , rtsBuildTag              = mkBuildTag dfWays
+    , splitInfo                = splitInfo defaults
+    , objectDir                = Just tmp
+    -- , dylibInstallName      = <user>
+    , hiDir                    = Just tmp
+    , stubDir                  = Just tmp
+    , dumpDir                  = Just tmp
+    -- , objectSuf             = <user>
+    -- , hcSuf                 = <user>
+    -- , hiSuf                 = <user>
+    -- , canGenerateDynamicToo = <user>
+    -- , dynObjectSuf          = <user>
+    -- , dynHiSuf              = <user>
+    , dllSplitFile             = dllSplitFile defaults
+    , dllSplit                 = dllSplit defaults
+    , outputFile               = outputFile defaults
+    , dynOutputFile            = dynOutputFile defaults
+    , outputHi                 = outputHi defaults
+    -- , dynLibLoader          = <user>
+    , dumpPrefix               = dumpPrefix defaults
+    , dumpPrefixForce          = dumpPrefixForce defaults
+    -- , ldInputs              = <user>
+    , includePaths             = nub $ idirs cfg ++ includePaths df
+    , libraryPaths             = nub $ idirs cfg ++ libraryPaths df
+    , frameworkPaths           = nub $ idirs cfg ++ frameworkPaths df
+    -- , cmdlineFrameworks     = <user>
+    , rtsOpts                  = rtsOpts defaults
+    , rtsOptsEnabled           = rtsOptsEnabled defaults
+    , hpcDir                   = tmp
+    -- , pluginModNames        = <user>
+    -- , pluginModNameOpts     = <user>
+    -- , hooks                 = <user>
+    , depMakefile              = depMakefile defaults
+    , depIncludePkgDeps        = depIncludePkgDeps defaults
+    , depExcludeMods           = depExcludeMods defaults
+    , depSuffixes              = depSuffixes defaults
+    -- , extraPkgConfs         = <user>
+    , packageFlags             = ExposePackage (PackageArg "ghc-prim")
+                                               (ModRenaming True [])
+                                 : packageFlags df
+    -- , packageEnv            = <user>
+    -- , pkgDatabase           = <user>
+    -- , pkgState              = <user>
+    -- , filesToClean          = <user>
+    -- , dirsToClean           = <user>
+    -- , filesToNotIntermediateClean = <user>
+    -- , nextTempSuffix        = <user>
+    -- , generatedDumps        = <user>
+    , dumpFlags                = dumpFlags defaults
+    -- (generalFlags are handled below)
+    , warningFlags             = if loud
+                                   then warningFlags df
+                                   else I.empty
+    -- , language              = <user>
+    -- , safeHaskell           = <user>
+    -- , safeInfer             = <user>
+    -- , safeInferred          = <user>
+    -- , thOnLoc               = <user>
+    -- , newDerivOnLoc         = <user>
+    -- , overlapInstLoc        = <user>
+    -- , incoherentOnLoc       = <user>
+    -- , pkgTrustOnLoc         = <user>
+    -- , warnSafeOnLoc         = <user>
+    -- , warnUnsafeOnLoc       = <user>
+    -- , trustworthyOnLoc      = <user>
+    -- , extensionFlags        = <user> (also see below)
+    , ufCreationThreshold      = ufCreationThreshold defaults
+    , ufUseThreshold           = ufUseThreshold defaults
+    , ufFunAppDiscount         = ufFunAppDiscount defaults
+    , ufDictDiscount           = ufDictDiscount defaults
+    , ufKeenessFactor          = ufKeenessFactor defaults
+    , ufDearOp                 = ufDearOp defaults
+    , maxWorkerArgs            = maxWorkerArgs defaults
+    , ghciHistSize             = ghciHistSize defaults
+    , log_action               = if loud
+                                   then defaultLogAction
+                                   else \_ _ _ _ _ -> return ()
+    , flushOut                 = flushOut defaults
+    , flushErr                 = flushErr defaults
+    , haddockOptions           = haddockOptions defaults
+    , ghciScripts              = ghciScripts defaults
+    -- , pprUserLength         = <user>
+    -- , pprCols               = <user>
+    , traceLevel               = if loud
+                                   then max 1 $ traceLevel df
+                                   else 0
+    -- , useUnicode            = <user>
+    -- TODO: This used to be ProfAutoCalls but was commented out;
+    -- why?
+    , profAuto                 = profAuto defaults
+    , interactivePrint         = interactivePrint defaults
+    -- , llvmVersion           = <user>
+    -- , nextWrapperNum        = <user>
+    -- , sseVersion            = <user>
+    -- , avx                   = <user>
+    -- , avx2                  = <user>
+    -- , avx512cd              = <user>
+    -- , avx512er              = <user>
+    -- , avx512f               = <user>
+    -- , avx512pf              = <user>
+    -- , rtldInfo              = <user>
+    -- , rtccInfo              = <user>
+    -- , maxInlineAllocSize    = <user>
+    -- , maxInlineMemcpyInsns  = <user>
+    -- , maxInlineMemsetInsns  = <user>
+    } `xopt_set` Opt_MagicHash
+      `xopt_set` Opt_DeriveGeneric
+      `xopt_set` Opt_StandaloneDeriving
+      `gopt_set` Opt_ImplicitImportQualified
+      `gopt_set` Opt_PIC
+      `gopt_unset` Opt_DumpToFile
+      `gopt_unset` Opt_DoCoreLinting
+      `gopt_unset` Opt_DoStgLinting
+      `gopt_unset` Opt_DoCmmLinting
+      `gopt_unset` Opt_DoAsmLinting
+      `gopt_unset` Opt_DoAnnotationLinting
+      `gopt_unset` Opt_WarnIsError
+      `gopt_unset` Opt_WriteInterface
+      `gopt_unset` Opt_SplitObjs
+      `gopt_unset` Opt_GhciSandbox
+      `gopt_unset` Opt_GhciHistory
+      `gopt_unset` Opt_Hpc
 
 --------------------------------------------------------------------------------
 -- Parse, Find, & Load Targets -------------------------------------------------
