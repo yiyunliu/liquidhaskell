@@ -76,12 +76,12 @@ import Var
 import Language.Haskell.Liquid.GHC.SpanStack
 import Language.Haskell.Liquid.Types hiding   (binds)
 import Language.Haskell.Liquid.Types.Strata
-import Language.Haskell.Liquid.Misc           (fourth4, mapSnd)
+import Language.Haskell.Liquid.Misc           (fourth4, inserts, mapSnd)
 import Language.Haskell.Liquid.Types.RefType  (shiftVV, toType)
 import Language.Haskell.Liquid.WiredIn        (wiredSortedSyms)
 import qualified Language.Fixpoint.Types            as F
 
-import Language.Fixpoint.Misc
+import Language.Fixpoint.Misc hiding (inserts)
 
 import qualified Language.Haskell.Liquid.UX.CTags      as Tg
 
@@ -374,8 +374,8 @@ insertFEnv (FE benv env) ((x, t), i)
 insertsFEnv :: FEnv -> [((F.Symbol, F.Sort), F.BindId)] -> FEnv
 insertsFEnv = L.foldl' insertFEnv
 
-initFEnv :: [(F.Symbol, F.Sort)] -> FEnv
-initFEnv xts = FE F.emptyIBindEnv $ F.fromListSEnv (wiredSortedSyms ++ xts)
+initFEnv :: M.HashMap F.Symbol F.Sort -> FEnv
+initFEnv xts = FE F.emptyIBindEnv $ F.fromMapSEnv (inserts xts wiredSortedSyms)
 
 --------------------------------------------------------------------------------
 -- | Forcing Strictness --------------------------------------------------------

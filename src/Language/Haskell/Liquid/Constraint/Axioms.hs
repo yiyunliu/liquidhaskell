@@ -578,18 +578,18 @@ initAEEnv info sigs
                      , ae_recs    = []
                      , ae_assert  = []
                      , ae_cmb     = \x y -> (App (App (Var by) x) y)
-                     , ae_isHO    = higherorder $ config spc 
+                     , ae_isHO    = higherorder $ config info
                      }
     where
-      spc        = spec info
-      vs         = filter validVar (snd <$> freeSyms spc)
+      spc        = cmpSpec info
+      vs         = filter validVar (M.elems $ freeSyms spc)
       tp         = filter validExp (defVars info)
 
-      isExported = flip elemNameSet (exports $ spec info) . getName
+      isExported = flip elemNameSet (exports $ tgtSpec info) . getName
       validVar   = not . canIgnore
       validExp x = validVar x && isExported x
       by         = makeCombineVar $ makeCombineType τProof
-      τProof     = proofType $ spec info
+      τProof     = proofType $ tgtSpec info
 
 
 

@@ -18,7 +18,7 @@ import           Data.String
 import           Prelude                                hiding (error)
 import           Text.Parsec
 import           Text.Parsec.Error                      (newErrorMessage, Message (..))
-import           Text.Parsec.Pos                        (newPos)
+import           Text.Parsec.Pos
 
 import qualified Text.Parsec.Token                      as Token
 import qualified Data.Text                              as T

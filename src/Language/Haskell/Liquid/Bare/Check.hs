@@ -28,7 +28,7 @@ import           Text.PrettyPrint.HughesPJ
 import qualified Data.List                                 as L
 import qualified Data.HashMap.Strict                       as M
 
-import           Language.Fixpoint.Misc                    (applyNonNull, group, safeHead)
+import           Language.Fixpoint.Misc                    (group, safeHead)
 import           Language.Fixpoint.SortCheck               (checkSorted, checkSortedReftFull, checkSortFull)
 import           Language.Fixpoint.Types                   hiding (Error, R)
 
@@ -57,42 +57,42 @@ import           Debug.Trace
 
 checkGhcSpec :: [(ModName, Ms.BareSpec)]
              -> SEnv SortedReft
-             -> GhcSpec
-             -> Either [Error] GhcSpec
+             -> Config -> CompSpec -> TargetSpec
+             -> [Error]
 
-checkGhcSpec specs env sp =  applyNonNull (Right sp) Left errors
+checkGhcSpec specs env cfg csp tsp = errors
   where
-    errors           =  mapMaybe (checkBind allowHO "constructor"  emb tcEnv env) (dcons      sp)
-                     ++ mapMaybe (checkBind allowHO "measure"      emb tcEnv env) (meas       sp)
-                     ++ mapMaybe (checkBind allowHO "assumed type" emb tcEnv env) (asmSigs    sp)
-                     ++ mapMaybe (checkBind allowHO "class method" emb tcEnv env) (clsSigs    sp)
-                     ++ mapMaybe (checkInv allowHO emb tcEnv env)               (invariants sp)
-                     ++ checkIAl allowHO emb tcEnv env (ialiases   sp)
+    errors           =  mapMaybe (checkBind allowHO "constructor"  emb tcEnv env) (dcons      tsp)
+                     ++ mapMaybe (checkBind allowHO "measure"      emb tcEnv env) (M.toList $ meas    csp)
+                     ++ mapMaybe (checkBind allowHO "assumed type" emb tcEnv env) (M.toList $ asmSigs csp)
+                     ++ mapMaybe (checkBind allowHO "class method" emb tcEnv env) (clsSigs    csp)
+                     ++ mapMaybe (checkInv  allowHO                emb tcEnv env) (invariants csp)
+                     ++ checkIAl            allowHO                emb tcEnv env  (ialiases   csp)
                      ++ checkMeasures emb env ms
-                     ++ checkClassMeasures (measures sp)
+                     ++ checkClassMeasures (measures tsp)
                      ++ mapMaybe checkMismatch                     sigs
-                     ++ checkDuplicate                             (tySigs sp)
-                     ++ checkQualifiers env                        (qualifiers sp)
-                     ++ checkDuplicate                             (asmSigs sp)
-                     ++ checkDupIntersect                          (tySigs sp) (asmSigs sp)
+                     ++ checkDuplicate                             (M.toList $ tySigs csp)
+                     ++ checkQualifiers env                        (qualifiers csp)
+                     ++ checkDuplicate                             (M.toList $ asmSigs csp)
+                     ++ checkDupIntersect                          (M.toList $ tySigs csp) (M.toList $ asmSigs csp)
                      ++ checkRTAliases "Type Alias" env            tAliases
                      ++ checkRTAliases "Pred Alias" env            eAliases
-                     ++ checkDuplicateFieldNames                   (dconsP sp)
+                     ++ checkDuplicateFieldNames                   (dconsP tsp)
                      ++ checkRefinedClasses                        rClasses rInsts
     rClasses         = concatMap (Ms.classes   . snd) specs
     rInsts           = concatMap (Ms.rinstance . snd) specs
-    tAliases         = concat [Ms.aliases sp  | (_, sp) <- specs]
+    tAliases         = concat [Ms.aliases  sp | (_, sp) <- specs]
     eAliases         = concat [Ms.ealiases sp | (_, sp) <- specs]
     dcons spec       = [(v, Loc l l' t) | (v, t)   <- dataConSpec (dconsP spec)
                                         | (_, dcp) <- dconsP spec
                                         , let l     = dc_loc  dcp
                                         , let l'    = dc_locE dcp ]
-    emb              = tcEmbeds sp
-    tcEnv            = tyconEnv sp
-    ms               = measures sp
-    clsSigs sp       = [ (v, t) | (v, t) <- tySigs sp, isJust (isClassOpId_maybe v) ]
-    sigs             = tySigs sp ++ asmSigs sp
-    allowHO          = higherorder $ config sp 
+    emb              = tcEmbeds csp
+    tcEnv            = tyconEnv csp
+    ms               = measures tsp
+    clsSigs sp       = [ (v, t) | (v, t) <- M.toList $ tySigs sp, isJust (isClassOpId_maybe v) ]
+    sigs             = M.toList (tySigs csp) ++ M.toList (asmSigs csp)
+    allowHO          = higherorder cfg
 
 
 checkQualifiers :: SEnv SortedReft -> [Qualifier] -> [Error]

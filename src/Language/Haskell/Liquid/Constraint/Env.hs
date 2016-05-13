@@ -30,6 +30,7 @@ module Language.Haskell.Liquid.Constraint.Env (
 
   -- * Construction
   , fromListREnv
+  , fromMapREnv
   , toListREnv
   , insertREnv -- TODO: remove this ASAP
 
@@ -108,6 +109,12 @@ fromListREnv :: [(F.Symbol, SpecType)] -> [(F.Symbol, SpecType)] -> REnv
 fromListREnv gXts lXts = REnv
   { reGlobal = M.fromList gXts
   , reLocal  = M.fromList lXts
+  }
+
+fromMapREnv :: M.HashMap F.Symbol SpecType -> M.HashMap F.Symbol SpecType -> REnv
+fromMapREnv gXts lXts = REnv
+  { reGlobal = gXts
+  , reLocal  = lXts
   }
 
 -- RJ: REnv-Split-Bug?

@@ -132,13 +132,11 @@ makeMeasureDefinition tce lmap cbs x
 simplesymbol :: CoreBndr -> Symbol
 simplesymbol = symbol . getName
 
-strengthenHaskellMeasures :: S.HashSet (Located Var) -> [(Var, Located SpecType)] -> [(Var, Located SpecType)]
--- strengthenHaskellMeasures hmeas sigs = go <$> (L.groupBy cmpFst (sigs ++ hsigs))
-strengthenHaskellMeasures hmeas sigs = go <$> (L.groupBy cmpFst ((L.nubBy cmpFst $ reverse sigs) ++ hsigs))
+strengthenHaskellMeasures :: S.HashSet (Located Var) -> M.HashMap Var LocSpecType -> M.HashMap Var LocSpecType
+strengthenHaskellMeasures hmeas sigs =
+  foldr (uncurry $ M.insertWith $ flip meetRes) sigs hsigs
   where
-    hsigs  = [(val x, x {val = strengthenResult $ val x}) | x <- S.toList hmeas]
-    go xs  = L.foldl1' (\(v, t1) (_, t2) -> (v, t1 `meetRes` t2)) xs
-    cmpFst = \x y -> fst x == fst y
+    hsigs = [(val x, x {val = strengthenResult $ val x}) | x <- S.toList hmeas]
 
 meetRes :: Located SpecType -> Located SpecType -> Located SpecType
 meetRes !t1 !t2 = t1{val = fromRTypeRep $ trep1 {ty_res = ty_res trep1 `meet` F.subst su (ty_res trep2)}}

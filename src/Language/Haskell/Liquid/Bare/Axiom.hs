@@ -27,6 +27,7 @@ import Text.PrettyPrint.HughesPJ (text)
 
 
 import qualified Data.List as L
+import qualified Data.HashMap.Strict as M
 import Data.Maybe (fromMaybe)
 
 import Language.Fixpoint.Misc
@@ -39,22 +40,20 @@ import Language.Haskell.Liquid.GHC.Misc (showPpr, sourcePosSrcSpan, dropModuleNa
 import Language.Haskell.Liquid.Types
 
 
-import qualified Language.Haskell.Liquid.Measure as Ms
-
 import Language.Haskell.Liquid.Bare.Env
 import Language.Haskell.Liquid.Misc (mapSnd)
 
 
-makeAxiom :: F.TCEmb TyCon -> LogicMap -> [CoreBind] -> GhcSpec -> Ms.BareSpec -> LocSymbol
+makeAxiom :: F.TCEmb TyCon -> LogicMap -> [CoreBind] -> M.HashMap Var LocSpecType -> LocSymbol
           -> BareM ((Symbol, Located SpecType), [(Var, Located SpecType)], [HAxiom])
-makeAxiom tce lmap cbs spec _ x
+makeAxiom tce lmap cbs xts x
   = case filter ((val x `elem`) . map (dropModuleNames . simplesymbol) . binders) cbs of
         (NonRec v def:_)   -> do let anames = findAxiomNames x cbs
                                  vts <- zipWithM (makeAxiomType tce lmap x) (reverse anames) (defAxioms anames v def)
                                  insertAxiom v (val x)
                                  updateLMap lmap x x v
                                  updateLMap lmap (x{val = (symbol . showPpr . getName) v}) x v
-                                 let t = makeAssumeType tce lmap x v (tySigs spec) anames  def
+                                 let t = makeAssumeType tce lmap x v xts anames  def
                                  return ((val x, makeType v),
                                          (v, t):vts, defAxioms anames v def)
         (Rec [(v, def)]:_) -> do let anames = findAxiomNames x cbs
@@ -62,7 +61,7 @@ makeAxiom tce lmap cbs spec _ x
                                  insertAxiom v (val x)
                                  updateLMap lmap x x v -- (reverse $ findAxiomNames x cbs) (defAxioms v def)
                                  updateLMap lmap (x{val = (symbol . showPpr . getName) v}) x v
-                                 let t = makeAssumeType tce lmap x v (tySigs spec) anames  def
+                                 let t = makeAssumeType tce lmap x v xts anames  def
                                  return $ ((val x, makeType v),
                                           ((v, t): vts),
                                           defAxioms anames v def)
@@ -80,14 +79,14 @@ makeAxiom tce lmap cbs spec _ x
 
 
 
-makeAssumeType :: F.TCEmb TyCon -> LogicMap -> LocSymbol ->  Var -> [(Var, Located SpecType)] -> [a] -> CoreExpr -> Located SpecType
+makeAssumeType :: F.TCEmb TyCon -> LogicMap -> LocSymbol -> Var -> M.HashMap Var LocSpecType -> [a] -> CoreExpr -> Located SpecType
 makeAssumeType tce lmap x v xts ams def
   | not (null ams) 
   = x {val = axiomType x t}
   | otherwise
   = (x {val = axiomType x t `strengthenRes` ref})
   where
-    t  = fromMaybe (ofType $ varType v) (val <$> L.lookup v xts)
+    t  = fromMaybe (ofType $ varType v) (val <$> M.lookup v xts)
 
     le = case runToLogic tce lmap mkErr (coreToLogic def') of
            Left e -> e
