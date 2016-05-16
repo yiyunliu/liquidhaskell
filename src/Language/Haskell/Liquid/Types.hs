@@ -258,10 +258,10 @@ import           Data.Default
 -----------------------------------------------------------------------------
 
 data PPEnv
-  = PP { ppPs    :: Bool
-       , ppTyVar :: Bool -- TODO if set to True all Bare fails
-       , ppSs    :: Bool
-       , ppShort :: Bool
+  = PP { ppPs    :: !Bool
+       , ppTyVar :: !Bool -- TODO if set to True all Bare fails
+       , ppSs    :: !Bool
+       , ppShort :: !Bool
        }
     deriving (Show)
 
@@ -321,7 +321,7 @@ data GhcSpec = SP {
                                                  -- eg.  see tests/pos/Map.hs
   , freeSyms   :: ![(Symbol, Var)]               -- ^ List of `Symbol` free in spec and corresponding GHC var
                                                  -- eg. (Cons, Cons#7uz) from tests/pos/ex1.hs
-  , tcEmbeds   :: TCEmb TyCon                    -- ^ How to embed GHC Tycons into fixpoint sorts
+  , tcEmbeds   :: !(TCEmb TyCon)                 -- ^ How to embed GHC Tycons into fixpoint sorts
                                                  -- e.g. "embed Set as Set_set" from include/Data/Set.spec
   , qualifiers :: ![Qualifier]                   -- ^ Qualifiers in Source/Spec files
                                                  -- e.g tests/pos/qualTest.hs
@@ -333,30 +333,30 @@ data GhcSpec = SP {
   , autosize   :: !(S.HashSet TyCon)             -- ^ Binders to IGNORE during termination checking
   , config     :: !Config                        -- ^ Configuration Options
   , exports    :: !NameSet                       -- ^ `Name`s exported by the module being verified
-  , measures   :: [Measure SpecType DataCon]
-  , tyconEnv   :: M.HashMap TyCon RTyCon
-  , dicts      :: DEnv Var SpecType
+  , measures   :: ![Measure SpecType DataCon]
+  , tyconEnv   :: !(M.HashMap TyCon RTyCon)
+  , dicts      :: !(DEnv Var SpecType)
     -- ^ Dictionary Environment
-  , axioms     :: [HAxiom]
+  , axioms     :: ![HAxiom]
     -- ^ Axioms from axiomatized functions
-  , logicMap   :: LogicMap
-  , proofType  :: Maybe Type
+  , logicMap   :: !LogicMap
+  , proofType  :: !(Maybe Type)
   }
 
 instance HasConfig GhcSpec where
   getConfig = config
 
-data LogicMap = LM { logic_map :: M.HashMap Symbol LMap
-                   , axiom_map :: M.HashMap Var Symbol
+data LogicMap = LM { logic_map :: !(M.HashMap Symbol LMap)
+                   , axiom_map :: !(M.HashMap Var Symbol)
                    } deriving (Show)
 
 instance Monoid LogicMap where
   mempty                        = LM M.empty M.empty
   mappend (LM x1 x2) (LM y1 y2) = LM (M.union x1 y1) (M.union x2 y2)
 
-data LMap = LMap { lvar  :: Symbol
-                 , largs :: [Symbol]
-                 , lexpr :: Expr
+data LMap = LMap { lvar  :: !Symbol
+                 , largs :: ![Symbol]
+                 , lexpr :: !Expr
                  }
 
 instance Show LMap where
@@ -640,7 +640,7 @@ data RType c tv r
     , rt_ty     :: !(RType c tv r)
     }
 
-  | RExprArg (Located Expr)                     -- ^ For expression arguments to type aliases
+  | RExprArg !(Located Expr)                    -- ^ For expression arguments to type aliases
                                                 --   see tests/pos/vector2.hs
   | RAppTy{
       rt_arg   :: !(RType c tv r)
@@ -655,8 +655,8 @@ data RType c tv r
     , rt_ty    :: !(RType c tv r)
     }
 
-  | RHole r -- ^ let LH match against the Haskell type and add k-vars, e.g. `x:_`
-            --   see tests/pos/Holes.hs
+  | RHole !r -- ^ let LH match against the Haskell type and add k-vars, e.g. `x:_`
+             --   see tests/pos/Holes.hs
   deriving (Generic, Data, Typeable, Functor)
 
 instance (NFData c, NFData tv, NFData r) => NFData (RType c tv r)
@@ -676,8 +676,8 @@ ignoreOblig t              = t
 --   directly to any type and has semantics _independent of_ the data-type.
 
 data Ref τ t = RProp
-  { rf_args :: [(Symbol, τ)]
-  , rf_body :: t -- ^ Abstract refinement associated with `RTyCon`
+  { rf_args :: ![(Symbol, τ)]
+  , rf_body :: !t -- ^ Abstract refinement associated with `RTyCon`
   } deriving (Generic, Data, Typeable, Functor)
 
 instance (NFData τ, NFData t) => NFData (Ref τ t)
@@ -727,7 +727,7 @@ type RRProp r    = Ref       RSort (RRType r)
 
 type LocSpecType = Located SpecType
 
-data Stratum    = SVar Symbol | SDiv | SWhnf | SFin
+data Stratum    = SVar !Symbol | SDiv | SWhnf | SFin
                   deriving (Generic, Data, Typeable, Eq)
 instance NFData Stratum
 
@@ -829,9 +829,9 @@ instance Show RTyCon where
 --------------------------------------------------------------------------
 
 data RInstance t = RI
-  { riclass :: LocSymbol
-  , ritype  :: [t]
-  , risigs  :: [(LocSymbol, t)]
+  { riclass :: !LocSymbol
+  , ritype  :: ![t]
+  , risigs  :: ![(LocSymbol, t)]
   } deriving Functor
 
 newtype DEnv x ty = DEnv (M.HashMap x (M.HashMap Symbol ty)) deriving (Monoid, Show)
@@ -870,19 +870,19 @@ instance Show (Axiom Var Type CoreExpr) where
 
 
 -- | Data type refinements
-data DataDecl   = D { tycName   :: LocSymbol
+data DataDecl   = D { tycName   :: !LocSymbol
                                 -- ^ Type  Constructor Name
-                    , tycTyVars :: [Symbol]
+                    , tycTyVars :: ![Symbol]
                                 -- ^ Tyvar Parameters
-                    , tycPVars  :: [PVar BSort]
+                    , tycPVars  :: ![PVar BSort]
                                 -- ^ PVar  Parameters
-                    , tycTyLabs :: [Symbol]
+                    , tycTyLabs :: ![Symbol]
                                 -- ^ PLabel  Parameters
-                    , tycDCons  :: [(LocSymbol, [(Symbol, BareType)])]
+                    , tycDCons  :: ![(LocSymbol, [(Symbol, BareType)])]
                                 -- ^ [DataCon, [(fieldName, fieldType)]]
                     , tycSrcPos :: !SourcePos
                                 -- ^ Source Position
-                    , tycSFun   :: (Maybe (Symbol -> Expr))
+                    , tycSFun   :: !(Maybe (Symbol -> Expr))
                                 -- ^ Measure that should decrease in recursive calls
                     }
      --              deriving (Show)
@@ -903,12 +903,12 @@ instance Show DataDecl where
 -- | Refinement Type Aliases
 
 data RTAlias tv ty
-  = RTA { rtName  :: Symbol
-        , rtTArgs :: [tv]
-        , rtVArgs :: [tv]
-        , rtBody  :: ty
-        , rtPos   :: SourcePos
-        , rtPosE  :: SourcePos
+  = RTA { rtName  :: !Symbol
+        , rtTArgs :: ![tv]
+        , rtVArgs :: ![tv]
+        , rtBody  :: !ty
+        , rtPos   :: !SourcePos
+        , rtPosE  :: !SourcePos
         }
 
 mapRTAVars :: (a -> tv) -> RTAlias a ty -> RTAlias tv ty
@@ -921,13 +921,13 @@ mapRTAVars f rt = rt { rtTArgs = f <$> rtTArgs rt
 ------------------------------------------------------------------------
 
 data RTypeRep c tv r
-  = RTypeRep { ty_vars   :: [tv]
-             , ty_preds  :: [PVar (RType c tv ())]
-             , ty_labels :: [Symbol]
-             , ty_binds  :: [Symbol]
-             , ty_refts  :: [r]
-             , ty_args   :: [RType c tv r]
-             , ty_res    :: (RType c tv r)
+  = RTypeRep { ty_vars   :: ![tv]
+             , ty_preds  :: ![PVar (RType c tv ())]
+             , ty_labels :: ![Symbol]
+             , ty_binds  :: ![Symbol]
+             , ty_refts  :: ![r]
+             , ty_args   :: ![RType c tv r]
+             , ty_res    :: !(RType c tv r)
              }
 
 fromRTypeRep :: RTypeRep c tv r -> RType c tv r
@@ -1437,8 +1437,10 @@ instance PPrint Predicate where
 --   + local  : few bindings, relevant to particular constraints
 
 data REnv = REnv
-  { reGlobal :: M.HashMap Symbol SpecType -- ^ the "global" names for module
-  , reLocal  :: M.HashMap Symbol SpecType -- ^ the "local" names for sub-exprs
+  { reGlobal :: !(M.HashMap Symbol SpecType)
+                -- ^ the "global" names for module
+  , reLocal  :: !(M.HashMap Symbol SpecType)
+                -- ^ the "local" names for sub-exprs
   }
 
 instance NFData REnv where
@@ -1528,32 +1530,32 @@ mapRE f e = e { exprAliases = f $ exprAliases e }
 --- Measures
 --------------------------------------------------------------------------------
 data Body
-  = E Expr          -- ^ Measure Refinement: {v | v = e }
-  | P Expr          -- ^ Measure Refinement: {v | (? v) <=> p }
-  | R Symbol Expr   -- ^ Measure Refinement: {v | p}
+  = E !Expr          -- ^ Measure Refinement: {v | v = e }
+  | P !Expr          -- ^ Measure Refinement: {v | (? v) <=> p }
+  | R !Symbol !Expr  -- ^ Measure Refinement: {v | p}
   deriving (Show, Data, Typeable, Generic, Eq)
 
 data Def ty ctor = Def
-  { measure :: LocSymbol
-  , dparams :: [(Symbol, ty)]
-  , ctor    :: ctor
-  , dsort   :: Maybe ty
-  , binds   :: [(Symbol, Maybe ty)]
-  , body    :: Body
+  { measure :: !LocSymbol
+  , dparams :: ![(Symbol, ty)]
+  , ctor    :: !ctor
+  , dsort   :: !(Maybe ty)
+  , binds   :: ![(Symbol, Maybe ty)]
+  , body    :: !Body
   } deriving (Show, Data, Typeable, Generic, Eq, Functor)
 
 data Measure ty ctor = M
-  { name :: LocSymbol
-  , sort :: ty
-  , eqns :: [Def ty ctor]
+  { name :: !LocSymbol
+  , sort :: !ty
+  , eqns :: ![Def ty ctor]
   } deriving (Data, Typeable, Generic, Functor)
 
 deriveBifunctor ''Def
 deriveBifunctor ''Measure
 
 data CMeasure ty = CM
-  { cName :: LocSymbol
-  , cSort :: ty
+  { cName :: !LocSymbol
+  , cSort :: !ty
   } deriving (Data, Typeable, Generic, Functor)
 
 instance PPrint Body where
@@ -1622,10 +1624,10 @@ instance Subable t => Subable (WithModel t) where
   subst su = fmap (subst su)
 
 data RClass ty
-  = RClass { rcName    :: LocSymbol
-           , rcSupers  :: [ty]
-           , rcTyVars  :: [Symbol]
-           , rcMethods :: [(LocSymbol,ty)]
+  = RClass { rcName    :: !LocSymbol
+           , rcSupers  :: ![ty]
+           , rcTyVars  :: ![Symbol]
+           , rcMethods :: ![(LocSymbol,ty)]
            } deriving (Show, Functor)
 
 
@@ -1637,10 +1639,10 @@ newtype AnnInfo a = AI (M.HashMap SrcSpan [(Maybe Text, a)])
                     deriving (Data, Typeable, Generic, Functor)
 
 data Annot t
-  = AnnUse t
-  | AnnDef t
-  | AnnRDf t
-  | AnnLoc SrcSpan
+  = AnnUse !t
+  | AnnDef !t
+  | AnnRDf !t
+  | AnnLoc !SrcSpan
   deriving (Data, Typeable, Generic, Functor)
 
 instance Monoid (AnnInfo a) where
@@ -1656,12 +1658,12 @@ instance NFData a => NFData (Annot a)
 --------------------------------------------------------------------------------
 
 data Output a = O
-  { o_vars   :: Maybe [String]
+  { o_vars   :: !(Maybe [String])
   , o_errors :: ![UserError]
   , o_types  :: !(AnnInfo a)
   , o_templs :: !(AnnInfo a)
   , o_bots   :: ![SrcSpan]
-  , o_result :: ErrorResult
+  , o_result :: !ErrorResult
   } deriving (Typeable, Generic, Functor)
 
 emptyOutput :: Output a
@@ -1747,9 +1749,9 @@ liquidEnd :: String
 liquidEnd = ['@', '-', '}']
 
 data MSpec ty ctor = MSpec
-  { ctorMap  :: M.HashMap Symbol [Def ty ctor]
-  , measMap  :: M.HashMap LocSymbol (Measure ty ctor)
-  , cmeasMap :: M.HashMap LocSymbol (Measure ty ())
+  { ctorMap  :: !(M.HashMap Symbol [Def ty ctor])
+  , measMap  :: !(M.HashMap LocSymbol (Measure ty ctor))
+  , cmeasMap :: !(M.HashMap LocSymbol (Measure ty ()))
   , imeas    :: ![Measure ty ctor]
   } deriving (Data, Typeable, Generic, Functor)
 

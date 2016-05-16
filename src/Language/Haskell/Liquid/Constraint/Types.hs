@@ -100,8 +100,8 @@ data CGEnv
         , grtys :: !REnv              -- ^ Top-level variables with (assert)-guarantees to verify
         , assms :: !REnv              -- ^ Top-level variables with assumed types
         , intys :: !REnv              -- ^ Top-level variables with auto generated internal types
-        , emb   :: F.TCEmb TC.TyCon   -- ^ How to embed GHC Tycons into fixpoint sorts
-        , tgEnv :: !Tg.TagEnv          -- ^ Map from top-level binders to fixpoint tag
+        , emb   :: !(F.TCEmb TC.TyCon)-- ^ How to embed GHC Tycons into fixpoint sorts
+        , tgEnv :: !Tg.TagEnv         -- ^ Map from top-level binders to fixpoint tag
         , tgKey :: !(Maybe Tg.TagKey)                     -- ^ Current top-level binder
         , trec  :: !(Maybe (M.HashMap F.Symbol SpecType)) -- ^ Type of recursive function with decreasing constraints
         , lcb   :: !(M.HashMap F.Symbol CoreExpr)         -- ^ Let binding that have not been checked (c.f. LAZYVARs)
@@ -112,7 +112,7 @@ data CGEnv
         , cgCfg :: !Config                                -- ^ top-level config options
         } -- deriving (Data, Typeable)
 
-data LConstraint = LC [[(F.Symbol, SpecType)]]
+newtype LConstraint = LC [[(F.Symbol, SpecType)]]
 
 instance Monoid LConstraint where
   mempty  = LC []
@@ -197,7 +197,7 @@ data CGInfo = CGInfo {
   , logErrors  :: ![Error]                     -- ^ Errors during constraint generation
   , kvProf     :: !KVProf                      -- ^ Profiling distribution of KVars
   , recCount   :: !Int                         -- ^ number of recursive functions seen (for benchmarks)
-  , bindSpans  :: M.HashMap F.BindId SrcSpan   -- ^ Source Span associated with Fixpoint Binder
+  , bindSpans  :: !(M.HashMap F.BindId SrcSpan)-- ^ Source Span associated with Fixpoint Binder
   , allowHO    :: !Bool
   }
 
@@ -240,10 +240,10 @@ elemHEnv x (HEnv s) = x `S.member` s
 -- | Helper Types: Invariants --------------------------------------------------
 --------------------------------------------------------------------------------
 
-data RInv = RInv { _rinv_args :: [RSort]   -- empty list means that the invariant is generic
-                                           -- for all type arguments
-                 , _rinv_type :: SpecType
-                 , _rinv_name :: Maybe Var
+data RInv = RInv { _rinv_args :: ![RSort]   -- empty list means that the invariant is generic
+                                            -- for all type arguments
+                 , _rinv_type :: !SpecType
+                 , _rinv_name :: !(Maybe Var)
                  } deriving Show
 
 type RTyConInv = M.HashMap RTyCon [RInv]
