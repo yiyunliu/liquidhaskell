@@ -16,7 +16,7 @@ module Test.Target.Testable (test, Testable, setup) where
 
 import Prelude hiding (error, undefined)
 
-import           Control.Exception               (AsyncException, evaluate)
+import           Control.Exception               (evaluate)
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Reader
@@ -74,12 +74,15 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
       let n' = n + 1
       xs <- decodeArgs f vs (map snd xts)
       whenVerbose $ io $ print xs
+      -- FIXME: need to guard the `check` phase with `try . evaluate` too..
+      -- exception could be lurking underneath the constructor, eg non-exhaustive pattern
+      -- in recursive call
       er <- io $ try $ evaluate (apply f xs)
       -- whenVerbose $ io $ print er
       case er of
         Left (e :: SomeException)
           -- DON'T catch AsyncExceptions since they are used by @timeout@
-          | Just (_ :: AsyncException) <- fromException e -> throwM e
+          --- | Just (_ :: AsyncException) <- fromException e -> throwM e
           | Just (SmtError _) <- fromException e -> throwM e
           | Just (ExpectedValues _) <- fromException e -> throwM e
           | otherwise -> do

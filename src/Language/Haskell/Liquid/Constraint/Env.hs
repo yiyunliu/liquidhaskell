@@ -46,6 +46,7 @@ module Language.Haskell.Liquid.Constraint.Env (
 
   -- * Lookup CGEnv
  , getLocation
+ , getTopBind
 
 ) where
 
@@ -292,3 +293,14 @@ setTRec γ xts  = γ' {trec = Just $ M.fromList xts' `M.union` trec'}
 getLocation :: CGEnv -> SrcSpan
 ------------------------------------------------------------------------
 getLocation = Sp.srcSpan . cgLoc
+
+------------------------------------------------------------------------
+getTopBind :: CGEnv -> Maybe Var
+------------------------------------------------------------------------
+getTopBind cge = case Sp.unStack (cgLoc cge) of
+  [] -> Nothing
+  xs -> unVar (fst (last xs))
+
+unVar :: Sp.Span -> Maybe Var
+unVar (Sp.Var v) = Just v
+unVar _          = Nothing -- panic Nothing "unVar: not a Var"

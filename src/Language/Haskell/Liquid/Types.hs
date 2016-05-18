@@ -1462,6 +1462,7 @@ instance NFData a => NFData (TError a)
 
 data Cinfo    = Ci { ci_loc :: !SrcSpan
                    , ci_err :: !(Maybe Error)
+                   , ci_var :: !(Maybe Var) -- ^ top-level binder enclosing the SrcSpan
                    }
                 deriving (Eq, Ord, Generic)
 

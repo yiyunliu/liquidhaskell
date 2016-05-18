@@ -33,7 +33,7 @@ targetFInfo info cgi fn = F.fi cs ws bs ls ks qs bi fn aHO
    ls     = fEnv cgi
    ks     = kuts cgi
    qs     = targetQuals info cgi
-   bi     = (`Ci` Nothing) <$> bindSpans cgi
+   bi     = (\x -> Ci x Nothing Nothing) <$> bindSpans cgi
    aHO    = allowHO cgi 
 
 targetQuals :: GhcInfo -> CGInfo -> [F.Qualifier]

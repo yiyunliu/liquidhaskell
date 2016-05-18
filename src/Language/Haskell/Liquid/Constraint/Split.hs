@@ -127,7 +127,7 @@ bsplitW' γ t pflag isHO
   = []
   where
     r'                = rTypeSortedReft' pflag γ t
-    ci                = Ci (getLocation γ) Nothing
+    ci                = Ci (getLocation γ) Nothing (getTopBind γ)
 
 --------------------------------------------------------------------------------
 splitS  :: SubC -> CG [([Stratum], [Stratum])]
@@ -372,7 +372,7 @@ splitC (SubR γ o r)
     r1  = F.RR F.boolSort rr
     r2  = F.RR F.boolSort $ F.Reft (vv, F.EVar vv)
     vv  = "vvRec"
-    ci  = Ci src err
+    ci  = Ci src err (getTopBind γ)
     err = Just $ ErrAssType src o (text $ show o ++ "type error") g (rHole rr)
     rr  = F.toReft r
     tag = getTag γ
@@ -452,7 +452,7 @@ bsplitC' γ t1 t2 pflag isHO
     γ'  = feBinds $ fenv γ
     r1' = rTypeSortedReft' pflag γ t1
     r2' = rTypeSortedReft' pflag γ t2
-    ci  = Ci src err
+    ci  = Ci src err (getTopBind γ)
     tag = getTag γ
     -- err = Just $ ErrSubType src "subtype" g t1 t2
     err = Just $ fromMaybe (ErrSubType src (text "subtype") g t1 t2) (cerr γ)

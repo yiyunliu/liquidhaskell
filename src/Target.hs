@@ -13,12 +13,12 @@ main = do
   [src, binder] <- getArgs
   r <- runInterpreter $ do
     loadModules [src]
-    mods <- getLoadedModules
+    mods@(tgt : _) <- getLoadedModules
     -- liftIO $ print mods
     setImportsQ $ map (\m -> (m,Nothing)) mods
                              ++ [("Test.Target", Nothing), ("Prelude", Nothing)]
     set [languageExtensions := [TemplateHaskell]]
-    let expr = printf "$(targetResultTH '%s \"%s\")" binder src
+    let expr = printf "$(targetResultWithTH '%s.%s \"%s\" (defaultOpts {logging = True}))" tgt binder src
     -- liftIO $ putStrLn expr
     interpret expr (as :: IO Result)
   case r of

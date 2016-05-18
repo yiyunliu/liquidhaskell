@@ -3,7 +3,7 @@
 module Language.Haskell.Liquid.GHC.SpanStack
    ( -- * Stack of positions
      Span (..)
-   , SpanStack
+   , SpanStack, unStack
 
      -- * Creating Stacks
    , empty, push
