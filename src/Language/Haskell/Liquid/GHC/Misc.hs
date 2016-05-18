@@ -104,9 +104,6 @@ miModGuts cls mg  = MI {
   , mgi_cls_inst  = cls
   }
 
-mgi_namestring :: MGIModGuts -> String
-mgi_namestring = moduleNameString . moduleName . mgi_module
-
 --------------------------------------------------------------------------------
 -- | Encoding and Decoding Location --------------------------------------------
 --------------------------------------------------------------------------------

@@ -63,30 +63,30 @@ import Language.Haskell.Liquid.Bare.OfType
 import Language.Haskell.Liquid.Bare.Resolve
 import Language.Haskell.Liquid.Bare.RefToLogic
 
-makeHaskellMeasures :: F.TCEmb TyCon -> [CoreBind] -> ModName -> (ModName, Ms.BareSpec) -> BareM (Ms.MSpec SpecType DataCon)
-makeHaskellMeasures _   _   name' (name, _   ) | name /= name'
-  = return mempty
-makeHaskellMeasures tce cbs _     (_   , spec)
-  = do lmap <- gets logicEnv
-       Ms.mkMSpec' <$> mapM (makeMeasureDefinition tce lmap cbs') (S.toList $ Ms.hmeas spec)
+makeHaskellMeasures :: F.TCEmb TyCon -> (ModName, Ms.BareSpec, Maybe CoreInfo) -> BareM (Ms.MSpec SpecType DataCon)
+makeHaskellMeasures _ (_, _, Nothing) = return mempty
+makeHaskellMeasures tce (name, spec, Just coreInfo) = inModule name $ do
+  lmap <- gets logicEnv
+  Ms.mkMSpec' <$> mapM (makeMeasureDefinition tce lmap cbs') (S.toList $ Ms.hmeas spec)
   where
+    cbs                   = coreInfoProgram coreInfo
     cbs'                  = concatMap unrec cbs
     unrec cb@(NonRec _ _) = [cb]
     unrec (Rec xes)       = [NonRec x e | (x, e) <- xes]
 
-makeHaskellInlines :: F.TCEmb TyCon -> [CoreBind] -> ModName -> (ModName, Ms.BareSpec) -> BareM ()
-makeHaskellInlines _   _   name' (name, _   ) | name /= name'
-  = return mempty
-makeHaskellInlines tce cbs _     (_   , spec)
-  = do lmap <- gets logicEnv
-       mapM_ (makeMeasureInline tce lmap cbs') (S.toList $ Ms.inlines spec)
+makeHaskellInlines :: F.TCEmb TyCon -> (ModName, Ms.BareSpec, Maybe CoreInfo) -> BareM ()
+makeHaskellInlines _ (_, _, Nothing) = return ()
+makeHaskellInlines tce (name, spec, Just coreInfo) = inModule name $ do
+  lmap <- gets logicEnv
+  mapM_ (makeMeasureInline tce lmap cbs') (S.toList $ Ms.inlines spec)
   where
+    cbs                   = coreInfoProgram coreInfo
     cbs'                  = concatMap unrec cbs
     unrec cb@(NonRec _ _) = [cb]
     unrec (Rec xes)       = [NonRec x e | (x, e) <- xes]
 
-makeMeasureInline :: F.TCEmb TyCon -> LogicMap -> [CoreBind] ->  LocSymbol -> BareM ()
-makeMeasureInline tce lmap cbs  x
+makeMeasureInline :: F.TCEmb TyCon -> LogicMap -> [CoreBind] -> LocSymbol -> BareM ()
+makeMeasureInline tce lmap cbs x
   = case filter ((val x `elem`) . map (dropModuleNames . simplesymbol) . binders) cbs of
     (NonRec v def:_)   -> do {e <- coreToFun' tce x v def; updateInlines x e}
     (Rec [(v, def)]:_) -> do {e <- coreToFun' tce x v def; updateInlines x e}
@@ -169,8 +169,8 @@ makeMeasureSelector x s dc n i = M {name = x, sort = s, eqns = [eqn]}
         mkx j = symbol ("xx" ++ show j)
 
 
-makeMeasureSpec :: (ModName, Ms.BareSpec) -> BareM (Ms.MSpec SpecType DataCon)
-makeMeasureSpec (mod, spec) = inModule mod mkSpec
+makeMeasureSpec :: (ModName, Ms.BareSpec, a) -> BareM (Ms.MSpec SpecType DataCon)
+makeMeasureSpec (mod, spec, _) = inModule mod mkSpec
   where
     mkSpec = mkMeasureDCon =<< mkMeasureSort =<< first val <$> m
     m      = Ms.mkMSpec <$> mapM expandMeasure (Ms.measures spec)
@@ -237,23 +237,18 @@ varSpecType v    = Loc l l' (ofType $ varType v)
     l'           = getSourcePosE v
 
 
-makeHaskellBounds :: F.TCEmb TyCon -> CoreProgram -> S.HashSet (Var, LocSymbol) -> BareM RBEnv
-makeHaskellBounds tce cbs xs
-  = do lmap <- gets logicEnv
-       M.fromList <$> mapM (makeHaskellBound tce lmap cbs) (S.toList xs)
+makeHaskellBounds :: F.TCEmb TyCon -> (ModName, Ms.BareSpec, Maybe CoreInfo) -> BareM RBEnv
+makeHaskellBounds _ (_, _, Nothing) = return mempty
+makeHaskellBounds tce (name, spec, Just coreInfo) = inModule name $ do
+  lmap <- gets logicEnv
+  M.fromList <$> mapM (makeHaskellBound tce lmap $ coreInfoProgram coreInfo) (S.toList $ Ms.hbounds spec)
 
-
-makeHaskellBound :: MonadError Error m
-                 => F.TCEmb TyCon
-                 -> LogicMap
-                 -> [Bind Var]
-                 -> (Var, Located Symbol)
-                 -> m (LocSymbol, RBound)
-makeHaskellBound tce lmap  cbs (v, x) = case filter ((v  `elem`) . binders) cbs of
+makeHaskellBound :: F.TCEmb TyCon -> LogicMap -> [CoreBind] -> LocSymbol -> BareM (LocSymbol, RBound)
+makeHaskellBound tce lmap cbs x
+  = case filter ((val x `elem`) . map (dropModuleNames . simplesymbol) . binders) cbs of
     (NonRec v def:_)   -> do {e <- coreToFun' tce x v def; return $ toBound v x e}
     (Rec [(v, def)]:_) -> do {e <- coreToFun' tce x v def; return $ toBound v x e}
     _                  -> throwError $ mkError "Cannot make bound of haskell function"
-
   where
     binders (NonRec x _) = [x]
     binders (Rec xes)    = fst <$> xes

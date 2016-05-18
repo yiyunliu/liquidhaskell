@@ -19,10 +19,8 @@ module Language.Haskell.Liquid.Bare.Spec (
   , makeInvariants
   , makeSpecDictionaries
   , makeBounds
-  , makeHBounds
   ) where
 
-import           CoreSyn                                    (CoreBind)
 import           DataCon
 import           MonadUtils                                 (mapMaybeM)
 import           Prelude                                    hiding (error)
@@ -107,9 +105,6 @@ makeLazy :: [Var]
          -> Ms.Spec ty bndr
          -> BareM [Var]
 makeLazy    vs spec = fmap fst <$> varSymbols id vs [(v, ()) | v <- S.toList $ Ms.lazy spec]
-
-makeHBounds :: [Var] -> Ms.Spec ty bndr -> BareM [(Var, LocSymbol)]
-makeHBounds vs spec = varSymbols id vs [(v, v ) | v <- S.toList $ Ms.hbounds spec]
 
 makeTExpr :: [Var] -> Ms.Spec ty bndr -> BareM [(Var, [Located F.Expr])]
 makeTExpr   vs spec = varSymbols id vs $ Ms.termexprs spec
@@ -301,15 +296,15 @@ resolveDictionaries vars ds  = lookupVar <$> concat (go <$> groupList ds)
                 [(_, x)] -> Just x
                 _        -> Nothing
 
-makeBounds ::  F.TCEmb TyCon -> ModName -> [Var] -> [CoreBind] -> [(ModName, Ms.BareSpec)] -> BareM ()
-makeBounds tce name defVars cbs specs
-  = do bnames  <- mkThing makeHBounds
-       hbounds <- makeHaskellBounds tce cbs bnames
-       bnds    <- M.fromList <$> mapM go (concatMap (M.toList . Ms.bounds . snd ) specs)
+makeBounds :: F.TCEmb TyCon
+           -> [(ModName, Ms.BareSpec, Maybe CoreInfo)]
+           -> BareM ()
+makeBounds tce specs
+  = do hbounds <- mconcat <$> mapM (makeHaskellBounds tce) specs
+       bnds    <- M.fromList <$> mapM go (concatMap (M.toList . Ms.bounds . snd3 ) specs)
        modify   $ \env -> env { bounds = hbounds `mappend` bnds }
   where
     go (x,bound) = (x,) <$> mkBound bound
-    mkThing mk   = S.fromList . mconcat <$> sequence [ mk defVars s | (m, s) <- specs, m == name]
 
 mkBound :: (Resolvable a) => Bound (Located BareType) a -> BareM (Bound RSort a)
 mkBound (Bound s vs pts xts r)

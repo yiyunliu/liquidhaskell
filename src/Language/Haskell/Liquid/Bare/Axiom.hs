@@ -3,58 +3,62 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
 
-module Language.Haskell.Liquid.Bare.Axiom (makeAxiom) where
+module Language.Haskell.Liquid.Bare.Axiom (makeAxioms) where
 
 import Prelude hiding (error)
+
 import CoreSyn
 import TyCon
 import DataCon
 import Id
 import Name
 import Type hiding (isFunTy)
+import TypeRep
 import Var
 
-import TypeRep
-
-import Prelude hiding (mapM)
-
-
-import Control.Monad hiding (forM, mapM)
+import Control.Monad hiding (forM)
 import Control.Monad.Except hiding (forM, mapM)
 import Control.Monad.State hiding (forM, mapM)
 
-import Text.PrettyPrint.HughesPJ (text)
-
+import Data.Maybe (fromMaybe)
 
 import qualified Data.List as L
-import Data.Maybe (fromMaybe)
+import qualified Data.HashSet as S
+
+import Text.PrettyPrint.HughesPJ (text)
 
 import Language.Fixpoint.Misc
 import Language.Fixpoint.Types (Symbol, symbol, symbolString)
 
 import qualified Language.Fixpoint.Types as F
-import Language.Haskell.Liquid.Types.RefType
-import Language.Haskell.Liquid.Transforms.CoreToLogic
-import Language.Haskell.Liquid.GHC.Misc (showPpr, sourcePosSrcSpan, dropModuleNames)
-import Language.Haskell.Liquid.Types
 
+import Language.Haskell.Liquid.GHC.Misc (showPpr, sourcePosSrcSpan, dropModuleNames)
+import Language.Haskell.Liquid.Misc (mapSnd)
+import Language.Haskell.Liquid.Transforms.CoreToLogic
+import Language.Haskell.Liquid.Types
+import Language.Haskell.Liquid.Types.RefType
 
 import qualified Language.Haskell.Liquid.Measure as Ms
 
 import Language.Haskell.Liquid.Bare.Env
-import Language.Haskell.Liquid.Misc (mapSnd)
 
+makeAxioms :: F.TCEmb TyCon -> GhcSpec -> (ModName, Ms.BareSpec, Maybe CoreInfo)
+           -> BareM [((Symbol, Located SpecType), [(Var, Located SpecType)], [HAxiom])]
+makeAxioms _ _ (_, _, Nothing) = return []
+makeAxioms tce sp (name, spec, Just coreInfo) = inModule name $ do
+  lmap <- logicEnv <$> get
+  mapM (makeAxiom tce lmap sp $ coreInfoProgram coreInfo) (S.toList $ Ms.axioms spec)
 
-makeAxiom :: F.TCEmb TyCon -> LogicMap -> [CoreBind] -> GhcSpec -> Ms.BareSpec -> LocSymbol
+makeAxiom :: F.TCEmb TyCon -> LogicMap -> GhcSpec -> [CoreBind] -> LocSymbol
           -> BareM ((Symbol, Located SpecType), [(Var, Located SpecType)], [HAxiom])
-makeAxiom tce lmap cbs spec _ x
+makeAxiom tce lmap sp cbs x
   = case filter ((val x `elem`) . map (dropModuleNames . simplesymbol) . binders) cbs of
         (NonRec v def:_)   -> do let anames = findAxiomNames x cbs
                                  vts <- zipWithM (makeAxiomType tce lmap x) (reverse anames) (defAxioms anames v def)
                                  insertAxiom v (val x)
                                  updateLMap lmap x x v
                                  updateLMap lmap (x{val = (symbol . showPpr . getName) v}) x v
-                                 let t = makeAssumeType tce lmap x v (tySigs spec) anames  def
+                                 let t = makeAssumeType tce lmap x v (tySigs sp) anames  def
                                  return ((val x, makeType v),
                                          (v, t):vts, defAxioms anames v def)
         (Rec [(v, def)]:_) -> do let anames = findAxiomNames x cbs
@@ -62,7 +66,7 @@ makeAxiom tce lmap cbs spec _ x
                                  insertAxiom v (val x)
                                  updateLMap lmap x x v -- (reverse $ findAxiomNames x cbs) (defAxioms v def)
                                  updateLMap lmap (x{val = (symbol . showPpr . getName) v}) x v
-                                 let t = makeAssumeType tce lmap x v (tySigs spec) anames  def
+                                 let t = makeAssumeType tce lmap x v (tySigs sp) anames  def
                                  return $ ((val x, makeType v),
                                           ((v, t): vts),
                                           defAxioms anames v def)

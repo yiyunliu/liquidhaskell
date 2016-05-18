@@ -28,6 +28,7 @@ module Language.Haskell.Liquid.Types (
   , GhcInfo (..)
   , GhcSpec (..)
   , TargetVars (..)
+  , CoreInfo(..)
 
   -- * Located Things
   , Located (..)
@@ -195,7 +196,7 @@ module Language.Haskell.Liquid.Types (
   where
 
 import           Class
-import           CoreSyn                                (CoreBind, CoreExpr)
+import           CoreSyn                                (CoreProgram, CoreBind, CoreExpr)
 import           Data.String
 import           DataCon
 import           GHC                                    (HscEnv, ModuleName, moduleNameString, getName)
@@ -408,6 +409,19 @@ data DataConP = DataConP { dc_loc     :: !SourcePos
 
 -- | Which Top-Level Binders Should be Verified
 data TargetVars = AllVars | Only ![Var]
+
+
+data CoreInfo
+  = CoreInfo
+    { coreInfoProgram  :: CoreProgram
+    , coreInfoDataCons :: [Id]
+    , coreInfoImpVars  :: [Var]
+    , coreInfoDefVars  :: [Var]
+    , coreInfoLetVars  :: [Var]
+    , coreInfoUseVars  :: [Var]
+    , coreInfoDerVars  :: [Var]
+    , coreInfoExports  :: NameSet
+    }
 
 
 --------------------------------------------------------------------
