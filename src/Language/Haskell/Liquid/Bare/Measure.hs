@@ -133,17 +133,21 @@ simplesymbol :: CoreBndr -> Symbol
 simplesymbol = symbol . getName
 
 strengthenHaskellMeasures :: S.HashSet (Located Var) -> M.HashMap Var LocSpecType -> M.HashMap Var LocSpecType
-strengthenHaskellMeasures hmeas sigs =
-  foldr (uncurry $ M.insertWith $ flip meetRes) sigs hsigs
+strengthenHaskellMeasures hmeas sigs
+  = foldr (uncurry $ M.insertWith $ flip meetLoc) sigs hsigs
   where
     hsigs = [(val x, x {val = strengthenResult $ val x}) | x <- S.toList hmeas]
 
-meetRes :: Located SpecType -> Located SpecType -> Located SpecType
-meetRes !t1 !t2 = t1{val = fromRTypeRep $ trep1 {ty_res = ty_res trep1 `meet` F.subst su (ty_res trep2)}}
-  where
-    [trep1, trep2] = toRTypeRep . val <$> [t1, t2]
-    su = F.mkSubst [(y, F.EVar x) | (x, y) <- zip (ty_binds trep1) (ty_binds trep2)]
-
+meetLoc :: Located SpecType -> Located SpecType -> Located SpecType
+meetLoc t1 t2 = t1 {val = val t1 `meet` val t2}
+{- 
+meetLoc !t1 !t2 = t1{val = fromRTypeRep $ trep1 
+      { ty_args = zipWith (\t1 t2 -> t1 `meet` F.subst su t2) (ty_args trep1) (ty_args trep2)
+      , ty_res = ty_res trep1 `meet` F.subst su (ty_res trep2)}}
+    where
+      [trep1, trep2] = toRTypeRep . val <$> [t1, t2]
+      su = F.mkSubst [(y, F.EVar x) | (x, y) <- zip (ty_binds trep1) (ty_binds trep2)]
+-}
 
 makeMeasureSelectors :: (DataCon, Located DataConP) -> [Measure SpecType DataCon]
 makeMeasureSelectors (dc, Loc l l' (DataConP _ vs _ _ _ xts r _))
