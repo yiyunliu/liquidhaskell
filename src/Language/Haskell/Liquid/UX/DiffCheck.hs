@@ -67,8 +67,8 @@ import qualified Data.ByteString.Lazy                   as LB
 -- | Main type of value returned for diff-check.
 data DiffCheck = DC { newBinds   :: [CoreBind]
                     , oldOutput  :: !(Output Doc)
-                    , newCmpSpec :: !CompSpec
-                    , newTgtSpec :: !TargetSpec
+                    , newGblSpec :: !GlobalSpec
+                    , newLclSpec :: !LocalSpec
                     }
 
 instance PPrint DiffCheck where
@@ -107,39 +107,39 @@ checkedVars              = concatMap names . newBinds
 --    file which correspond to top-level binders whose code has changed
 --    and their transitive dependencies.
 --------------------------------------------------------------------------------
-slice :: FilePath -> [CoreBind] -> CompSpec -> TargetSpec -> IO (Maybe DiffCheck)
+slice :: FilePath -> [CoreBind] -> GlobalSpec -> LocalSpec -> IO (Maybe DiffCheck)
 --------------------------------------------------------------------------------
-slice target cbs csp tsp = ifM (doesFileExist savedFile)
+slice target cbs gbl lcl = ifM (doesFileExist savedFile)
                                doDiffCheck
                                (return Nothing)
   where
     savedFile       = extFileName Saved target
-    doDiffCheck     = sliceSaved target savedFile cbs csp tsp
+    doDiffCheck     = sliceSaved target savedFile cbs gbl lcl
 
-sliceSaved :: FilePath -> FilePath -> [CoreBind] -> CompSpec -> TargetSpec -> IO (Maybe DiffCheck)
-sliceSaved target savedFile coreBinds csp tsp = do
+sliceSaved :: FilePath -> FilePath -> [CoreBind] -> GlobalSpec -> LocalSpec -> IO (Maybe DiffCheck)
+sliceSaved target savedFile coreBinds gbl lcl = do
   (is, lm) <- lineDiff target savedFile
   result   <- loadResult target
-  return    $ sliceSaved' target is lm (DC coreBinds result csp tsp)
+  return    $ sliceSaved' target is lm (DC coreBinds result gbl lcl)
 
 sliceSaved' :: FilePath -> [Int] -> LMap -> DiffCheck -> Maybe DiffCheck
-sliceSaved' srcF is lm (DC coreBinds result csp tsp)
+sliceSaved' srcF is lm (DC coreBinds result gbl lcl)
   | gDiff     = Nothing
-  | otherwise = Just $ DC cbs' res' csp' tsp
+  | otherwise = Just $ DC cbs' res' gbl' lcl
   where
-    gDiff     = globalDiff srcF is csp tsp
-    csp'      = assumeSpec sigm csp
+    gDiff     = globalDiff srcF is gbl lcl
+    gbl'      = assumeSpec sigm gbl
     res'      = adjustOutput lm cm result
     cm        = checkedItv (coreDefs cbs')
     cbs'      = thinWith sigs coreBinds $ diffVars is defs
-    defs      = coreDefs coreBinds ++ specDefs srcF csp
+    defs      = coreDefs coreBinds ++ specDefs srcF gbl
     sigs      = S.fromList $ M.keys sigm
-    sigm      = sigVars srcF is csp
+    sigm      = sigVars srcF is gbl
 
 -- | Add the specified signatures for vars-with-preserved-sigs,
 --   whose bodies have been pruned from [CoreBind] into the "assumes"
 
-assumeSpec :: M.HashMap Var LocSpecType -> CompSpec -> CompSpec
+assumeSpec :: M.HashMap Var LocSpecType -> GlobalSpec -> GlobalSpec
 assumeSpec sigm sp = sp { asmSigs = M.union sigm $ asmSigs sp }
 
 diffVars :: [Int] -> [Def] -> [Var]
@@ -154,17 +154,17 @@ diffVars ls defs'    = tracePpr ("INCCHECK: diffVars lines = " ++ show ls ++ " d
       | i > end d    = go (i:is) ds
       | otherwise    = binder d : go (i:is) ds
 
-sigVars :: FilePath -> [Int] -> CompSpec -> M.HashMap Var LocSpecType
+sigVars :: FilePath -> [Int] -> GlobalSpec -> M.HashMap Var LocSpecType
 sigVars srcF ls sp = M.fromList $ filter (ok . snd) $ specSigs sp
   where
     ok             = not . isDiff srcF ls
 
-globalDiff :: FilePath -> [Int] -> CompSpec -> TargetSpec -> Bool
-globalDiff srcF ls csp tsp = measDiff || invsDiff || dconsDiff
+globalDiff :: FilePath -> [Int] -> GlobalSpec -> LocalSpec -> Bool
+globalDiff srcF ls gbl lcl = measDiff || invsDiff || dconsDiff
   where
-    measDiff  = any (isDiff srcF ls) (M.elems $ meas csp)
-    invsDiff  = any (isDiff srcF ls) (snd <$> invariants csp)
-    dconsDiff = any (isDiff srcF ls) (dloc . snd <$> dconsP tsp)
+    measDiff  = any (isDiff srcF ls) (M.elems $ meas gbl)
+    invsDiff  = any (isDiff srcF ls) (snd <$> invariants gbl)
+    dconsDiff = any (isDiff srcF ls) (dloc . snd <$> dconsP lcl)
     dloc dc   = Loc (dc_loc dc) (dc_locE dc) ()
 
 isDiff :: FilePath -> [Int] -> Located a -> Bool
@@ -184,14 +184,14 @@ isDiff srcF ls x = file x == srcF && any hits ls
  -}
 
 --------------------------------------------------------------------------------
-thin :: [CoreBind] -> CompSpec -> TargetSpec -> [Var] -> DiffCheck
+thin :: [CoreBind] -> GlobalSpec -> LocalSpec -> [Var] -> DiffCheck
 --------------------------------------------------------------------------------
-thin cbs csp tsp vs = DC (filterBinds cbs vs') mempty csp' tsp
+thin cbs gbl lcl vs = DC (filterBinds cbs vs') mempty gbl' lcl
   where
     vs'             = txClosure (coreDeps cbs) xs (S.fromList vs)
-    csp'            = assumeSpec sigs' csp
+    gbl'            = assumeSpec sigs' gbl
     sigs'           = foldr M.delete (M.fromList xts) vs
-    xts             = specSigs csp
+    xts             = specSigs gbl
     xs              = S.fromList $ fst <$> xts
 
 thinWith :: S.HashSet Var -> [CoreBind] -> [Var] -> [CoreBind]
@@ -245,14 +245,14 @@ filterBinds cbs ys = filter f cbs
 
 
 --------------------------------------------------------------------------------
-specDefs :: FilePath -> CompSpec -> [Def]
+specDefs :: FilePath -> GlobalSpec -> [Def]
 --------------------------------------------------------------------------------
 specDefs srcF  = map def . filter sameFile . specSigs
   where
     def (x, t) = D (line t) (lineE t) x
     sameFile   = (srcF ==) . file . snd
 
-specSigs :: CompSpec -> [(Var, LocSpecType)]
+specSigs :: GlobalSpec -> [(Var, LocSpecType)]
 specSigs sp = M.toList (tySigs  sp) ++
               M.toList (asmSigs sp) ++
               M.toList (ctors   sp)

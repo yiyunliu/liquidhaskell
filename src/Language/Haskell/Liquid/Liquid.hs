@@ -125,14 +125,14 @@ liquidOne info = do
 
 newPrune :: Config -> [CoreBind] -> FilePath -> GhcInfo -> IO (Either [CoreBind] [DC.DiffCheck])
 newPrune cfg cbs tgt info
-  | not (null vs) = return . Right $ [DC.thin cbs csp tsp vs]
-  | timeBinds cfg = return . Right $ [DC.thin cbs csp tsp [v] | v <- exportedVars info ]
-  | diffcheck cfg = maybeEither cbs <$> DC.slice tgt cbs csp tsp
+  | not (null vs) = return . Right $ [DC.thin cbs gbl lcl vs]
+  | timeBinds cfg = return . Right $ [DC.thin cbs gbl lcl [v] | v <- exportedVars info ]
+  | diffcheck cfg = maybeEither cbs <$> DC.slice tgt cbs gbl lcl
   | otherwise     = return  (Left cbs)
   where
-    vs            = tgtVars tsp
-    csp           = cmpSpec info
-    tsp           = tgtSpec info
+    vs            = tgtVars lcl
+    gbl           = gblSpec info
+    lcl           = lclSpec info
 
 -- topLevelBinders :: GhcSpec -> [Var]
 -- topLevelBinders = map fst . tySigs
@@ -155,7 +155,7 @@ liquidQuery cfg tgt info edc = do
   where
     cgi    = {-# SCC "generateConstraints" #-} generateConstraints $! info' {cbs = cbs''}
     cbs''  = either id DC.newBinds edc
-    info'  = either (const info) (\z -> info {cmpSpec = DC.newCmpSpec z, tgtSpec = DC.newTgtSpec z}) edc
+    info'  = either (const info) (\z -> info {gblSpec = DC.newGblSpec z, lclSpec = DC.newLclSpec z}) edc
     names  = either (const Nothing) (Just . map show . DC.checkedVars) edc
     oldOut = either (const mempty) DC.oldOutput edc
 

@@ -40,7 +40,7 @@ import           Data.Maybe                             (fromMaybe, isNothing)
 import           Language.Fixpoint.Misc
 import           Language.Fixpoint.Types                hiding (R, SrcSpan)
 import           Language.Haskell.Liquid.GHC.Misc
-import           Language.Haskell.Liquid.Types          hiding (GhcInfo(..), CompSpec (..), TargetSpec (..))
+import           Language.Haskell.Liquid.Types          hiding (GhcInfo(..), GlobalSpec (..), LocalSpec (..))
 -- import           Language.Haskell.Liquid.Types.Errors
 import           Language.Haskell.Liquid.Types.RefType
 import           Language.Haskell.Liquid.Types.Variance

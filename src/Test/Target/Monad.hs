@@ -139,8 +139,8 @@ data TargetState = TargetState
   , smtContext   :: !Context
   }
 
-initState :: FilePath -> CompSpec -> TargetSpec -> Context -> TargetState
-initState fp csp tsp ctx = TargetState
+initState :: FilePath -> GlobalSpec -> LocalSpec -> Context -> TargetState
+initState fp gbl lcl ctx = TargetState
   { variables    = []
   , choices      = []
   , constraints  = []
@@ -149,7 +149,7 @@ initState fp csp tsp ctx = TargetState
   , dconEnv      = dcons
   , ctorEnv      = cts
   , measEnv      = meas
-  , embEnv       = tcEmbeds csp
+  , embEnv       = tcEmbeds gbl
   , tyconInfo    = tyi
   , freesyms     = free
   , constructors = []
@@ -163,16 +163,16 @@ initState fp csp tsp ctx = TargetState
   }
   where
     -- FIXME: can we NOT tidy???
-    dcons = tidyF $ map (first symbol) (dconsP tsp)
+    dcons = tidyF $ map (first symbol) (dconsP lcl)
 
     -- NOTE: we want to tidy all occurrences of nullary datacons in the signatures
-    cts   = subst su $ tidyF $ map (symbol *** val) $ M.toList $ ctors csp
-    sigs  = subst su $ tidyF $ map (symbol *** val) $ M.toList $ tySigs csp
+    cts   = subst su $ tidyF $ map (symbol *** val) $ M.toList $ ctors gbl
+    sigs  = subst su $ tidyF $ map (symbol *** val) $ M.toList $ tySigs gbl
 
-    tyi   = tyconEnv csp
+    tyi   = tyconEnv gbl
     free  = tidyS $ map (second symbol)
-          $ (M.toList $ freeSyms csp) ++ map (\c -> (symbol c, c)) (M.keys $ ctors csp)
-    meas  = measures tsp
+          $ (M.toList $ freeSyms gbl) ++ map (\c -> (symbol c, c)) (M.keys $ ctors gbl)
+    meas  = measures lcl
     tidyF = map (first tidySymbol)
     tidyS = map (second tidySymbol)
     su = mkSubst (map (second eVar) free)

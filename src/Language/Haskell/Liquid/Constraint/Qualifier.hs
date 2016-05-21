@@ -31,12 +31,12 @@ import Debug.Trace
 specificationQualifiers :: Int -> GhcInfo -> SEnv Sort -> [Qualifier]
 -----------------------------------------------------------------------------------
 specificationQualifiers k info lEnv
-  = [ q | (x, t) <- (M.toList $ tySigs  $ cmpSpec info)
-                 ++ (M.toList $ asmSigs $ cmpSpec info)
+  = [ q | (x, t) <- (M.toList $ tySigs  $ gblSpec info)
+                 ++ (M.toList $ asmSigs $ gblSpec info)
                  ++ (if info `hasOpt` scrapeInternals
-                       then M.toList $ inSigs $ cmpSpec info
+                       then M.toList $ inSigs $ gblSpec info
                        else [])
-                 ++ (M.toList $ ctors   $ cmpSpec info)
+                 ++ (M.toList $ ctors   $ gblSpec info)
         , x `S.member` (S.fromList $ defVars info ++
                                      -- NOTE: this mines extra, useful qualifiers but causes
                                      -- a significant increase in running time, so we hide it
@@ -46,7 +46,7 @@ specificationQualifiers k info lEnv
                                      else if info `hasOpt` scrapeImports
                                      then impVars info
                                      else [])
-        , q <- refTypeQuals lEnv (getSourcePos x) (tcEmbeds $ cmpSpec info) (val t)
+        , q <- refTypeQuals lEnv (getSourcePos x) (tcEmbeds $ gblSpec info) (val t)
         -- NOTE: large qualifiers are VERY expensive, so we only mine
         -- qualifiers up to a given size, controlled with --max-params
         , length (q_params q) <= k + 1

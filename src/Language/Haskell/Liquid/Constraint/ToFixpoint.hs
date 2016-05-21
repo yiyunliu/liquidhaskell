@@ -40,7 +40,7 @@ targetFInfo info cgi fn = F.fi cs ws bs ls ks qs bi fn aHO aHOqs
 targetQuals :: GhcInfo -> CGInfo -> [F.Qualifier]
 targetQuals info cgi = spcQs ++ genQs
   where
-    spcQs     = qualifiers $ cmpSpec info
+    spcQs     = qualifiers $ gblSpec info
     genQs     = specificationQualifiers n info (fEnv cgi)
     n         = maxParams $ config info
     -- lEnv      = F.fromListSEnv $ lits cgi

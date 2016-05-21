@@ -57,27 +57,27 @@ import           Debug.Trace
 
 checkGhcSpec :: [(ModName, Ms.BareSpec)]
              -> SEnv SortedReft
-             -> Config -> CompSpec -> TargetSpec
+             -> Config -> GlobalSpec -> LocalSpec
              -> [Error]
 
-checkGhcSpec specs env cfg csp tsp = errors
+checkGhcSpec specs env cfg gbl lcl = errors
   where
-    errors           =  mapMaybe (checkBind allowHO "constructor"  emb tcEnv env) (dcons      tsp)
-                     ++ mapMaybe (checkBind allowHO "measure"      emb tcEnv env) (M.toList $ meas    csp)
-                     ++ mapMaybe (checkBind allowHO "assumed type" emb tcEnv env) (M.toList $ asmSigs csp)
-                     ++ mapMaybe (checkBind allowHO "class method" emb tcEnv env) (clsSigs    csp)
-                     ++ mapMaybe (checkInv  allowHO                emb tcEnv env) (invariants csp)
-                     ++ checkIAl            allowHO                emb tcEnv env  (ialiases   csp)
+    errors           =  mapMaybe (checkBind allowHO "constructor"  emb tcEnv env) (dcons      lcl)
+                     ++ mapMaybe (checkBind allowHO "measure"      emb tcEnv env) (M.toList $ meas    gbl)
+                     ++ mapMaybe (checkBind allowHO "assumed type" emb tcEnv env) (M.toList $ asmSigs gbl)
+                     ++ mapMaybe (checkBind allowHO "class method" emb tcEnv env) (clsSigs    gbl)
+                     ++ mapMaybe (checkInv  allowHO                emb tcEnv env) (invariants gbl)
+                     ++ checkIAl            allowHO                emb tcEnv env  (ialiases   gbl)
                      ++ checkMeasures emb env ms
-                     ++ checkClassMeasures (measures tsp)
+                     ++ checkClassMeasures (measures lcl)
                      ++ mapMaybe checkMismatch                     sigs
-                     ++ checkDuplicate                             (M.toList $ tySigs csp)
-                     ++ checkQualifiers env                        (qualifiers csp)
-                     ++ checkDuplicate                             (M.toList $ asmSigs csp)
-                     ++ checkDupIntersect                          (M.toList $ tySigs csp) (M.toList $ asmSigs csp)
+                     ++ checkDuplicate                             (M.toList $ tySigs gbl)
+                     ++ checkQualifiers env                        (qualifiers gbl)
+                     ++ checkDuplicate                             (M.toList $ asmSigs gbl)
+                     ++ checkDupIntersect                          (M.toList $ tySigs gbl) (M.toList $ asmSigs gbl)
                      ++ checkRTAliases "Type Alias" env            tAliases
                      ++ checkRTAliases "Pred Alias" env            eAliases
-                     ++ checkDuplicateFieldNames                   (dconsP tsp)
+                     ++ checkDuplicateFieldNames                   (dconsP lcl)
                      ++ checkRefinedClasses                        rClasses rInsts
     rClasses         = concatMap (Ms.classes   . snd) specs
     rInsts           = concatMap (Ms.rinstance . snd) specs
@@ -87,11 +87,11 @@ checkGhcSpec specs env cfg csp tsp = errors
                                         | (_, dcp) <- dconsP spec
                                         , let l     = dc_loc  dcp
                                         , let l'    = dc_locE dcp ]
-    emb              = tcEmbeds csp
-    tcEnv            = tyconEnv csp
-    ms               = measures tsp
+    emb              = tcEmbeds gbl
+    tcEnv            = tyconEnv gbl
+    ms               = measures lcl
     clsSigs sp       = [ (v, t) | (v, t) <- M.toList $ tySigs sp, isJust (isClassOpId_maybe v) ]
-    sigs             = M.toList (tySigs csp) ++ M.toList (asmSigs csp)
+    sigs             = M.toList (tySigs gbl) ++ M.toList (asmSigs gbl)
     allowHO          = higherorder cfg
 
 

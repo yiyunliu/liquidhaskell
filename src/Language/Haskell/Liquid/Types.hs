@@ -26,10 +26,10 @@ module Language.Haskell.Liquid.Types (
 
   -- * Ghc Information
   , GhcInfo (..)
-  , CompSpec (..)
-  , emptyCompSpec
-  , TargetSpec (..)
-  , emptyTargetSpec
+  , GlobalSpec (..)
+  , emptyGlobalSpec
+  , LocalSpec (..)
+  , emptyLocalSpec
   , TargetVars (..)
 
   -- * Located Things
@@ -299,15 +299,16 @@ data GhcInfo = GI {
   , hqFiles  :: ![FilePath]
   , imports  :: ![String]
   , includes :: ![FilePath]
-  , cmpSpec  :: !CompSpec
-  , tgtSpec  :: !TargetSpec
+  , gblSpec  :: !GlobalSpec
+  , lclSpec  :: !LocalSpec
   }
 
 instance HasConfig GhcInfo where
   getConfig = config
 
--- | Specifications associated with the module as a /unit of compilation/.
-data CompSpec = CS {
+-- | Specifications associated globally with the module, which can be imported
+-- by other modules.
+data GlobalSpec = GS {
     tySigs     :: !(M.HashMap Var LocSpecType)
     -- ^ Asserted Reftypes
   , asmSigs    :: !(M.HashMap Var LocSpecType)
@@ -342,12 +343,13 @@ data CompSpec = CS {
   , logicMap   :: LogicMap
   }
 
-emptyCompSpec :: CompSpec
-emptyCompSpec = CS mempty mempty mempty mempty mempty mempty mempty mempty
-                   mempty mempty mempty mempty mempty mempty
+emptyGlobalSpec :: GlobalSpec
+emptyGlobalSpec = GS mempty mempty mempty mempty mempty mempty mempty mempty
+                     mempty mempty mempty mempty mempty mempty
 
--- | Specifications associated with the module as a /verification target/.
-data TargetSpec = TS {
+-- | Specifications associated locally with the module, only needed when it is
+-- being verified.
+data LocalSpec = LS {
     tgtVars    :: ![Var]
     -- ^ Top-level Binders To Verify (empty means ALL binders)
   , exports    :: !NameSet
@@ -369,9 +371,9 @@ data TargetSpec = TS {
   , proofType  :: Maybe Type
   }
 
-emptyTargetSpec :: TargetSpec
-emptyTargetSpec = TS mempty mempty mempty mempty mempty mempty mempty mempty
-                     mempty Nothing
+emptyLocalSpec :: LocalSpec
+emptyLocalSpec = LS mempty mempty mempty mempty mempty mempty mempty mempty
+                    mempty Nothing
 
 data LogicMap = LM { logic_map :: M.HashMap Symbol LMap
                    , axiom_map :: M.HashMap Var Symbol

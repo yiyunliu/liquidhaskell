@@ -146,11 +146,11 @@ stripQuals = snd . bkClass . fourth4 . bkUniv
 fourth4 :: (t, t1, t2, t3) -> t3
 fourth4 (_,_,_,d) = d
 
-getSpec :: [String] -> FilePath -> IO (CompSpec, TargetSpec)
+getSpec :: [String] -> FilePath -> IO (GlobalSpec, LocalSpec)
 getSpec opts target
   = do cfg <- getOpts ["--quiet"]
        inf <- head.fst <$> getGhcInfo Nothing (cfg {ghcOptions = opts}) [target]
-       return (cmpSpec inf, tgtSpec inf)
+       return (gblSpec inf, lclSpec inf)
        -- case info of
        --   Left err -> error $ show err
        --   Right i  -> return $ spec i
