@@ -15,6 +15,8 @@ import Language.Fixpoint.Solver                 ( parseFInfo )
 
 import           Data.Monoid
 
+import qualified Data.HashMap.Strict as M
+
 import Language.Haskell.Liquid.Constraint.Qualifier
 
 
@@ -40,7 +42,7 @@ targetFInfo info cgi fn = F.fi cs ws bs ls ks qs bi fn aHO aHOqs
 targetQuals :: GhcInfo -> CGInfo -> [F.Qualifier]
 targetQuals info cgi = spcQs ++ genQs
   where
-    spcQs     = qualifiers $ gblSpec info
+    spcQs     = M.elems $ qualifiers $ gblSpec info
     genQs     = specificationQualifiers n info (fEnv cgi)
     n         = maxParams $ config info
     -- lEnv      = F.fromListSEnv $ lits cgi

@@ -24,9 +24,11 @@ import           Debug.Trace
 import           Prelude                                    hiding (error)
 import           Avail                                      (availsToNameSet)
 import           BasicTypes                                 (Arity)
+import           ConLike
 import           CoreSyn                                    hiding (Expr, sourceName)
 import qualified CoreSyn                                    as Core
 import           CostCentre
+import qualified DataCon                                    as DC
 import           GHC                                        hiding (L)
 import           HscTypes                                   (Dependencies, ImportedMods, ModGuts(..), HscEnv(..), FindResult(..))
 import           Kind                                       (superKind)
@@ -310,8 +312,7 @@ getSourcePos           = srcSpanSourcePos  . getSrcSpan
 
 getSourcePosE :: NamedThing a => a -> SourcePos
 getSourcePosE          = srcSpanSourcePosE . getSrcSpan
-
-
+ 
 --------------------------------------------------------------------------------
 -- | Manipulating CoreExpr -----------------------------------------------------
 --------------------------------------------------------------------------------
@@ -607,3 +608,21 @@ synTyConRhs_maybe = TC.synTyConRhs_maybe
 
 tcRnLookupRdrName :: HscEnv -> GHC.Located RdrName -> IO (Messages, Maybe [Name])
 tcRnLookupRdrName = TcRnDriver.tcRnLookupRdrName
+
+--------------------------------------------------------------------------------
+-- | Unwrap TyThing ------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+tyThingId_maybe :: TyThing -> Maybe Id
+tyThingId_maybe (AnId x)                   = Just x
+tyThingId_maybe (AConLike (RealDataCon x)) = Just (DC.dataConWorkId x)
+tyThingId_maybe _                          = Nothing
+
+tyThingDataCon_maybe :: TyThing -> Maybe DataCon
+tyThingDataCon_maybe (AConLike (RealDataCon x)) = Just x
+tyThingDataCon_maybe _                          = Nothing
+
+tyThingTyCon_maybe :: TyThing -> Maybe TyCon
+tyThingTyCon_maybe (ATyCon x) = Just x
+tyThingTyCon_maybe _          = Nothing
+

@@ -87,7 +87,7 @@ makeGhcSpec cfg name cbs vars defVars exports env lmap specs
   where
     act       = makeGhcSpec' cfg cbs vars defVars exports specs
     throwLeft = either Ex.throw return
-    initEnv   = BE name mempty mempty mempty env lmap' mempty mempty
+    initEnv   = BE name mempty mempty mempty mempty env lmap' mempty
     lmap'     = case lmap of {Left e -> Ex.throw e; Right x -> x `mappend` listLMap}
 
 listLMap :: LogicMap
@@ -313,7 +313,7 @@ makeGhcSpec4 quals defVars specs name su (gbl, lcl)
        let mtx  = txRefToLogic lmap inlmap
        let txdcons d = d{tyRes = f $ tyRes d, tyConsts = f <$> tyConsts d, tyArgs = tx <$> tyArgs d}
        return
-        ( gbl { qualifiers = subst su quals
+        ( gbl { qualifiers = M.fromList $ (\q -> (q_name q, q)) <$> subst su quals
               , tySigs     = tx <$> msgs
               , asmSigs    = tx <$> asmSigs gbl
               , inSigs     = tx <$> inSigs  gbl

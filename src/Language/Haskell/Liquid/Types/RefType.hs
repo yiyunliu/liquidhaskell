@@ -1375,3 +1375,17 @@ instance PPrint (RTProp c tv r) => Show (RTProp c tv r) where
 
 instance PPrint REnv where
   pprintTidy k re = "RENV" $+$ pprintTidy k (reLocal re)
+
+instance PPrint RTEnv where
+  pprintTidy k rtEnv = vcat
+    [ "Expression Aliases:"
+    , nest 4 $ pprintLongList k (M.toList $ exprAliases rtEnv)
+    , "Type Aliases:"
+    , nest 4 $ pprintLongList k (M.toList $ typeAliases rtEnv)
+    ]
+
+instance (PPrint tv, PPrint ty) => PPrint (RTAlias tv ty) where
+  pprintTidy k rta = pprintTidy k (rtName rta)
+                 <+> pprintTidy k (rtTArgs rta)
+                 <+> pprintTidy k (rtVArgs rta)
+                 <+> pprintTidy k (rtBody rta)

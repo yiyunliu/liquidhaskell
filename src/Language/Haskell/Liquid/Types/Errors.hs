@@ -233,6 +233,15 @@ data TError t =
                 , locs:: ![SrcSpan]
                 } -- ^ multiple definitions of the same measure
 
+  | ErrDupEmbs  { pos   :: !SrcSpan
+                , tycon :: !Doc
+                , ftcs  :: ![Doc]
+                }
+
+  | ErrDupQuals { pos   :: !SrcSpan
+                , qname :: !Doc
+                , locs  :: ![SrcSpan]
+                }
 
   | ErrBadData  { pos :: !SrcSpan
                 , var :: !Doc
@@ -278,6 +287,11 @@ data TError t =
                 , msg :: !Doc
                 } -- ^ GHC error: parsing or type checking
 
+  | ErrNotInScope { pos   :: !SrcSpan
+                  , kind  :: !Doc 
+                  , dname :: !Doc
+                  } -- ^ GHC error: parsing or type checking
+
   | ErrMismatch { pos   :: !SrcSpan -- ^ haskell type location
                 , var   :: !Doc
                 , hs    :: !Doc
@@ -302,12 +316,44 @@ data TError t =
                        , dpos  :: !SrcSpan
                        } -- ^ Illegal RTAlias application (from BSort, eg. in PVar)
 
-  | ErrAliasApp { pos   :: !SrcSpan
-                , nargs :: !Int
-                , dname :: !Doc
-                , dpos  :: !SrcSpan
-                , dargs :: !Int
-                }
+  | ErrTypeAliasApp { pos    :: !SrcSpan
+                    , nargs  :: !Int
+                    , dname  :: !Doc
+                    , dpos   :: !SrcSpan
+                    , dtargs :: !Int
+                    , dvargs :: !Int
+                    }
+
+  | ErrExprAliasApp { pos   :: !SrcSpan
+                    , nargs :: !Int
+                    , dname :: !Doc
+                    , dpos  :: !SrcSpan
+                    , dargs :: !Int
+                    }
+
+  | ErrTypeAliasPredArgs { pos   :: !SrcSpan
+                         , dname :: !Doc
+                         }
+
+  | ErrNotAnExprArg { pos  :: !SrcSpan
+                    , dtyp :: !Doc
+                    }
+
+  | ErrBadTypeApp { pos   :: !SrcSpan
+                  , typ   :: !t
+                  , targs :: ![t]
+                  }
+
+  | ErrTyAppArity { pos   :: !SrcSpan
+                  , nargs :: !Int
+                  , dname :: !Doc
+                  , dpos  :: !SrcSpan
+                  , dargs :: !Int
+                  }
+
+  | ErrUnboundPVar { pos :: !SrcSpan
+                   , var :: !Doc
+                   }
 
   | ErrTermin   { pos  :: !SrcSpan
                 , bind :: ![Doc]
@@ -664,9 +710,18 @@ ppError' _ dSp _ (ErrDupMeas _ v t ls)
         <> colon
         $+$ (nest 4 $ vcat $ pprint <$> ls)
 
+ppError' _ dSp _ (ErrDupEmbs _ t fs)
+  = dSp <+> text "Multiple Conflicting TyCon Embeds for" <+> pprint t
+        $+$ (nest 4 $ vcat fs)
+
 ppError' _ dSp _ (ErrDupAlias _ k v ls)
-  = dSp <+> text "Multiple Declarations! "
+  = dSp <+> text "Multiple Declarations!"
     $+$ (nest 2 $ text "Multiple Declarations of" <+> pprint k <+> ppVar v $+$ text "Declared at:")
+    <+> (nest 4 $ vcat $ pprint <$> ls)
+
+ppError' _ dSp _ (ErrDupQuals _ v ls)
+  = dSp <+> text "Multiple Declarations!"
+    $+$ (nest 2 $ text "Multiple Declarations of Qualifier" <+> ppVar v $+$ text "Declared at:")
     <+> (nest 4 $ vcat $ pprint <$> ls)
 
 ppError' _ dSp dCtx (ErrUnbound _ x)
@@ -677,6 +732,10 @@ ppError' _ dSp dCtx (ErrGhc _ s)
   = dSp <+> text "GHC Error"
         $+$ dCtx
         $+$ (nest 4 $ pprint s)
+
+ppError' _ dSp dCtx (ErrNotInScope _ kind name)
+  = dSp <+> text "Not in scope:" <+> kind <+> text "`" <> name <> "'"
+        $+$ dCtx
 
 ppError' _ dSp dCtx (ErrPartPred _ c p i eN aN)
   = dSp <+> text "Malformed Predicate Application"
@@ -714,12 +773,51 @@ ppError' _ dSp dCtx (ErrIllegalAliasApp _ dn dl)
         $+$ text "Type alias:" <+> pprint dn
         $+$ text "Defined at:" <+> pprint dl
 
-ppError' _ dSp dCtx (ErrAliasApp _ n name dl dn)
+ppError' _ dSp dCtx (ErrTypeAliasApp _ n name dl dtn dvn)
   = dSp <+> text "Malformed Type Alias Application"
         $+$ dCtx
         $+$ text "Type alias:" <+> pprint name
         $+$ text "Defined at:" <+> pprint dl
+        $+$ text "Expects:"    <+> pprint dtn <+> text "type argument(s)," <+> pprint dvn <+> "expression argument(s)"
+        $+$ text "Given:"      <+> pprint n <+> text "argument(s)"
+
+ppError' _ dSp dCtx (ErrExprAliasApp _ n name dl dn)
+  = dSp <+> text "Malformed Expression Alias Application"
+        $+$ dCtx
+        $+$ text "Expression alias:" <+> pprint name
+        $+$ text "Defined at:" <+> pprint dl
         $+$ text "Expects"     <+> pprint dn <+> text "arguments, but is given" <+> pprint n
+
+ppError' _ dSp dCtx (ErrTypeAliasPredArgs _ name)
+  = dSp <+> text "Type Aliases Cannot Have Predicate Arguments"
+        $+$ dCtx
+        $+$ text "Type Alias:" <+> pprint name
+
+ppError' _ dSp dCtx (ErrNotAnExprArg _ typ)
+  = dSp <+> text "Not An Expression Argument"
+        $+$ dCtx
+        $+$ text "Type:" <+> pprint typ
+
+ppError' _ dSp dCtx (ErrBadTypeApp _ typ targs)
+  = dSp <+> text "Illegal Type Application"
+        $+$ dCtx
+        $+$ text "Type:"      <+> pprint typ
+        $+$ text "Arguments:"
+        $+$ nest 4 (brackets $ vcat $ pprint <$> targs)
+
+ppError' _ dSp dCtx (ErrTyAppArity _ nargs dname dpos dargs)
+  = dSp <+> text "Malformed Type Constructor Application"
+        $+$ dCtx
+        $+$ text "Type constructor" <+> dname
+        <+> text "(defined at" <+> pprint dpos <> text ")"
+        <+> text "expects a maximum" <+> pprint dargs
+        <+> text "arguments but was given" <+> pprint nargs
+        <+> text "arguments"
+
+ppError' _ dSp dCtx (ErrUnboundPVar _ var)
+  = dSp <+> text "Unbound Predicate Variable"
+        $+$ dCtx
+        $+$ text "Variable:" <+> var
 
 ppError' _ dSp dCtx (ErrSaved _ name s)
   = dSp <+> name -- <+> "(saved)"

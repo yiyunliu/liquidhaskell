@@ -136,7 +136,7 @@ Library
                 , text >= 1.2
                 , vector >= 0.10
                 , hashable >= 1.2
-                , unordered-containers >= 0.2
+                , unordered-containers >= 0.2.7
                 , liquid-fixpoint
                 , located-base
                 , prover
@@ -210,6 +210,12 @@ Library
                     Language.Haskell.Liquid.Types.Names,
                     Language.Haskell.Liquid.Liquid,
                     Paths_liquidhaskell,
+
+                    Language.Haskell.Liquid.Spec,
+                    Language.Haskell.Liquid.Spec.Aliases,
+                    Language.Haskell.Liquid.Spec.Env,
+                    Language.Haskell.Liquid.Spec.Lookup,
+                    Language.Haskell.Liquid.Spec.Resolve,
 
                     -- FIXME: These shouldn't really be exposed, but the linker complains otherwise...
                     Language.Haskell.Liquid.Bare.RefToLogic,

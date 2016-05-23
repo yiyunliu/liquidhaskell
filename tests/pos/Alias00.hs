@@ -1,4 +1,4 @@
-module Test0 () where
+module Alias00 () where
 
 {-@ type PosInt = {v: Int | v >= 0} @-}
 

@@ -1060,14 +1060,15 @@ dataDeclFullP
 ---------------------------------------------------------------------
 
 fTyConP :: Parser FTycon
-fTyConP
-  =   (reserved "int"     >> return intFTyCon)
-  <|> (reserved "Integer" >> return intFTyCon)
-  <|> (reserved "Int"     >> return intFTyCon)
-  <|> (reserved "int"     >> return intFTyCon)
-  <|> (reserved "real"    >> return realFTyCon)
-  <|> (reserved "bool"    >> return boolFTyCon)
-  <|> (symbolFTycon      <$> locUpperIdP)
+fTyConP = symbolFTycon <$> locParserP fTyConP'
+
+fTyConP' :: Parser Symbol
+fTyConP' = ("int"  <$ reserved "int")
+       <|> ("int"  <$ reserved "Integer")
+       <|> ("int"  <$ reserved "Int")
+       <|> ("real" <$ reserved "real")
+       <|> ("bool" <$ reserved "bool")
+       <|> upperIdP
 
 ---------------------------------------------------------------
 -- | Bundling Parsers into a Typeclass ------------------------

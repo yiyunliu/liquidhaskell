@@ -1,4 +1,4 @@
-module Test0 () where
+module Alias01 () where
 
 {-@ type GeNum a N = {v: a | N <= v} @-}
 

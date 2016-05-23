@@ -173,6 +173,7 @@ module Language.Haskell.Liquid.Types (
 
   -- * Misc
   , mapRTAVars
+  , rtSrcSpan
   , insertsSEnv
 
   -- * Strata
@@ -250,8 +251,9 @@ import           Language.Fixpoint.Types                hiding (Error, SrcSpan, 
 
 
 import           Language.Haskell.Liquid.GHC.Misc
-import           Language.Haskell.Liquid.Types.Variance
 import           Language.Haskell.Liquid.Types.Errors
+import {-# SOURCE #-} Language.Haskell.Liquid.Types.Bounds
+import           Language.Haskell.Liquid.Types.Variance
 import           Language.Haskell.Liquid.Misc
 import           Language.Haskell.Liquid.UX.Config
 import           Data.Default
@@ -317,12 +319,14 @@ data GlobalSpec = GS {
     -- ^ Auto generated Signatures
   , ctors      :: !(M.HashMap Var LocSpecType)
     -- ^ Data Constructor Measure Sigs
+  , aliases    :: !RTEnv
   , meas       :: !(M.HashMap Symbol LocSpecType)
     -- ^ Measure Types
     -- eg.  len :: [a] -> Int
   , invariants :: ![(Maybe Var, LocSpecType)]
     -- ^ Data Type Invariants that came from the definition of var measure
     -- eg.  forall a. {v: [a] | len(v) >= 0}
+  , bounds     :: !(RRBEnv RSort)
   , ialiases   :: ![(LocSpecType, LocSpecType)]
     -- ^ Data Type Invariant Aliases
   , freeSyms   :: !(M.HashMap Symbol Var)
@@ -331,7 +335,7 @@ data GlobalSpec = GS {
   , tcEmbeds   :: TCEmb TyCon
     -- ^ How to embed GHC Tycons into fixpoint sorts
     -- e.g. "embed Set as Set_set" from include/Data/Set.spec
-  , qualifiers :: ![Qualifier]
+  , qualifiers :: !(M.HashMap Symbol Qualifier)
     -- ^ Qualifiers in Source/Spec files
     -- e.g tests/pos/qualTest.hs
   , tyconEnv   :: M.HashMap TyCon RTyCon
@@ -345,7 +349,7 @@ data GlobalSpec = GS {
 
 emptyGlobalSpec :: GlobalSpec
 emptyGlobalSpec = GS mempty mempty mempty mempty mempty mempty mempty mempty
-                     mempty mempty mempty mempty mempty mempty
+                     mempty mempty mempty mempty mempty mempty mempty mempty
 
 -- | Specifications associated locally with the module, only needed when it is
 -- being verified.
@@ -945,6 +949,9 @@ mapRTAVars f rt = rt { rtTArgs = f <$> rtTArgs rt
                      , rtVArgs = f <$> rtVArgs rt
                      }
 
+rtSrcSpan :: RTAlias tv ty -> SrcSpan
+rtSrcSpan rta = sourcePos2SrcSpan (rtPos rta) (rtPosE rta)
+
 ------------------------------------------------------------------------
 -- | Constructor and Destructors for RTypes ----------------------------
 ------------------------------------------------------------------------
@@ -1077,12 +1084,17 @@ class Reftable r => UReftable r where
   ofUReft :: UReft Reft -> r
   ofUReft (MkUReft r _ _) = ofReft r
 
+  toUReft :: r -> UReft Reft
+  toUReft r = MkUReft (toReft r) mempty mempty
+
 
 instance UReftable (UReft Reft) where
-   ofUReft r = r
+   ofUReft = id
+   toUReft = id
 
 instance UReftable () where
    ofUReft _ = mempty
+   toUReft _ = mempty
 
 instance (PPrint r, Reftable r) => Reftable (UReft r) where
   isTauto            = isTauto_ureft

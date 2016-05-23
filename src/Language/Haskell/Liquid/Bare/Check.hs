@@ -72,11 +72,11 @@ checkGhcSpec specs env cfg gbl lcl = errors
                      ++ checkClassMeasures (measures lcl)
                      ++ mapMaybe checkMismatch                     sigs
                      ++ checkDuplicate                             (M.toList $ tySigs gbl)
-                     ++ checkQualifiers env                        (qualifiers gbl)
+                     ++ checkQualifiers env                        (M.elems $ qualifiers gbl)
                      ++ checkDuplicate                             (M.toList $ asmSigs gbl)
                      ++ checkDupIntersect                          (M.toList $ tySigs gbl) (M.toList $ asmSigs gbl)
                      ++ checkRTAliases "Type Alias" env            tAliases
-                     ++ checkRTAliases "Pred Alias" env            eAliases
+                     ++ checkRTAliases "Expression Alias" env      eAliases
                      ++ checkDuplicateFieldNames                   (dconsP lcl)
                      ++ checkRefinedClasses                        rClasses rInsts
     rClasses         = concatMap (Ms.classes   . snd) specs

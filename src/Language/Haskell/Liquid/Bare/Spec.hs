@@ -306,7 +306,7 @@ makeBounds tce name defVars cbs specs
   = do bnames  <- mkThing makeHBounds
        hbounds <- makeHaskellBounds tce cbs bnames
        bnds    <- M.fromList <$> mapM go (concatMap (M.toList . Ms.bounds . snd ) specs)
-       modify   $ \env -> env { bounds = hbounds `mappend` bnds }
+       modify   $ \env -> env { rbEnv = hbounds `mappend` bnds }
   where
     go (x,bound) = (x,) <$> mkBound bound
     mkThing mk   = S.fromList . mconcat <$> sequence [ mk defVars s | (m, s) <- specs, m == name]

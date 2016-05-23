@@ -65,11 +65,11 @@ data TInline = TI { tiargs :: [Symbol]
 data BareEnv = BE { modName  :: !ModName
                   , tcEnv    :: !TCEnv
                   , rtEnv    :: !RTEnv
+                  , rbEnv    :: RBEnv
                   , varEnv   :: ![(Symbol,Var)]
                   , hscEnv   :: HscEnv
                   , logicEnv :: LogicMap
                   , inlines  :: InlnEnv
-                  , bounds   :: RBEnv
                   }
 
 

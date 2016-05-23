@@ -119,7 +119,7 @@ ofBRType appRTAlias resolveReft
       = RAppTy <$> go t1 <*> go t2 <*> resolveReft r
     go (RFun x t1 t2 r)
       =  do env <- get
-            goRFun (bounds env) x t1 t2 r
+            goRFun (rbEnv env) x t1 t2 r
     go (RVar a r)
       = RVar (symbolRTyVar a) <$> resolveReft r
     go (RAllT a t)
@@ -200,7 +200,7 @@ expandRTAliasApp l rta args r
     αs        = rtTArgs rta
     εs        = rtVArgs rta
     err       :: Error
-    err       = ErrAliasApp (sourcePosSrcSpan l) (length args) (pprint $ rtName rta) (sourcePosSrcSpan $ rtPos rta) (length αs + length εs)
+    err       = ErrTypeAliasApp (sourcePosSrcSpan l) (length args) (pprint $ rtName rta) (sourcePosSrcSpan $ rtPos rta) (length αs) (length εs)
 
 -- | exprArg converts a tyVar to an exprVar because parser cannot tell
 -- HORRIBLE HACK To allow treating upperCase X as value variables X
@@ -237,7 +237,7 @@ bareTCApp r (Loc l _ c) rs ts | Just rhs <- synTyConRhs_maybe c
        nts = length tvs
 
        err :: Error
-       err = ErrAliasApp (sourcePosSrcSpan l) (length ts) (pprint c) (getSrcSpan c) (realTcArity c)
+       err = ErrTypeAliasApp (sourcePosSrcSpan l) (length ts) (pprint c) (getSrcSpan c) (realTcArity c) 0
 
 -- TODO expandTypeSynonyms here to
 bareTCApp r (Loc _ _ c) rs ts | isFamilyTyCon c && isTrivial t

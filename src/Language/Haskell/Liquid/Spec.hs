@@ -1,0 +1,86 @@
+{-# LANGUAGE TupleSections #-}
+
+module Language.Haskell.Liquid.Spec (
+    -- * Build Module Specs
+    makeSpecs
+  ) where
+
+import GHC
+
+import CoreSyn
+import NameSet
+import Var
+
+import Control.Exception
+
+import qualified Data.HashMap.Strict as M
+
+import Language.Fixpoint.Types
+
+import Language.Haskell.Liquid.GHC.Misc
+import Language.Haskell.Liquid.Types
+
+import qualified Language.Haskell.Liquid.Measure as Ms
+
+import Language.Haskell.Liquid.Spec.Aliases
+import Language.Haskell.Liquid.Spec.Env
+import Language.Haskell.Liquid.Spec.Lookup
+import Language.Haskell.Liquid.Spec.Resolve
+
+--------------------------------------------------------------------------------
+-- | Build Module Specs --------------------------------------------------------
+--------------------------------------------------------------------------------
+
+makeSpecs :: Config
+          -> GlobalSpec
+          -> CoreProgram
+          -> [Var]
+          -> [Var]
+          -> NameSet
+          -> Maybe Module
+          -> Ms.BareSpec
+          -> Ghc (GlobalSpec, LocalSpec)
+makeSpecs cfg extern cbs vars lvars exports mod bspec =
+  either throw return =<<
+    runSpecM (makeSpecs' cfg cbs vars lvars exports mod bspec) extern bspec
+  
+makeSpecs' :: Config
+           -> CoreProgram
+           -> [Var]
+           -> [Var]
+           -> NameSet
+           -> Maybe Module
+           -> Ms.BareSpec
+           -> SpecM (GlobalSpec, LocalSpec)
+makeSpecs' _cfg _cbs _vars _lvars _exports _mod bspec = do
+  tcEmbeds <- makeTyConEmbeds bspec
+  aliases <- makeAliases bspec
+  withLocalAliases aliases $ do
+  qualifiers <- makeQualifiers bspec
+  return $
+    ( emptyGlobalSpec
+      { aliases = aliases
+      , tcEmbeds = tcEmbeds
+      , qualifiers = qualifiers
+      }
+    , emptyLocalSpec
+    )
+
+--------------------------------------------------------------------------------
+-- | Make Specifications -------------------------------------------------------
+--------------------------------------------------------------------------------
+
+-- | Make Embedded TyCon Environment -------------------------------------------
+
+makeTyConEmbeds :: Ms.BareSpec -> SpecM (TCEmb TyCon)
+makeTyConEmbeds = fmap M.fromList . mapM go . M.toList . Ms.embeds
+  where
+    go (c, y) = (,y) <$> lookupGhcTyConL c
+
+-- | Make Qualifiers -----------------------------------------------------------
+
+makeQualifiers :: Ms.BareSpec -> SpecM (M.HashMap Symbol Qualifier)
+makeQualifiers = fmap M.fromList . mapM go . Ms.qualifiers
+  where
+    go q = (q_name q,) <$> resolve (sourcePosSrcSpan $ q_pos q) q
+
