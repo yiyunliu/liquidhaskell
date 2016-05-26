@@ -134,7 +134,7 @@ configureDynFlags cfg tmp = do
                  , ghcLink      = LinkInMemory
                  -- FIXME: this *should* be HscNothing, but that prevents us from
                  -- looking up *unexported* names in another source module..
-                 , hscTarget    = HscInterpreted -- HscNothing
+                 , hscTarget    = HscNothing
                  , ghcMode      = CompManager
                  -- prevent GHC from printing anything, unless in Loud mode
                  , log_action   = if loud
