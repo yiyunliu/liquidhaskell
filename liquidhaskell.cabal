@@ -215,6 +215,7 @@ Library
                     Language.Haskell.Liquid.Spec.Aliases,
                     Language.Haskell.Liquid.Spec.Env,
                     Language.Haskell.Liquid.Spec.Lookup,
+                    Language.Haskell.Liquid.Spec.Measure,
                     Language.Haskell.Liquid.Spec.Resolve,
 
                     -- FIXME: These shouldn't really be exposed, but the linker complains otherwise...

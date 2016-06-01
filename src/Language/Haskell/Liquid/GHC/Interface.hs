@@ -413,17 +413,30 @@ checkFilePragmas = applyNonNull (return ()) throw . mapMaybe err
 
 mergeGlobalSpecs :: GlobalSpec -> GlobalSpec -> GlobalSpec
 mergeGlobalSpecs x1 x2 = emptyGlobalSpec
-  { aliases = mergeRTEnvs (aliases x1) (aliases x2)
+  { meas = mergeMeasures (meas x1) (meas x2)
+  , aliases = mergeRTEnvs (aliases x1) (aliases x2)
   , tcEmbeds = mergeTCEmbeds (tcEmbeds x1) (tcEmbeds x2)
   , qualifiers = mergeQualifiers (qualifiers x1) (qualifiers x2)
   }
+
+-- TODO: Placeholder for name collection/resolution
+mergeMeasures :: M.HashMap Symbol LocSpecType
+              -> M.HashMap Symbol LocSpecType
+              -> M.HashMap Symbol LocSpecType
+mergeMeasures = M.unionWithKey dupMeasure
+  where
+    dupMeasure k v1 v2 = throw
+      ( ErrDupMeas (fSrcSpan v1) (pprint k) (text "TODO")
+                   (fSrcSpan <$> [v1, v2])
+        :: Error )
 
 mergeRTEnvs :: RTEnv -> RTEnv -> RTEnv
 mergeRTEnvs x1 x2 = RTE
   { typeAliases =
       M.unionWith (dupAlias "Type Alias") (typeAliases x1) (typeAliases x2)
   , exprAliases =
-      M.unionWith (dupAlias "Expression Alias") (exprAliases x1) (exprAliases x2)
+      M.unionWith (dupAlias "Expression Alias")
+                  (exprAliases x1) (exprAliases x2)
   }
   where
     dupAlias d v1 v2 = throw

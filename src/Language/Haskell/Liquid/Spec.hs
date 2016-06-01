@@ -25,6 +25,7 @@ import qualified Language.Haskell.Liquid.Measure as Ms
 import Language.Haskell.Liquid.Spec.Aliases
 import Language.Haskell.Liquid.Spec.Env
 import Language.Haskell.Liquid.Spec.Lookup
+import Language.Haskell.Liquid.Spec.Measure
 import Language.Haskell.Liquid.Spec.Resolve
 
 --------------------------------------------------------------------------------
@@ -56,10 +57,12 @@ makeSpecs' _cfg _cbs _vars _lvars _exports _mod bspec = do
   tcEmbeds <- makeTyConEmbeds bspec
   aliases <- makeAliases bspec
   withLocalAliases aliases $ do
+  meas <- makeMeasures bspec
   qualifiers <- makeQualifiers bspec
   return $
     ( emptyGlobalSpec
-      { aliases = aliases
+      { meas = meas
+      , aliases = aliases
       , tcEmbeds = tcEmbeds
       , qualifiers = qualifiers
       }
