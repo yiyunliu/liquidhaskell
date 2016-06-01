@@ -509,7 +509,7 @@ ppError :: (PPrint a, Show a) => Tidy -> Doc -> TError a -> Doc
 --------------------------------------------------------------------------------
 ppError k dCtx e = ppError' k dSp dCtx e
   where
-    dSp          = pprint (pos e) <> text ": Error:"
+    dSp          = pprint (pos e) <> text ":" $+$ "Error:"
 
 nests :: Foldable t => Int -> t Doc -> Doc
 nests n      = foldr (\d acc -> nest n (d $+$ acc)) empty
@@ -746,7 +746,7 @@ ppError' _ dSp dCtx (ErrGhc _ s)
         $+$ (nest 4 $ pprint s)
 
 ppError' _ dSp dCtx (ErrNotInScope _ kind name)
-  = dSp <+> text "Not in scope:" <+> kind <+> text "`" <> name <> "'"
+  = dSp <+> text "Not in scope:" <+> kind <+> text "‘" <> name <> "’"
         $+$ dCtx
 
 ppError' _ dSp dCtx (ErrPartPred _ c p i eN aN)

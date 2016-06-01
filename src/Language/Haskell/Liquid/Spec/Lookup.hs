@@ -13,6 +13,7 @@ import HscTypes
 import MonadUtils
 import Var
 
+import Data.List
 import Data.Maybe
 
 import Text.PrettyPrint.HughesPJ (text)
@@ -56,7 +57,9 @@ lookupGhcThing desc unwrap l x = handleSourceError handle $ do
     handle = throwErrors . map ghcError . bagToList . srcErrorMessages
 
     notInScopeError = ErrNotInScope l (text desc) (pprint x)
-    ghcError = ErrGhc l . pprint
+    ghcError e
+      | "Not in scope:"  `isPrefixOf` show e = notInScopeError
+      | otherwise = ErrGhc l $ pprint e
 
 
 tryPropTyCon :: Symbol -> Error -> SpecM TyCon
