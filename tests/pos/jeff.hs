@@ -57,6 +57,7 @@ import Data.Char
 
 import Data.Monoid
 import Data.Proxy
+import Data.Word
 import Debug.Trace
 import GHC.TypeLits
 
@@ -182,7 +183,7 @@ myIndices alg t bs
 {-@ assume BS.append  :: b1:BS.ByteString -> b2:BS.ByteString -> ByteStringN {bLength b1 + bLength b2} @-}
 {-@ assume BS.null    :: b:BS.ByteString -> {v:Bool | Prop v <=> (bLength b == 0)} @-}
 {-@ assume BS.splitAt :: n:Nat -> b:BS.ByteString -> (ByteStringN {min n (bLength b)}, ByteStringN {max 0 (bLength b - n)}) @-}
-{-@ assume BS.head    :: BS.ByteString -> Data.Word.Word8 @-}
+{-@ assume BS.head    :: BS.ByteString -> Word8 @-}
 
 {-@ measure target @-}
 target :: MatchIdxs -> BS.ByteString
