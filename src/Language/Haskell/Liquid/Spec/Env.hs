@@ -181,7 +181,7 @@ instance MonadSpec m => MonadSpec (ReaderT r m) where
   withFixScope = liftWithReaderT . withFixScope
   isInFixScope = lift . isInFixScope
 
-liftWithReaderT :: Monad m => (m b -> m b) -> ReaderT r m b -> ReaderT r m b
+liftWithReaderT :: Monad m => (m a -> m a) -> ReaderT r m a -> ReaderT r m a
 liftWithReaderT f act = do
   env <- ask
   lift $ f $ runReaderT act env

@@ -71,6 +71,7 @@ module Language.Haskell.Liquid.Types (
 
   -- * Refinements
   , UReft(..)
+  , getBind
 
   -- * Parse-time entities describing refined data types
   , DataDecl (..)
@@ -741,6 +742,9 @@ data UReft r
             , ur_strata :: !Strata
             }
     deriving (Generic, Data, Typeable, Functor)
+
+getBind :: Reftable r => r -> Symbol
+getBind = reftBind . toReft
 
 type BRType     = RType LocSymbol Symbol
 type RRType     = RType RTyCon    RTyVar

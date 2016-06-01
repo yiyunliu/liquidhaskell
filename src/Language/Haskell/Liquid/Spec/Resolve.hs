@@ -114,7 +114,7 @@ instance ( PPrint r
     RVar (symbolRTyVar v) <$> resolve' r
 
   resolve' (RFun b i o r) =
-    resolveRFun b i o r
+    withFixScope [getBind r] $ resolveRFun b i o r
 
   resolve' (RAllT tv ty) =
     RAllT (symbolRTyVar tv) <$> resolve' ty
@@ -125,7 +125,7 @@ instance ( PPrint r
     RAllS sb <$> withFixScope [sb] (resolve' ty)
 
   resolve' (RApp tc ts ps r) =
-    resolveRApp tc ts ps r
+    withFixScope [getBind r] $ resolveRApp tc ts ps r
 
   -- TOOD: Correct scoping behavior?
   resolve' (RAllE b a ty) =
@@ -138,7 +138,8 @@ instance ( PPrint r
     RExprArg <$> resolve' e
 
   resolve' (RAppTy t1 t2 r) =
-    RAppTy <$> resolve' t1 <*> resolve' t2 <*> resolve' r
+    withFixScope [getBind r] $
+      RAppTy <$> resolve' t1 <*> resolve' t2 <*> resolve' r
 
   -- TODO: Correct scoping behavior?
   resolve' (RRTy env ref obl ty) =
@@ -268,7 +269,6 @@ instance Resolve Sort Sort where
 --------------------------------------------------------------------------------
 
 resolveRFun :: ( PPrint r
---             , Resolve (BRType r) (RRType r)
                , Resolve r r
                , SubsTy Symbol BSort r
                , SubsTy RTyVar RSort r
@@ -288,11 +288,11 @@ resolveRFun b i o r = go_bound
             makeBound bound ts' [x | RVar x _ <- ps'] <$> resolve' o
           Nothing -> go_fun
       _ -> go_fun
-    go_fun = RFun b <$> resolve' i <*> resolve' o <*> resolve' r
+    go_fun = RFun b <$> resolve' i
+                    <*> withFixScope [b] (resolve' o)
+                    <*> resolve' r
 
 resolveRApp :: ( PPrint r
---             , Resolve (BRType r) (RRType r)
---             , Resolve (RTProp LocSymbol Symbol r) (RTProp RTycon RTyVar r)
                , Resolve r r
                , SubsTy Symbol BSort r
                , SubsTy RTyVar RSort r
@@ -307,7 +307,6 @@ resolveRApp c ts ps r = do
     Nothing  -> appSpecType c ts ps r
 
 expandTypeAlias :: ( PPrint r
---                 , Resolve (BRType r) (RRType r)
                    , Resolve r r
                    , SubsTy Symbol BSort r
                    , SubsTy RTyVar RSort r
@@ -358,8 +357,6 @@ toExprArg z =
   throwError . (`ErrNotAnExprArg` pprint z) =<< getLocation
 
 appSpecType :: ( PPrint r
---             , Resolve (BRType r) (RRType r)
---             , Resolve (RTProp LocSymbol Symbol r) (RTProp RTyCon RTyVar r)
                , Resolve r r
                , SubsTy Symbol BSort r
                , SubsTy RTyVar RSort r
