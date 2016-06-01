@@ -10,6 +10,7 @@ module Language.Haskell.Liquid.Spec.Resolve (
     -- * Resolve Names in Symbols
     Resolve
   , resolve
+  , resolveL
   ) where
 
 import GHC hiding (Located)
@@ -41,6 +42,9 @@ import Language.Haskell.Liquid.Spec.Lookup
 
 resolve :: Resolve a b => SrcSpan -> a -> SpecM b
 resolve l x = runResolveM (resolve' x) mempty l
+
+resolveL :: Resolve a b => Located a -> SpecM (Located b)
+resolveL x = traverse (resolve $ fSrcSpan x) x
 
 --------------------------------------------------------------------------------
 -- | Internal Resolution Monad -------------------------------------------------

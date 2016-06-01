@@ -5,7 +5,7 @@ module Language.Haskell.Liquid.Spec (
     makeSpecs
   ) where
 
-import GHC
+import GHC hiding (Located)
 
 import CoreSyn
 import NameSet
@@ -19,6 +19,7 @@ import Language.Fixpoint.Types
 
 import Language.Haskell.Liquid.GHC.Misc
 import Language.Haskell.Liquid.Types
+import Language.Haskell.Liquid.Types.RefType
 
 import qualified Language.Haskell.Liquid.Measure as Ms
 
@@ -54,15 +55,19 @@ makeSpecs' :: Config
            -> Ms.BareSpec
            -> SpecM (GlobalSpec, LocalSpec)
 makeSpecs' _cfg _cbs _vars _lvars _exports _mod bspec = do
-  tcEmbeds <- makeTyConEmbeds bspec
-  aliases <- makeAliases bspec
+  tcEmbeds   <- makeTyConEmbeds bspec
+  aliases    <- makeAliases bspec
   withLocalAliases aliases $ do
-  meas <- makeMeasures bspec
+  meas       <- makeMeasures bspec
+  invariants <- makeInvariants bspec
+  ialiases   <- makeIAliases bspec
   qualifiers <- makeQualifiers bspec
   return $
     ( emptyGlobalSpec
-      { meas = meas
-      , aliases = aliases
+      { aliases = aliases
+      , meas = meas
+      , invariants = invariants
+      , ialiases = ialiases
       , tcEmbeds = tcEmbeds
       , qualifiers = qualifiers
       }
@@ -70,7 +75,7 @@ makeSpecs' _cfg _cbs _vars _lvars _exports _mod bspec = do
     )
 
 --------------------------------------------------------------------------------
--- | Make Specifications -------------------------------------------------------
+-- | Make Simple Specifications ------------------------------------------------
 --------------------------------------------------------------------------------
 
 -- | Make Embedded TyCon Environment -------------------------------------------
@@ -79,6 +84,19 @@ makeTyConEmbeds :: Ms.BareSpec -> SpecM (TCEmb TyCon)
 makeTyConEmbeds = fmap M.fromList . mapM go . M.toList . Ms.embeds
   where
     go (c, y) = (,y) <$> lookupGhcTyConL c
+
+-- | Make Invariants & Invariant Aliases ---------------------------------------
+
+makeInvariants :: Ms.BareSpec -> SpecM [(Maybe Var, LocSpecType)]
+makeInvariants = mapM (fmap (Nothing,) . makeInvariantTy) . Ms.invariants
+
+makeIAliases :: Ms.BareSpec -> SpecM [(LocSpecType, LocSpecType)]
+makeIAliases = mapM go . Ms.ialiases
+  where
+    go (t1, t2) = (,) <$> makeInvariantTy t1 <*> makeInvariantTy t2
+
+makeInvariantTy :: Located BareType -> SpecM LocSpecType
+makeInvariantTy = fmap (fmap generalize) . resolveL
 
 -- | Make Qualifiers -----------------------------------------------------------
 

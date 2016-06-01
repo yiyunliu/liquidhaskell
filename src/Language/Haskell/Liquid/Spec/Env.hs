@@ -89,9 +89,17 @@ runSpecM act extern bspec = runSpecM' act $ SpecEnv
   , specEnvLocalBounds   = mempty
   , specEnvExternAliases = aliases extern
   , specEnvLocalAliases  = mempty
-  , specEnvFixScope      = S.fromList $ (val . name <$> Ms.measures bspec)
-                                     ++ M.keys (meas extern)
+  , specEnvFixScope      = S.fromList $
+                             bareMeasureNames bspec ++ M.keys (meas extern)
   }
+
+bareMeasureNames :: Ms.BareSpec -> [Symbol]
+bareMeasureNames bspec = concat
+  [ val . name <$> Ms.measures bspec
+  , val . name <$> Ms.cmeasures bspec
+  , val . name <$> Ms.imeasures bspec
+  , val <$> S.toList (Ms.hmeas bspec)
+  ]
 
 runSpecM' :: SpecM a -> SpecEnv -> Ghc (Either [Error] a)
 runSpecM' act env = runExceptT (runReaderT (unSpecM act) env)

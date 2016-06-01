@@ -413,25 +413,16 @@ checkFilePragmas = applyNonNull (return ()) throw . mapMaybe err
 
 mergeGlobalSpecs :: GlobalSpec -> GlobalSpec -> GlobalSpec
 mergeGlobalSpecs x1 x2 = emptyGlobalSpec
-  { meas = mergeMeasures (meas x1) (meas x2)
-  , aliases = mergeRTEnvs (aliases x1) (aliases x2)
+  { aliases = mergeAliases (aliases x1) (aliases x2)
+  , meas = mergeMeasures (meas x1) (meas x2)
+  , invariants = mergeInvariants (invariants x1) (invariants x2)
+  , ialiases = mergeIAliases (ialiases x1) (ialiases x2)
   , tcEmbeds = mergeTCEmbeds (tcEmbeds x1) (tcEmbeds x2)
   , qualifiers = mergeQualifiers (qualifiers x1) (qualifiers x2)
   }
 
--- TODO: Placeholder for name collection/resolution
-mergeMeasures :: M.HashMap Symbol LocSpecType
-              -> M.HashMap Symbol LocSpecType
-              -> M.HashMap Symbol LocSpecType
-mergeMeasures = M.unionWithKey dupMeasure
-  where
-    dupMeasure k v1 v2 = throw
-      ( ErrDupMeas (fSrcSpan v1) (pprint k) (text "TODO")
-                   (fSrcSpan <$> [v1, v2])
-        :: Error )
-
-mergeRTEnvs :: RTEnv -> RTEnv -> RTEnv
-mergeRTEnvs x1 x2 = RTE
+mergeAliases :: RTEnv -> RTEnv -> RTEnv
+mergeAliases x1 x2 = RTE
   { typeAliases =
       M.unionWith (dupAlias "Type Alias") (typeAliases x1) (typeAliases x2)
   , exprAliases =
@@ -442,6 +433,29 @@ mergeRTEnvs x1 x2 = RTE
     dupAlias d v1 v2 = throw
       ( ErrDupAlias (rtSrcSpan v1) (pprint $ rtName v1) (text d)
                     (rtSrcSpan <$> [v1, v2])
+        :: Error )
+
+-- TODO: Conflict detection?
+mergeInvariants :: [(Maybe Var, LocSpecType)]
+                -> [(Maybe Var, LocSpecType)]
+                -> [(Maybe Var, LocSpecType)]
+mergeInvariants = mappend
+
+-- TODO: Conflict detection?
+mergeIAliases :: [(LocSpecType, LocSpecType)]
+              -> [(LocSpecType, LocSpecType)]
+              -> [(LocSpecType, LocSpecType)]
+mergeIAliases = mappend
+
+-- TODO: Placeholder for name collection/resolution
+mergeMeasures :: M.HashMap Symbol LocSpecType
+              -> M.HashMap Symbol LocSpecType
+              -> M.HashMap Symbol LocSpecType
+mergeMeasures = M.unionWithKey dupMeasure
+  where
+    dupMeasure k v1 v2 = throw
+      ( ErrDupMeas (fSrcSpan v1) (pprint k) (text "TODO")
+                   (fSrcSpan <$> [v1, v2])
         :: Error )
 
 mergeTCEmbeds :: TCEmb TyCon -> TCEmb TyCon -> TCEmb TyCon
@@ -591,10 +605,14 @@ instance PPrint GlobalSpec where
     , pprintLongList k (M.toList $ asmSigs spec)
     , "******* DataCon Specifications (Measure) ****"
     , pprintLongList k (M.toList $ ctors spec)
-    , "******* Measure Specifications **************"
-    , pprintLongList k (M.toList $ meas spec)
     , "******* Alias Environment *******************"
     , pprintTidy k $ aliases spec
+    , "******* Measure Specifications **************"
+    , pprintLongList k (M.toList $ meas spec)
+    , "******* Invariants **************************"
+    , pprintLongList k $ invariants spec
+    , "******* Invariant Aliases *******************"
+    , pprintLongList k $ ialiases spec
     , "******* TyCon Embeds Emvironment ************"
     , pprintLongList k (mapSnd fTyconSymbol <$> M.toList (tcEmbeds spec))
     , "******* Qualifiers **************************"
