@@ -1,7 +1,7 @@
 module Even where 
 
-{-@ type Even = {v:Int | v mod 2 = 0} @-}
+{-@ type MyEven = {v:Int | v mod 2 = 0} @-}
 
-{-@ notEven :: Int -> Even @-}
+{-@ notEven :: Int -> MyEven @-}
 notEven :: Int -> Int
 notEven x = x * 2

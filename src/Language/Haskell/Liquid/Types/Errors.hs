@@ -714,7 +714,7 @@ ppError' _ dSp _ (ErrDupEmbs _ t fs)
   = dSp <+> text "Multiple Conflicting TyCon Embeds for" <+> pprint t
         $+$ (nest 4 $ vcat fs)
 
-ppError' _ dSp _ (ErrDupAlias _ k v ls)
+ppError' _ dSp _ (ErrDupAlias _ v k ls)
   = dSp <+> text "Multiple Declarations!"
     $+$ (nest 2 $ text "Multiple Declarations of" <+> pprint k <+> ppVar v $+$ text "Declared at:")
     <+> (nest 4 $ vcat $ pprint <$> ls)
