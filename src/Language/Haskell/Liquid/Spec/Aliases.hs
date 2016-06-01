@@ -114,9 +114,13 @@ findTypeEdges aliases = go
 
 addExprAlias :: RTEnv -> RTAlias Symbol Expr -> SpecM RTEnv
 addExprAlias rtEnv alias@RTA{..} = do
+  when (length rtTArgs /= 0) $ throwError tyArgsError
   body <- withFixScope rtVArgs $ resolve (rtSrcSpan alias) rtBody
   let alias' = alias { rtBody = body }
   return $ rtEnv { exprAliases = M.insert rtName alias' $ exprAliases rtEnv }
+  where
+    tyArgsError =
+      ErrExprAliasTyArgs (rtSrcSpan alias) (pprint rtName) (pprint <$> rtTArgs)
 
 addTypeAlias :: RTEnv -> RTAlias Symbol BareType -> SpecM RTEnv
 addTypeAlias rtEnv alias@RTA{..} = do

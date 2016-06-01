@@ -243,6 +243,11 @@ data TError t =
                 , locs  :: ![SrcSpan]
                 }
 
+  | ErrExprAliasTyArgs { pos   :: !SrcSpan
+                       , dname :: !Doc
+                       , bargs :: ![Doc]
+                       }
+
   | ErrBadData  { pos :: !SrcSpan
                 , var :: !Doc
                 , msg :: !Doc
@@ -723,6 +728,13 @@ ppError' _ dSp _ (ErrDupQuals _ v ls)
   = dSp <+> text "Multiple Declarations!"
     $+$ (nest 2 $ text "Multiple Declarations of Qualifier" <+> ppVar v $+$ text "Declared at:")
     <+> (nest 4 $ vcat $ pprint <$> ls)
+
+ppError' _ dSp dCtx (ErrExprAliasTyArgs _ name args)
+  = dSp <+> text "Expression aliases should not have type arguments"
+        $+$ dCtx
+        $+$ (nest 4 $ text "Expression Alias:" <+> name)
+        $+$ (nest 4 $ text "Type Arguments:" <+> pprint args)
+        $+$ (nest 4 $ text "(Expression arguments begin with an uppercase letter)")
 
 ppError' _ dSp dCtx (ErrUnbound _ x)
   = dSp <+> text "Unbound variable" <+> pprint x
