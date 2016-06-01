@@ -25,7 +25,7 @@ customerGetsDiscount c i = c == Vip && i >= BOOK_THRESHOLD
 discount :: Int -> Int
 discount bookCount = (bookCount - BOOK_THRESHOLD) * DISCOUNT_PERCENTAGE
 
-{-@ type Discount i = {v:Int | v == discount i} @-}
+{-@ type Discount I = {v:Int | v == discount I} @-}
 
 ---------------------------------------------------------------------------------------
 -- 3. Policy: Only compute discounts for discountable customers
