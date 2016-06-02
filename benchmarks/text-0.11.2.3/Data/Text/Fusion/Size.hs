@@ -43,7 +43,7 @@ data Size = Exact (getExact::{v:Int | v >= 0})
           | Unknown
 @-}
 
-{-@ type SizeN N = {v:Size | (((getSize v) = n) && (not (isUnknown v)))} @-}
+{-@ type SizeN N = {v:Size | (((getSize v) = N) && (not (isUnknown v)))} @-}
 {-@ measure getSize :: Data.Text.Fusion.Size.Size -> Int
     getSize (Data.Text.Fusion.Size.Exact n) = n
     getSize (Data.Text.Fusion.Size.Max   n) = n
