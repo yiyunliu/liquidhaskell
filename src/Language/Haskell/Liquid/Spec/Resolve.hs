@@ -106,18 +106,18 @@ instance Resolve a b => Resolve (Located a) (Located b) where
 -- TODO: Handle type variables properly (symbolRTyVar is probably wrong)
 instance ( PPrint r
          , Resolve r r
-         , SubsTy Symbol BSort r
+         , SubsTy BTyVar BSort r
          , SubsTy RTyVar RSort r
          , UReftable r
          ) => Resolve (BRType r) (RRType r) where
   resolve' (RVar v r) =
-    RVar (symbolRTyVar v) <$> resolve' r
+    RVar (symbolRTyVar $ btv_tv v) <$> resolve' r
 
   resolve' (RFun b i o r) =
     withFixScope [getBind r] $ resolveRFun b i o r
 
   resolve' (RAllT tv ty) =
-    RAllT (symbolRTyVar tv) <$> resolve' ty
+    RAllT (symbolRTyVar $ btv_tv tv) <$> resolve' ty
   resolve' (RAllP pv ty) = do
     pv' <- resolve' pv
     RAllP pv' <$> withPredVar (uPVar pv') (resolve' ty)
@@ -270,7 +270,7 @@ instance Resolve Sort Sort where
 
 resolveRFun :: ( PPrint r
                , Resolve r r
-               , SubsTy Symbol BSort r
+               , SubsTy BTyVar BSort r
                , SubsTy RTyVar RSort r
                , UReftable r
                )
@@ -280,12 +280,12 @@ resolveRFun b i o r = go_bound
     -- TOOD: Error on wrong arity & non-tauto refinements
     go_bound = case i of
       RApp c ps _ _ -> do
-        result <- lookupBound $ val c
+        result <- lookupBound $ val $ btc_tc c
         case result of
           Just bound  -> do
             let (ts, ps') = splitAt (length $ tyvars bound) ps
             ts' <- resolve' ts
-            makeBound bound ts' [x | RVar x _ <- ps'] <$> resolve' o
+            makeBound bound ts' [btv_tv x | RVar x _ <- ps'] <$> resolve' o
           Nothing -> go_fun
       _ -> go_fun
     go_fun = RFun b <$> resolve' i
@@ -294,27 +294,27 @@ resolveRFun b i o r = go_bound
 
 resolveRApp :: ( PPrint r
                , Resolve r r
-               , SubsTy Symbol BSort r
+               , SubsTy BTyVar BSort r
                , SubsTy RTyVar RSort r
                , UReftable r
                )
-            => LocSymbol -> [BRType r] -> [RTProp LocSymbol Symbol r] -> r
+            => BTyCon -> [BRType r] -> [RTProp BTyCon BTyVar r] -> r
             -> ResolveM (RRType r)
 resolveRApp c ts ps r = do
-  result <- lookupTypeAlias $ val c
+  result <- lookupTypeAlias $ val $ btc_tc c
   case result of
     Just rta -> expandTypeAlias (fSrcSpan c) rta ts ps r
     Nothing  -> appSpecType c ts ps r
 
 expandTypeAlias :: ( PPrint r
                    , Resolve r r
-                   , SubsTy Symbol BSort r
+                   , SubsTy BTyVar BSort r
                    , SubsTy RTyVar RSort r
                    , UReftable r)
                 => SrcSpan
                 -> RTAlias RTyVar SpecType
                 -> [BRType r]
-                -> [RTProp LocSymbol Symbol r]
+                -> [RTProp BTyCon BTyVar r]
                 -> r
                 -> ResolveM (RRType r)
 expandTypeAlias l RTA{..} ts ps r = do
@@ -340,7 +340,7 @@ expandTypeAlias l RTA{..} ts ps r = do
 -- e.g. type Matrix a Row Col = List (List a Row) Col
 toExprArg :: ( PPrint r
              , Reftable r
-             , SubsTy Symbol BSort r
+             , SubsTy BTyVar BSort r
              )
           => BRType r -> ResolveM Expr
 toExprArg (RExprArg e) =
@@ -350,7 +350,7 @@ toExprArg (RVar x r) | isTauto r =
 toExprArg (RApp x [] [] r) | isTauto r =
   return $ EVar $ symbol x
 toExprArg (RApp f ts [] r) | isTauto r =
-  mkEApp (symbol <$> f) <$> mapM toExprArg ts
+  mkEApp (symbol <$> btc_tc f) <$> mapM toExprArg ts
 toExprArg (RAppTy (RVar f r1) t r2) | isTauto r1 && isTauto r2 =
   mkEApp (dummyLoc $ symbol f) . return <$> toExprArg t
 toExprArg z =
@@ -358,14 +358,14 @@ toExprArg z =
 
 appSpecType :: ( PPrint r
                , Resolve r r
-               , SubsTy Symbol BSort r
+               , SubsTy BTyVar BSort r
                , SubsTy RTyVar RSort r
                , UReftable r
                )
-            => LocSymbol -> [BRType r] -> [RTProp LocSymbol Symbol r] -> r
+            => BTyCon -> [BRType r] -> [RTProp BTyCon BTyVar r] -> r
             -> ResolveM (RRType r)
 appSpecType c ts ps r = do
-  c'  <- matchTyCon c $ length ts
+  c'  <- matchTyCon (btc_tc c) $ length ts
   ts' <- resolve' ts
   ps' <- resolve' ps
   r'  <- resolve' r
@@ -374,7 +374,7 @@ appSpecType c ts ps r = do
 -- TODO: Better type application
 
 appSpecType' :: ( PPrint r
-                , SubsTy Symbol BSort r
+                , SubsTy BTyVar BSort r
                 , SubsTy RTyVar RSort r
                 , UReftable r
                 )

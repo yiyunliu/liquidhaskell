@@ -83,7 +83,7 @@ findExprEdges aliases = go
 findTypeEdges :: S.HashSet Symbol -> BareType -> [Symbol]
 findTypeEdges aliases = go
   where
-    go (RApp c ts rs _)        = concat [ go_alias $ val c
+    go (RApp c ts rs _)        = concat [ go_alias $ val $ btc_tc c
                                         , concatMap go ts
                                         , concatMap go $ mapMaybe go_ref rs
                                         ]

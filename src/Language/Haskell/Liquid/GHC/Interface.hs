@@ -28,6 +28,7 @@ import GHC hiding (Target, desugarModule, Located)
 import qualified GHC
 import GHC.Paths (libdir)
 
+import Annotations
 import Bag
 import Class
 import CoreMonad
@@ -44,17 +45,24 @@ import IdInfo
 import InstEnv
 import Module
 import Panic (throwGhcExceptionIO)
+import Serialized
+import TcRnTypes
 import Var
 import NameSet
 
 import Control.Exception
 import Control.Monad
 
+import Data.Data hiding (TyCon)
 import Data.List hiding (intersperse)
+import Data.Map (elems)
 import Data.Maybe
+
+import Data.Generics.Aliases (mkT)
+import Data.Generics.Schemes (everywhere)
+
 import qualified Data.HashMap.Strict as M
 import qualified Data.HashSet as S
-import Data.Map (elems)
 
 import System.Console.CmdArgs.Verbosity hiding (Loud)
 import System.Directory
@@ -78,6 +86,7 @@ import Language.Haskell.Liquid.Types
 import Language.Haskell.Liquid.Types.PrettyPrint
 import Language.Haskell.Liquid.Types.Visitors
 import Language.Haskell.Liquid.UX.CmdLine
+import Language.Haskell.Liquid.UX.QuasiQuoter
 import Language.Haskell.Liquid.UX.Tidy
 import Language.Fixpoint.Utils.Files
 
@@ -268,7 +277,7 @@ definedVars :: CoreProgram -> [Id]
 definedVars = concatMap defs
   where
     defs (NonRec x _) = [x]
-    defs (Rec xes) = map fst xes
+    defs (Rec xes)    = map fst xes
 
 --------------------------------------------------------------------------------
 -- | Per-Module Pipeline -------------------------------------------------------
@@ -296,8 +305,9 @@ processModule cfg0 logicMap tgtFiles depGraph specEnv modSummary = do
   typechecked            <- typecheckModule $ ignoreInline parsed
   desugared              <- desugarModule typechecked
   _                      <- loadModule desugared
-  let specComments        = getSpecComments parsed
-  (modName, bareSpec)    <- either throw return $ hsSpecificationP (moduleName mod) specComments
+  let specComments        = extractSpecComments parsed
+  let specQuotes          = extractSpecQuotes typechecked
+  (modName, bareSpec)    <- either throw return $ hsSpecificationP (moduleName mod) specComments specQuotes
   let modGuts             = makeMGIModGuts desugared
   hscEnv                 <- getSession
   _                      <- checkFilePragmas $ Ms.pragmas bareSpec
@@ -352,7 +362,6 @@ toGhcSpec cfg cbs vars letVs mod tgtMod mgi bareSpec lm specSpecs homeSpecs = do
   (gbl, lcl)   <- liftIO $ makeGhcSpec cfg tgtMod cbs vars letVs exports hsc lm specs
   return (gbl', gbl, lcl, imps, Ms.includes bareSpec)
 
-
 keepRawTokenStream :: ModSummary -> ModSummary
 keepRawTokenStream modSummary = modSummary
   { ms_hspp_opts = ms_hspp_opts modSummary `gopt_set` Opt_KeepRawTokenStream }
@@ -362,19 +371,6 @@ loadDependenciesOf modName = do
   loadResult <- load $ LoadDependenciesOf modName
   when (failed loadResult) $ liftIO $ throwGhcExceptionIO $ ProgramError $
    "Failed to load dependencies of module " ++ showPpr modName
-
-getSpecComments :: ParsedModule -> [(SourcePos, String)]
-getSpecComments parsed = mapMaybe getSpecComment comments
-  where
-    comments = concat $ elems $ snd $ pm_annotations parsed
-
-getSpecComment :: GHC.Located AnnotationComment -> Maybe (SourcePos, String)
-getSpecComment (GHC.L span (AnnBlockComment text))
-  | isPrefixOf "{-@" text && isSuffixOf "@-}" text =
-    Just (offsetPos, take (length text - 6) $ drop 3 text)
-  where
-    offsetPos = incSourceColumn (srcSpanSourcePos span) 3
-getSpecComment _ = Nothing
 
 modSummaryHsFile :: ModSummary -> FilePath
 modSummaryHsFile modSummary =
@@ -397,15 +393,55 @@ checkFilePragmas :: [Located String] -> Ghc ()
 checkFilePragmas = applyNonNull (return ()) throw . mapMaybe err
   where
     err pragma
-      | check $ val pragma = Just $ (ErrFilePragma $ fSrcSpan pragma :: Error)
-      | otherwise = Nothing
-    check pragma =
-      any (`isPrefixOf` pragma) bad
+      | check (val pragma) = Just (ErrFilePragma $ fSrcSpan pragma :: Error)
+      | otherwise          = Nothing
+    check pragma           = any (`isPrefixOf` pragma) bad
     bad =
       [ "-i", "--idirs"
       , "-g", "--ghc-option"
       , "--c-files", "--cfiles"
       ]
+
+--------------------------------------------------------------------------------
+-- | Extract Specifications from GHC -------------------------------------------
+--------------------------------------------------------------------------------
+
+extractSpecComments :: ParsedModule -> [(SourcePos, String)]
+extractSpecComments parsed = mapMaybe extractSpecComment comments
+  where
+    comments = concat $ elems $ snd $ pm_annotations parsed
+
+extractSpecComment :: GHC.Located AnnotationComment -> Maybe (SourcePos, String)
+extractSpecComment (GHC.L span (AnnBlockComment text))
+  | length text > 2 && isPrefixOf "{-@" text && isSuffixOf "@-}" text =
+    Just (offsetPos, take (length text - 6) $ drop 3 text)
+  where
+    offsetPos = incSourceColumn (srcSpanSourcePos span) 3
+extractSpecComment _ = Nothing
+
+extractSpecQuotes :: TypecheckedModule -> [BPspec]
+extractSpecQuotes typechecked = mapMaybe extractSpecQuote anns
+  where
+    anns = map ann_value $
+           filter (isOurModTarget . ann_target) $
+           tcg_anns $ fst $ tm_internals_ typechecked
+
+    isOurModTarget (ModuleTarget mod1) = mod1 == mod
+    isOurModTarget _ = False
+
+    mod = ms_mod $ pm_mod_summary $ tm_parsed_module typechecked
+
+extractSpecQuote :: AnnPayload -> Maybe BPspec
+extractSpecQuote payload =
+  case fromSerialized deserializeWithData payload of
+    Nothing -> Nothing
+    Just qt -> Just $ refreshSymbols $ liquidQuoteSpec qt
+
+refreshSymbols :: Data a => a -> a
+refreshSymbols = everywhere (mkT refreshSymbol)
+
+refreshSymbol :: Symbol -> Symbol
+refreshSymbol = symbol . symbolText
 
 --------------------------------------------------------------------------------
 -- | Merge Specifications ------------------------------------------------------
@@ -479,7 +515,7 @@ mergeQualifiers = M.unionWith dupQualifier
         :: Error )
 
 --------------------------------------------------------------------------------
--- Finding & Parsing Files -----------------------------------------------------
+-- | Finding & Parsing Files ---------------------------------------------------
 --------------------------------------------------------------------------------
 
 -- Handle Spec Files -----------------------------------------------------------
@@ -640,7 +676,6 @@ instance PPrint GhcInfo where
     , pprintCBs $ cbs info                          ]
 
 -- RJ: the silly guards below are to silence the unused-var checker
-
 pprintCBs :: [CoreBind] -> Doc
 pprintCBs
   | otherwise = pprintCBsVerbose
@@ -648,7 +683,7 @@ pprintCBs
   where
     pprintCBsTidy    = pprDoc . tidyCBs
     pprintCBsVerbose = text . O.showSDocDebug unsafeGlobalDynFlags . O.ppr . tidyCBs
-
+ 
 instance Show GhcInfo where
   show = showpp
 

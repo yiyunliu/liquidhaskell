@@ -43,6 +43,12 @@ module Language.Haskell.Liquid.Types (
   -- * Default unknown name
   , dummyName, isDummy
 
+  -- * Bare Type Constructors and Variables
+  , BTyCon(..)
+  , mkBTyCon, mkClassBTyCon
+  , isClassBTyCon
+  , BTyVar(..)
+
   -- * Refined Type Constructors
   , RTyCon (RTyCon, rtc_tc, rtc_info)
   , TyConInfo(..), defaultTyConInfo
@@ -251,7 +257,7 @@ import           Language.Fixpoint.Types                hiding (Error, SrcSpan, 
 
 
 
-import           Language.Haskell.Liquid.GHC.Misc
+import           Language.Haskell.Liquid.GHC.Misc       hiding (Loc)
 import           Language.Haskell.Liquid.Types.Errors
 import {-# SOURCE #-} Language.Haskell.Liquid.Types.Bounds
 import           Language.Haskell.Liquid.Types.Variance
@@ -531,15 +537,37 @@ mapQualBody f q = q { q_body = f (q_body q) }
 
 instance NFData r => NFData (UReft r)
 
+
+newtype BTyVar = BTV { btv_tv :: Symbol } deriving (Show, Generic, Data, Typeable)
+
+newtype RTyVar = RTV { rtv_tv :: TyVar } deriving (Generic, Data, Typeable)
+
+instance Eq BTyVar where
+  (BTV x) == (BTV y) = x == y
+
+instance Ord BTyVar where
+  compare (BTV x) (BTV y) = compare x y
+
+instance IsString BTyVar where
+  fromString = BTV . fromString
+
+instance Hashable BTyVar
+
+instance NFData BTyVar
+
 instance NFData RTyVar
 
-
--- MOVE TO TYPES
-newtype RTyVar = RTV TyVar deriving (Generic, Data, Typeable)
+instance Symbolic BTyVar where
+  symbol (BTV tv) = tv
 
 instance Symbolic RTyVar where
   symbol (RTV tv) = symbol . getName $ tv
 
+data BTyCon = BTyCon
+  { btc_tc    :: !LocSymbol    -- ^ TyCon name with location information
+  , btc_class :: !Bool         -- ^ Is this a class type constructor?
+  }
+  deriving (Generic, Data, Typeable)
 
 data RTyCon = RTyCon
   { rtc_tc    :: TyCon         -- ^ GHC Type Constructor
@@ -548,7 +576,21 @@ data RTyCon = RTyCon
   }
   deriving (Generic, Data, Typeable)
 
+instance Loc BTyCon where
+  srcSpan = srcSpan . btc_tc
+
+instance Symbolic BTyCon where
+  symbol = val . btc_tc
+
+instance NFData BTyCon
+
 instance NFData RTyCon
+
+mkBTyCon :: LocSymbol -> BTyCon
+mkBTyCon = (`BTyCon` False)
+
+mkClassBTyCon :: LocSymbol -> BTyCon
+mkClassBTyCon = (`BTyCon` True)
 
 -- | Accessors for @RTyCon@
 
@@ -559,6 +601,9 @@ isBool _                                 = False
 isRVar :: RType c tv r -> Bool
 isRVar (RVar _ _) = True
 isRVar _          = False
+
+isClassBTyCon :: BTyCon -> Bool
+isClassBTyCon = btc_class
 
 isClassRTyCon :: RTyCon -> Bool
 isClassRTyCon x = (isClassTyCon $ rtc_tc x) || (rtc_tc x == eqTyCon)
@@ -746,8 +791,8 @@ data UReft r
 getBind :: Reftable r => r -> Symbol
 getBind = reftBind . toReft
 
-type BRType     = RType LocSymbol Symbol
-type RRType     = RType RTyCon    RTyVar
+type BRType     = RType BTyCon BTyVar
+type RRType     = RType RTyCon RTyVar
 
 type BSort      = BRType    ()
 type RSort      = RRType    ()
@@ -844,12 +889,25 @@ instance TyConable LocSymbol where
   isTuple = isTuple . val
   ppTycon = ppTycon . val
 
+instance TyConable BTyCon where
+  isFun   = isFun . btc_tc
+  isList  = isList . btc_tc
+  isTuple = isTuple . btc_tc
+  isClass = isClassBTyCon
+  ppTycon = ppTycon . btc_tc
+
 
 instance Eq RTyCon where
   x == y = rtc_tc x == rtc_tc y
 
+instance Eq BTyCon where
+  x == y = btc_tc x == btc_tc y
+
 instance Fixpoint RTyCon where
   toFix (RTyCon c _ _) = text $ showPpr c
+
+instance Fixpoint BTyCon where
+  toFix = text . symbolString . val . btc_tc
 
 instance Fixpoint Cinfo where
   toFix = text . showPpr . ci_loc
@@ -857,8 +915,13 @@ instance Fixpoint Cinfo where
 instance PPrint RTyCon where
   pprintTidy _ = text . showPpr . rtc_tc
 
+instance PPrint BTyCon where
+  pprintTidy _ = text . symbolString . val . btc_tc
 
 instance Show RTyCon where
+  show = showpp
+
+instance Show BTyCon where
   show = showpp
 
 --------------------------------------------------------------------------
@@ -866,10 +929,10 @@ instance Show RTyCon where
 --------------------------------------------------------------------------
 
 data RInstance t = RI
-  { riclass :: LocSymbol
+  { riclass :: BTyCon
   , ritype  :: [t]
   , risigs  :: [(LocSymbol, t)]
-  } deriving Functor
+  } deriving (Functor, Data, Typeable)
 
 newtype DEnv x ty = DEnv (M.HashMap x (M.HashMap Symbol ty)) deriving (Monoid, Show)
 
@@ -921,8 +984,7 @@ data DataDecl   = D { tycName   :: LocSymbol
                                 -- ^ Source Position
                     , tycSFun   :: (Maybe (Symbol -> Expr))
                                 -- ^ Measure that should decrease in recursive calls
-                    }
-     --              deriving (Show)
+                    } deriving (Data, Typeable)
 
 
 instance Eq DataDecl where
@@ -946,7 +1008,7 @@ data RTAlias tv ty
         , rtBody  :: ty
         , rtPos   :: SourcePos
         , rtPosE  :: SourcePos
-        }
+        } deriving (Data, Typeable)
 
 mapRTAVars :: (a -> tv) -> RTAlias a ty -> RTAlias tv ty
 mapRTAVars f rt = rt { rtTArgs = f <$> rtTArgs rt
@@ -1667,11 +1729,11 @@ instance Subable t => Subable (WithModel t) where
   subst su = fmap (subst su)
 
 data RClass ty
-  = RClass { rcName    :: LocSymbol
+  = RClass { rcName    :: BTyCon
            , rcSupers  :: [ty]
-           , rcTyVars  :: [Symbol]
+           , rcTyVars  :: [BTyVar]
            , rcMethods :: [(LocSymbol,ty)]
-           } deriving (Show, Functor)
+           } deriving (Show, Functor, Data, Typeable)
 
 
 ------------------------------------------------------------------------
@@ -1727,13 +1789,14 @@ instance Monoid (Output a) where
 --------------------------------------------------------------------------------
 
 data KVKind
-  = RecBindE    Var
-  | NonRecBindE Var
+  = RecBindE    Var -- ^ Recursive binder      @letrec x = ...@
+  | NonRecBindE Var -- ^ Non recursive binder  @let x = ...@
   | TypeInstE
   | PredInstE
   | LamE
-  | CaseE
+  | CaseE       Int -- ^ Int is the number of cases
   | LetE
+  | ProjectE        -- ^ Projecting out field of 
   deriving (Generic, Eq, Ord, Show, Data, Typeable)
 
 instance Hashable KVKind
@@ -1832,6 +1895,9 @@ instance Eq ctor => Monoid (MSpec ty ctor) where
 --------------------------------------------------------------------------------
 -- Nasty PP stuff
 --------------------------------------------------------------------------------
+
+instance PPrint BTyVar where
+  pprintTidy _ (BTV α) = text $ symbolString α
 
 instance PPrint RTyVar where
   pprintTidy _ (RTV α)

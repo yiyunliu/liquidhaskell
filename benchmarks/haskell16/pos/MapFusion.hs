@@ -1,8 +1,6 @@
 {-@ LIQUID "--higherorder"     @-}
 {-@ LIQUID "--totality"        @-}
 {-@ LIQUID "--exact-data-cons" @-}
-{-@ LIQUID "--eliminate" @-}
-{-@ LIQUID "--maxparams=10"  @-}
 {-@ LIQUID "--higherorderqs" @-}
 
 
@@ -27,28 +25,20 @@ map f xs
   | otherwise    = C (f (hd xs)) (map f (tl xs))
 
 
-{-@ map_fusion_0 :: f:(a -> a) -> g:(a -> a) -> xs:L a
-   -> {v:Proof | map (compose f g) xs == (compose (map f) (map g)) (xs) } @-}
-map_fusion_0  :: (a -> a) -> (a -> a) -> L a -> Proof
-map_fusion_0 = undefined
-
-
 {-@ map_fusion :: f:(a -> a) -> g:(a -> a) -> xs:L a
-   -> {v:Proof | map (compose f g) xs == (compose (map f) (map g)) (xs) } @-}
+   -> {map (compose f g) xs == (compose (map f) (map g)) (xs) } @-}
 map_fusion :: (a -> a) -> (a -> a) -> L a -> Proof
 map_fusion f g N
-  = toProof $
-      (compose (map f) (map g)) N
+  = (compose (map f) (map g)) N
         ==! (map f) ((map g) N)
         ==! map f (map g N)
         ==! map f N
         ==! N
         ==! map (compose f g) N
+        *** QED
 map_fusion f g (C x xs)
-  = toProof $
-      map (compose f g) (C x xs)
+  = map (compose f g) (C x xs)
        ==! C ((compose f g) x) (map (compose f g) xs)
-       ==! C ((compose f g) x) ((compose (map f) (map g)) xs) ? map_fusion_0 f g xs
        ==! C ((compose f g) x) ((compose (map f) (map g)) xs) ? map_fusion f g xs
        ==! C ((compose f g) x) (map f (map g xs))
        ==! C (f (g x)) (map f (map g xs))
@@ -57,6 +47,7 @@ map_fusion f g (C x xs)
        ==! (map f) (map g (C x xs))
        ==! (map f) ((map g) (C x xs))
        ==! (compose (map f) (map g)) (C x xs)
+       *** QED 
 
 data L a = N | C a (L a)
 {-@ data L [llen] @-}

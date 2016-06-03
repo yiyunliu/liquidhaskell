@@ -21,6 +21,7 @@ import           PrelNames                                  (fractionalClassKeys
 
 import           Debug.Trace
 
+import           DataCon                                    (isTupleDataCon)
 import           Prelude                                    hiding (error)
 import           Avail                                      (availsToNameSet)
 import           BasicTypes                                 (Arity)
@@ -58,7 +59,7 @@ import           Var
 import           IdInfo
 import qualified TyCon                                      as TC
 import           Data.Char                                  (isLower, isSpace)
-import           Data.Maybe                                 (fromMaybe)
+import           Data.Maybe                                 (isJust, fromMaybe)
 import           Data.Hashable
 import qualified Data.HashSet                               as S
 
@@ -342,11 +343,17 @@ ignoreLetBinds e
 -- | Predicates on CoreExpr and DataCons ---------------------------------------
 --------------------------------------------------------------------------------
 
+isTupleId :: Id -> Bool
+isTupleId = maybe False isTupleDataCon . idDataConM
+
+idDataConM :: Id -> Maybe DataCon
+idDataConM x = case idDetails x of
+  DataConWorkId d -> Just d
+  DataConWrapId d -> Just d
+  _               -> Nothing
+
 isDataConId :: Id -> Bool
-isDataConId x = case idDetails x of
-                  DataConWorkId _ -> True
-                  DataConWrapId _ -> True
-                  _               -> False
+isDataConId = isJust . idDataConM
 
 getDataConVarUnique :: Var -> Unique
 getDataConVarUnique v
@@ -608,6 +615,11 @@ synTyConRhs_maybe = TC.synTyConRhs_maybe
 
 tcRnLookupRdrName :: HscEnv -> GHC.Located RdrName -> IO (Messages, Maybe [Name])
 tcRnLookupRdrName = TcRnDriver.tcRnLookupRdrName
+
+showCBs :: Bool -> [CoreBind] -> String
+showCBs untidy
+  | untidy    = Out.showSDocDebug unsafeGlobalDynFlags . ppr . tidyCBs
+  | otherwise = showPpr
 
 --------------------------------------------------------------------------------
 -- | Unwrap TyThing ------------------------------------------------------------
