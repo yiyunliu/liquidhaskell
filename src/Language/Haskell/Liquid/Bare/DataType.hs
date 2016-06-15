@@ -18,8 +18,8 @@ import           Text.Parsec
 import           TyCon
 import           Var
 
+import           Data.Bifunctor
 import           Data.Maybe
-
 
 import qualified Data.List                              as L
 import qualified Data.HashMap.Strict                    as M
@@ -49,7 +49,7 @@ import           Language.Haskell.Liquid.Bare.OfType
 makeConTypes
   :: (ModName,Ms.Spec ty bndr)
   -> BareM ([(TyCon,TyConP)],[[(DataCon,Located DataConP)]])
-makeConTypes (name,spec) = inModule name $ makeConTypes' (Ms.dataDecls spec) (Ms.dvariance spec)
+makeConTypes (name,spec) = inModule name $ makeConTypes' (val <$> Ms.dataDecls spec) (second val <$> Ms.dvariance spec)
 
 makeConTypes' :: [DataDecl] -> [(LocSymbol, [Variance])] -> BareM ([(TyCon, TyConP)], [[(DataCon, Located DataConP)]])
 makeConTypes' dcs vdcs = unzip <$> mapM (uncurry ofBDataDecl) (group dcs vdcs)
@@ -87,7 +87,7 @@ ofBDataDecl :: Maybe DataDecl
             -> (Maybe (LocSymbol, [Variance]))
             -> BareM ((TyCon, TyConP), [(DataCon, Located DataConP)])
 ofBDataDecl (Just (D tc as ps ls cts _ sfun)) maybe_invariance_info
-  = do πs         <- mapM ofBPVar ps
+  = do πs         <- mapM (ofBPVar . val) ps
        tc'        <- lookupGhcTyCon tc
        cts'       <- mapM (ofBDataCon lc lc' tc' αs ps ls πs) cts
        let tys     = [t | (_, dcp) <- cts', (_, t) <- tyArgs dcp]
@@ -150,14 +150,14 @@ ofBDataCon :: SourcePos
            -> SourcePos
            -> TyCon
            -> [RTyVar]
-           -> [PVar BSort]
+           -> [Located BPVar]
            -> [Symbol]
            -> [PVar RSort]
-           -> (Located Symbol,[(Symbol,BareType)])
+           -> (Located Symbol,[(Symbol,LocBareType)])
            -> BareM (DataCon,DataConP)
 ofBDataCon l l' tc αs ps ls πs (c, xts)
   = do c'      <- lookupGhcDataCon c
-       ts'     <- mapM (mkSpecType' l ps) ts
+       ts'     <- mapM (mkSpecType' l (val <$> ps)) (val <$> ts)
        let cs   = map ofType (dataConStupidTheta c')
        let t0   = rApp tc rs (rPropP [] . pdVarReft <$> πs) mempty
        return   $ (c', DataConP l αs πs ls cs (reverse (zip xs ts')) t0 l')

@@ -244,4 +244,3 @@ mapAccumM f acc0 xs =
 
 inserts :: (Foldable t, Eq k, Hashable k) => M.HashMap k v -> t (k, v) -> M.HashMap k v
 inserts = foldr (uncurry M.insert)
-

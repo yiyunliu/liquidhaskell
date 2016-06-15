@@ -16,14 +16,11 @@ import TyCon
 import Type (expandTypeSynonyms, Type)
 import Var
 
-
 import Control.Monad
 import Control.Monad.Except
+
 import Data.Generics.Aliases (mkT)
 import Data.Generics.Schemes (everywhere)
-
-
-import qualified Data.HashMap.Strict as M
 
 import Language.Fixpoint.Types.Names (dummySymbol)
 import Language.Fixpoint.Types (mapPredReft, pAnd, conjuncts, TCEmb)
@@ -41,7 +38,7 @@ import Language.Haskell.Liquid.Bare.Misc
 makePluggedSigs :: Traversable t
                 => ModName
                 -> TCEmb TyCon
-                -> M.HashMap TyCon RTyCon
+                -> TCEnv
                 -> NameSet
                 -> t (Var, Located (RRType RReft))
                 -> BareM (t (Var, Located (RType RTyCon RTyVar RReft)))
@@ -53,7 +50,7 @@ makePluggedSigs name embs tcEnv exports sigs
 
 makePluggedAsmSigs :: Traversable t
                    => TCEmb TyCon
-                   -> M.HashMap TyCon RTyCon
+                   -> TCEnv
                    -> t (Var, Located (RRType RReft))
                    -> BareM (t (Var, Located (RType RTyCon RTyVar RReft)))
 makePluggedAsmSigs embs tcEnv sigs
@@ -64,7 +61,7 @@ makePluggedAsmSigs embs tcEnv sigs
 
 makePluggedDataCons :: Traversable t
                     => TCEmb TyCon
-                    -> M.HashMap TyCon RTyCon
+                    -> TCEnv
                     -> t (DataCon, Located DataConP)
                     -> BareM (t (DataCon, Located DataConP))
 makePluggedDataCons embs tcEnv dcs
@@ -81,7 +78,7 @@ makePluggedDataCons embs tcEnv dcs
 
 plugHoles :: (NamedThing a, PPrint a)
           => TCEmb TyCon
-          -> M.HashMap TyCon RTyCon
+          -> TCEnv
           -> a
           -> (SpecType -> RReft -> RReft)
           -> Type
@@ -138,10 +135,7 @@ plugHoles tce tyi x f t (Loc l l' st)
 
     makeCls cs t              = foldr (uncurry rFun) t cs
 
-addRefs :: TCEmb TyCon
-     -> M.HashMap TyCon RTyCon
-     -> SpecType
-     -> SpecType
+addRefs :: TCEmb TyCon -> TCEnv -> SpecType -> SpecType
 addRefs tce tyi (RApp c ts _ r) = RApp c' ts ps r
   where
     RApp c' _ ps _ = addTyConInfo tce tyi (RApp c ts [] r)

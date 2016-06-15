@@ -84,6 +84,7 @@ import Language.Haskell.Liquid.Spec
 import Language.Haskell.Liquid.Transforms.ANF
 import Language.Haskell.Liquid.Types
 import Language.Haskell.Liquid.Types.PrettyPrint
+import Language.Haskell.Liquid.Types.Variance
 import Language.Haskell.Liquid.Types.Visitors
 import Language.Haskell.Liquid.UX.CmdLine
 import Language.Haskell.Liquid.UX.QuasiQuoter
@@ -356,9 +357,15 @@ toGhcSpec cfg cbs vars letVs mod tgtMod mgi bareSpec lm specSpecs homeSpecs = do
   (specsGblSpec, _) <- makeSpecs defConfig emptyGlobalSpec [] [] [] mempty Nothing $ mconcat $ snd <$> specSpecs
   let extern    = foldl' mergeGlobalSpecs specsGblSpec $ map thd3 homeSpecs
   (gbl', lcl') <- makeSpecs cfg extern cbs vars letVs exports (Just mod) bareSpec
+  (gbl'', lcl'') <- postProcessSpecs (mergeGlobalSpecs extern gbl') lcl'
+  liftIO $ putStrLn "(global spec)"
   liftIO $ putStrLn $ showpp gbl'
+  liftIO $ putStrLn "(local spec)"
   liftIO $ putStrLn $ showpp lcl'
-  liftIO $ putStrLn $ showpp $ mergeGlobalSpecs extern gbl'
+  liftIO $ putStrLn "(finalized global spec)"
+  liftIO $ putStrLn $ showpp gbl''
+  liftIO $ putStrLn "(finalized local spec)"
+  liftIO $ putStrLn $ showpp lcl''
   (gbl, lcl)   <- liftIO $ makeGhcSpec cfg tgtMod cbs vars letVs exports hsc lm specs
   return (gbl', gbl, lcl, imps, Ms.includes bareSpec)
 
@@ -449,12 +456,14 @@ refreshSymbol = symbol . symbolText
 
 mergeGlobalSpecs :: GlobalSpec -> GlobalSpec -> GlobalSpec
 mergeGlobalSpecs x1 x2 = emptyGlobalSpec
-  { aliases = mergeAliases (aliases x1) (aliases x2)
-  , meas = mergeMeasures (meas x1) (meas x2)
-  , invariants = mergeInvariants (invariants x1) (invariants x2)
-  , ialiases = mergeIAliases (ialiases x1) (ialiases x2)
-  , tcEmbeds = mergeTCEmbeds (tcEmbeds x1) (tcEmbeds x2)
-  , qualifiers = mergeQualifiers (qualifiers x1) (qualifiers x2)
+  { aliases     = mergeAliases     (aliases     x1) (aliases     x2)
+  , meas        = mergeMeasures    (meas        x1) (meas        x2)
+  , invariants  = mergeInvariants  (invariants  x1) (invariants  x2)
+  , ialiases    = mergeIAliases    (ialiases    x1) (ialiases    x2)
+  , tcEmbeds    = mergeTCEmbeds    (tcEmbeds    x1) (tcEmbeds    x2)
+  , qualifiers  = mergeQualifiers  (qualifiers  x1) (qualifiers  x2)
+  , tyconEnv    = mergeTyconEnv    (tyconEnv    x1) (tyconEnv    x2)
+  , varianceEnv = mergeVarianceEnv (varianceEnv x1) (varianceEnv x2)
   }
 
 mergeAliases :: RTEnv -> RTEnv -> RTEnv
@@ -487,17 +496,17 @@ mergeIAliases = mappend
 mergeMeasures :: M.HashMap Symbol LocSpecType
               -> M.HashMap Symbol LocSpecType
               -> M.HashMap Symbol LocSpecType
-mergeMeasures = M.unionWithKey dupMeasure
+mergeMeasures = M.unionWithKey dup
   where
-    dupMeasure k v1 v2 = throw
+    dup k v1 v2 = throw
       ( ErrDupMeas (fSrcSpan v1) (pprint k) (text "TODO")
                    (fSrcSpan <$> [v1, v2])
         :: Error )
 
 mergeTCEmbeds :: TCEmb TyCon -> TCEmb TyCon -> TCEmb TyCon
-mergeTCEmbeds = M.unionWithKey dupTCEmbed
+mergeTCEmbeds = M.unionWithKey dup
   where
-    dupTCEmbed k v1 v2
+    dup k v1 v2
       | v1 == v2 = v1
       | otherwise = throw
         ( ErrDupEmbs (fSrcSpan $ fTyconSymbol v1) (pprint k)
@@ -507,12 +516,30 @@ mergeTCEmbeds = M.unionWithKey dupTCEmbed
 mergeQualifiers :: M.HashMap Symbol Qualifier
                 -> M.HashMap Symbol Qualifier
                 -> M.HashMap Symbol Qualifier
-mergeQualifiers = M.unionWith dupQualifier
+mergeQualifiers = M.unionWith dup
   where
-    dupQualifier v1 v2 = throw
+    dup v1 v2 = throw
       ( ErrDupQuals (sourcePosSrcSpan $ q_pos v1) (pprint $ q_name v1)
                     (sourcePosSrcSpan . q_pos <$> [v1, v2])
         :: Error )
+
+mergeTyconEnv :: TCEnv -> TCEnv -> TCEnv
+mergeTyconEnv = M.unionWithKey dup
+  where
+    dup k v1 v2 = throw
+      ( ErrDupDataDecls (fSrcSpan v1) (pprint k)
+                        (fSrcSpan <$> [v1, v2])
+        :: Error )
+
+mergeVarianceEnv :: VarianceEnv -> VarianceEnv -> VarianceEnv
+mergeVarianceEnv = M.unionWithKey dup
+  where
+    dup k v1 v2
+      | v1 == v2 = v1
+      | otherwise = throw
+        ( ErrDupVariance (fSrcSpan v1) (pprint k)
+                         (fSrcSpan <$> [v1, v2])
+          :: Error )
 
 --------------------------------------------------------------------------------
 -- | Finding & Parsing Files ---------------------------------------------------
@@ -652,12 +679,18 @@ instance PPrint GlobalSpec where
     , "******* TyCon Embeds Emvironment ************"
     , pprintLongList k (mapSnd fTyconSymbol <$> M.toList (tcEmbeds spec))
     , "******* Qualifiers **************************"
-    , pprintTidy k $ qualifiers spec                ]
+    , pprintLongList k (M.toList $ qualifiers spec)
+    , "******* RTyCon Environment ******************"
+    , pprintLongList k (M.toList $ tyconEnv spec)
+    , "******* Variance Environment ****************"
+    , pprintLongList k (M.toList $ varianceEnv spec)]
 
 instance PPrint LocalSpec where
   pprintTidy k spec = vcat
     [ "******* Target Variables ********************"
-    , pprintTidy k $ tgtVars spec                   ]
+    , pprintTidy k $ tgtVars spec                   
+    , "******* Data Constructors *******************"
+    , pprintLongList k $ dconsP spec                ]
 
 instance PPrint GhcInfo where
   pprintTidy k info = vcat

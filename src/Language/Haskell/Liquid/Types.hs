@@ -55,6 +55,7 @@ module Language.Haskell.Liquid.Types (
   , rTyConPVs
   , rTyConPropVs
   , isClassRTyCon, isClassType, isEqType, isRVar, isBool
+  , TCEnv
 
   -- * Refinement Types
   , RType (..), Ref(..), RTProp, rPropP
@@ -91,7 +92,7 @@ module Language.Haskell.Liquid.Types (
   -- * Instantiated RType
   , BareType, PrType
   , SpecType, SpecProp
-  , LocSpecType
+  , LocBareType, LocSpecType
   , RSort
   , UsedPVar, RPVar, RReft
   , REnv (..)
@@ -318,45 +319,48 @@ instance HasConfig GhcInfo where
 -- | Specifications associated globally with the module, which can be imported
 -- by other modules.
 data GlobalSpec = GS {
-    tySigs     :: !(M.HashMap Var LocSpecType)
+    tySigs      :: !(M.HashMap Var LocSpecType)
     -- ^ Asserted Reftypes
-  , asmSigs    :: !(M.HashMap Var LocSpecType)
+  , asmSigs     :: !(M.HashMap Var LocSpecType)
     -- ^ Assumed Reftypes
-  , inSigs     :: !(M.HashMap Var LocSpecType)
+  , inSigs      :: !(M.HashMap Var LocSpecType)
     -- ^ Auto generated Signatures
-  , ctors      :: !(M.HashMap Var LocSpecType)
+  , ctors       :: !(M.HashMap Var LocSpecType)
     -- ^ Data Constructor Measure Sigs
-  , aliases    :: !RTEnv
-  , meas       :: !(M.HashMap Symbol LocSpecType)
+  , aliases     :: !RTEnv
+  , meas        :: !(M.HashMap Symbol LocSpecType)
     -- ^ Measure Types
     -- eg.  len :: [a] -> Int
-  , invariants :: ![(Maybe Var, LocSpecType)]
+  , invariants  :: ![(Maybe Var, LocSpecType)]
     -- ^ Data Type Invariants that came from the definition of var measure
     -- eg.  forall a. {v: [a] | len(v) >= 0}
-  , bounds     :: !(RRBEnv RSort)
-  , ialiases   :: ![(LocSpecType, LocSpecType)]
+  , bounds      :: !(RRBEnv RSort)
+  , ialiases    :: ![(LocSpecType, LocSpecType)]
     -- ^ Data Type Invariant Aliases
-  , freeSyms   :: !(M.HashMap Symbol Var)
+  , freeSyms    :: !(M.HashMap Symbol Var)
     -- ^ List of `Symbol` free in spec and corresponding GHC var
     -- eg. (Cons, Cons#7uz) from tests/pos/ex1.hs
-  , tcEmbeds   :: TCEmb TyCon
+  , tcEmbeds    :: TCEmb TyCon
     -- ^ How to embed GHC Tycons into fixpoint sorts
     -- e.g. "embed Set as Set_set" from include/Data/Set.spec
-  , qualifiers :: !(M.HashMap Symbol Qualifier)
+  , qualifiers  :: !(M.HashMap Symbol Qualifier)
     -- ^ Qualifiers in Source/Spec files
     -- e.g tests/pos/qualTest.hs
-  , tyconEnv   :: M.HashMap TyCon RTyCon
+  , tyconEnv    :: TCEnv
     -- ^ Information attached to type constructors
-  , dicts      :: DEnv Var SpecType
+  , varianceEnv :: !VarianceEnv
+    -- ^ Variance annotations attached to data constructors
+  , dicts       :: DEnv Var SpecType
     -- ^ Dictionary Environment
-  , axioms     :: [HAxiom]
+  , axioms      :: [HAxiom]
     -- ^ Axioms from axiomatized functions
-  , logicMap   :: LogicMap
+  , logicMap    :: LogicMap
   }
 
 emptyGlobalSpec :: GlobalSpec
 emptyGlobalSpec = GS mempty mempty mempty mempty mempty mempty mempty mempty
                      mempty mempty mempty mempty mempty mempty mempty mempty
+                     mempty
 
 -- | Specifications associated locally with the module, only needed when it is
 -- being verified.
@@ -586,6 +590,8 @@ instance NFData BTyCon
 
 instance NFData RTyCon
 
+type TCEnv = M.HashMap TyCon (Located RTyCon)
+
 mkBTyCon :: LocSymbol -> BTyCon
 mkBTyCon = (`BTyCon` False)
 
@@ -807,6 +813,7 @@ type SpecType    = RRType    RReft
 type SpecProp    = RRProp    RReft
 type RRProp r    = Ref       RSort (RRType r)
 
+type LocBareType = Located BareType
 type LocSpecType = Located SpecType
 
 data Stratum    = SVar Symbol | SDiv | SWhnf | SFin
@@ -974,11 +981,11 @@ data DataDecl   = D { tycName   :: LocSymbol
                                 -- ^ Type  Constructor Name
                     , tycTyVars :: [Symbol]
                                 -- ^ Tyvar Parameters
-                    , tycPVars  :: [PVar BSort]
+                    , tycPVars  :: [Located BPVar]
                                 -- ^ PVar  Parameters
                     , tycTyLabs :: [Symbol]
                                 -- ^ PLabel  Parameters
-                    , tycDCons  :: [(LocSymbol, [(Symbol, BareType)])]
+                    , tycDCons  :: [(LocSymbol, [(Symbol, LocBareType)])]
                                 -- ^ [DataCon, [(fieldName, fieldType)]]
                     , tycSrcPos :: !SourcePos
                                 -- ^ Source Position

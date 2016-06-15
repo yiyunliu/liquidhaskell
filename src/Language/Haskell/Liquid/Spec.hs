@@ -3,6 +3,8 @@
 module Language.Haskell.Liquid.Spec (
     -- * Build Module Specs
     makeSpecs
+    -- * Post-Process Module Specs
+  , postProcessSpecs
   ) where
 
 import GHC hiding (Located)
@@ -23,7 +25,8 @@ import Language.Haskell.Liquid.Types.RefType
 
 import qualified Language.Haskell.Liquid.Measure as Ms
 
-import Language.Haskell.Liquid.Spec.Aliases
+import Language.Haskell.Liquid.Spec.Alias
+import Language.Haskell.Liquid.Spec.DataType
 import Language.Haskell.Liquid.Spec.Env
 import Language.Haskell.Liquid.Spec.Lookup
 import Language.Haskell.Liquid.Spec.Measure
@@ -55,23 +58,29 @@ makeSpecs' :: Config
            -> Ms.BareSpec
            -> SpecM (GlobalSpec, LocalSpec)
 makeSpecs' _cfg _cbs _vars _lvars _exports _mod bspec = do
-  tcEmbeds   <- makeTyConEmbeds bspec
-  aliases    <- makeAliases bspec
+  tcEmbeds <- makeTyConEmbeds bspec
+  aliases <- makeAliases bspec
   withLocalAliases aliases $ do
-  meas       <- makeMeasures bspec
+  (tyconEnv, dconsP) <- makeDataTypes bspec
+  varianceEnv <- makeVarianceEnv bspec
+  meas <- makeMeasures bspec
   invariants <- makeInvariants bspec
-  ialiases   <- makeIAliases bspec
+  ialiases <- makeIAliases bspec
   qualifiers <- makeQualifiers bspec
   return $
     ( emptyGlobalSpec
-      { aliases = aliases
-      , meas = meas
-      , invariants = invariants
-      , ialiases = ialiases
-      , tcEmbeds = tcEmbeds
-      , qualifiers = qualifiers
+      { aliases     = aliases
+      , meas        = meas
+      , invariants  = invariants
+      , ialiases    = ialiases
+      , tcEmbeds    = tcEmbeds
+      , qualifiers  = qualifiers
+      , tyconEnv    = tyconEnv
+      , varianceEnv = varianceEnv
       }
     , emptyLocalSpec
+      { dconsP = dconsP
+      }
     )
 
 --------------------------------------------------------------------------------
@@ -96,7 +105,7 @@ makeIAliases = mapM go . Ms.ialiases
     go (t1, t2) = (,) <$> makeInvariantTy t1 <*> makeInvariantTy t2
 
 makeInvariantTy :: Located BareType -> SpecM LocSpecType
-makeInvariantTy = fmap (fmap generalize) . resolveL
+makeInvariantTy = fmap (fmap generalize) . resolveL'
 
 -- | Make Qualifiers -----------------------------------------------------------
 
@@ -104,4 +113,13 @@ makeQualifiers :: Ms.BareSpec -> SpecM (M.HashMap Symbol Qualifier)
 makeQualifiers = fmap M.fromList . mapM go . Ms.qualifiers
   where
     go q = (q_name q,) <$> resolve (sourcePosSrcSpan $ q_pos q) q
+
+--------------------------------------------------------------------------------
+-- | Post-Process Module Specs -------------------------------------------------
+--------------------------------------------------------------------------------
+
+postProcessSpecs :: GlobalSpec -> LocalSpec -> Ghc (GlobalSpec, LocalSpec)
+postProcessSpecs gbl lcl = return (gbl', lcl)
+  where
+    gbl' = applyVarianceInfo gbl
 

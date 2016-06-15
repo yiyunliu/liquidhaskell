@@ -127,7 +127,7 @@ data TargetState = TargetState
   , ctorEnv      :: !DataConEnv
   , measEnv      :: !MeasureEnv
   , embEnv       :: !(TCEmb GHC.TyCon)
-  , tyconInfo    :: !(M.HashMap GHC.TyCon RTyCon)
+  , tyconInfo    :: !TCEnv
   , freesyms     :: ![(Symbol,Symbol)]
   , constructors :: ![Variable] -- (S.HashSet Variable)  --[(String, String)]
   , sigs         :: ![(Symbol, SpecType)]

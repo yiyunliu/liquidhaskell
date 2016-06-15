@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Language.Haskell.Liquid.Spec.Aliases (
+module Language.Haskell.Liquid.Spec.Alias (
     -- * Build Refined Type Alias Environment
     makeAliases
   ) where

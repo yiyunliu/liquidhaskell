@@ -11,6 +11,10 @@ module Language.Haskell.Liquid.Spec.Resolve (
     Resolve
   , resolve
   , resolveL
+  , resolveL'
+  , resolveP
+  , resolvePL
+  , resolvePL'
   ) where
 
 import GHC hiding (Located)
@@ -43,8 +47,23 @@ import Language.Haskell.Liquid.Spec.Lookup
 resolve :: Resolve a b => SrcSpan -> a -> SpecM b
 resolve l x = runResolveM (resolve' x) mempty l
 
-resolveL :: Resolve a b => Located a -> SpecM (Located b)
-resolveL x = traverse (resolve $ fSrcSpan x) x
+resolveL :: Resolve a b => Located a -> SpecM b
+resolveL x = resolve (fSrcSpan x) (val x)
+
+resolveL' :: Resolve a b => Located a -> SpecM (Located b)
+resolveL' x = traverse (resolve $ fSrcSpan x) x
+
+
+resolveP :: Resolve a b => [PVar t] -> SrcSpan -> a -> SpecM b
+resolveP ps l x = runResolveM (resolve' x) pmap l
+  where
+    pmap = M.fromList $ (\p -> (pname p, p)) . uPVar <$> ps
+
+resolvePL :: Resolve a b => [PVar t] -> Located a -> SpecM b
+resolvePL ps x = resolveP ps (fSrcSpan x) (val x)
+
+resolvePL' :: Resolve a b => [PVar t] -> Located a -> SpecM (Located b)
+resolvePL' ps x = traverse (resolveP ps $ fSrcSpan x) x
 
 --------------------------------------------------------------------------------
 -- | Internal Resolution Monad -------------------------------------------------
@@ -157,11 +176,15 @@ instance (Resolve a1 b1, Resolve a2 b2) => Resolve (Ref a1 a2) (Ref b1 b2) where
     RProp <$> mapM (secondM resolve') as
           <*> withFixScope (fst <$> as) (resolve' b)
 
-instance Resolve a b => Resolve (PVar a) (PVar b) where
+instance Resolve BPVar RPVar where
   resolve' (PV n k a as) =
     PV n <$> resolve' k
          <*> pure a
-         <*> mapM (\(t,s,e) -> (,s,) <$> resolve' t <*> resolve' e) as
+         <*> mapM (\(t,s,e) -> (,s,e) <$> resolve' t) as
+
+instance Resolve UsedPVar UsedPVar where
+  resolve' (PV n k a as) =
+    PV n k a <$> mapM (\(t,s,e) -> (t,s,) <$> resolve' e) as
 
 instance Resolve a b => Resolve (PVKind a) (PVKind b) where
   resolve' (PVProp t) =

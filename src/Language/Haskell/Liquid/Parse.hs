@@ -340,7 +340,7 @@ bareAllP :: Parser (RType BTyCon BTyVar RReft)
 bareAllP
   = do reserved "forall"
        as <- many (bTyVar <$> tyVarIdP)
-       ps <- predVarDefsP
+       ps <- (val <$>) <$> predVarDefsP
        dot
        t  <- bareTypeP
        return $ foldr RAllT (foldr RAllP t ps) as
@@ -350,12 +350,12 @@ tyVarIdP = symbol <$> condIdP alphanums (isSmall . head)
            where
              alphanums = S.fromList $ ['a'..'z'] ++ ['0'..'9']
 
-predVarDefsP :: Parser [PVar BSort]
+predVarDefsP :: Parser [Located BPVar]
 predVarDefsP
-  =  try (angles $ sepBy1 predVarDefP comma)
+  =  try (angles $ sepBy1 (locParserP predVarDefP) comma)
  <|> return []
 
-predVarDefP :: Parser (PVar BSort)
+predVarDefP :: Parser BPVar
 predVarDefP
   = bPVar <$> predVarIdP <*> dcolon <*> predVarTypeP
 
@@ -606,7 +606,7 @@ data Pspec ty ctor
   | LAsrt   (LocSymbol, ty)
   | Asrts   ([LocSymbol], (ty, Maybe [Located Expr]))
   | Impt    Symbol
-  | DDecl   DataDecl
+  | DDecl   (Located DataDecl)
   | Incl    FilePath
   | Invt    ty
   | IAlias  (ty, ty)
@@ -628,7 +628,7 @@ data Pspec ty ctor
   | IMeas   (Measure ty ctor)
   | Class   (RClass ty)
   | RInst   (RInstance ty)
-  | Varia   (LocSymbol, [Variance])
+  | Varia   (LocSymbol, Located [Variance])
   deriving (Data, Typeable)
 
 -- | For debugging
@@ -717,7 +717,7 @@ specP
     <|> (reservedToken "class"     >> liftM Class  classP    )
     <|> (reservedToken "import"    >> liftM Impt   symbolP   )
     <|> try (reservedToken "data" >> reserved "variance " >> liftM Varia datavarianceP)
-    <|> (reservedToken "data"      >> liftM DDecl  dataDeclP )
+    <|> (reservedToken "data"      >> liftM DDecl  (locParserP dataDeclP) )
     <|> (reservedToken "include"   >> liftM Incl   filePathP )
     <|> (reservedToken "invariant" >> liftM Invt   invariantP)
     <|> (reservedToken "using"     >> liftM IAlias invaliasP )
@@ -772,8 +772,8 @@ filePathP     = angles $ many1 pathCharP
     pathCharP = choice $ char <$> pathChars
     pathChars = ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ ['.', '/']
 
-datavarianceP :: Parser (Located Symbol, [Variance])
-datavarianceP = liftM2 (,) locUpperIdP (spaces >> many varianceP)
+datavarianceP :: Parser (Located Symbol, Located [Variance])
+datavarianceP = liftM2 (,) locUpperIdP (spaces >> locParserP (many varianceP))
 
 varianceP :: Parsec String u Variance
 varianceP = (reserved "bivariant"     >> return Bivariant)
@@ -1011,27 +1011,27 @@ tupDataCon n    = dummyLoc $ symbol $ "(" <> replicate (n - 1) ',' <> ")"
 --------------------------------- Predicates ----------------------------------
 -------------------------------------------------------------------------------
 
-dataConFieldsP :: Parser [(Symbol, BareType)]
+dataConFieldsP :: Parser [(Symbol, LocBareType)]
 dataConFieldsP
   =   (braces $ sepBy predTypeDDP comma)
   <|> (sepBy dataConFieldP spaces)
 
-dataConFieldP :: Parser (Symbol, BareType)
+dataConFieldP :: Parser (Symbol, LocBareType)
 dataConFieldP
   = parens ( try predTypeDDP
              <|> do v <- dummyBindP
-                    t <- bareTypeP
+                    t <- locParserP bareTypeP
                     return (v,t)
            )
     <|> do v <- dummyBindP
-           t <- bareTypeP
+           t <- locParserP bareTypeP
            return (v,t)
 
-predTypeDDP :: Parser (Symbol, BareType)
+predTypeDDP :: Parser (Symbol, LocBareType)
 predTypeDDP
-  = liftM2 (,) bbindP bareTypeP
+  = liftM2 (,) bbindP (locParserP bareTypeP)
 
-dataConP :: Parser (Located Symbol, [(Symbol, BareType)])
+dataConP :: Parser (Located Symbol, [(Symbol, LocBareType)])
 dataConP
   = do x   <- locParserP dataConNameP
        spaces

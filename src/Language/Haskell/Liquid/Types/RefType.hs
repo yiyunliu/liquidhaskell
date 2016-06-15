@@ -40,7 +40,7 @@ module Language.Haskell.Liquid.Types.RefType (
 
   -- TODO: categorize these!
   , ofType, toType
-  , bTyVar, rTyVar, rVar, rApp, rEx
+  , bTyVar, rTyVar, rVar, rApp, rTyCon, rEx
   , symbolRTyVar, bareRTyVar
   , addTyConInfo
   , appRTyCon
@@ -373,7 +373,10 @@ rApp :: TyCon
      -> [RTProp RTyCon tv r]
      -> r
      -> RType RTyCon tv r
-rApp c    = RApp (RTyCon c [] (mkTyConInfo c [] [] Nothing))
+rApp = RApp . rTyCon
+
+rTyCon :: TyCon -> RTyCon
+rTyCon c = RTyCon c [] (mkTyConInfo c [] [] Nothing)
 
 --- NV TODO : remove this code!!!
 
@@ -538,8 +541,8 @@ quantifyFreeRTy ty = quantifyRTy (freeTyVars ty) ty
 
 -------------------------------------------------------------------------
 addTyConInfo :: (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r)
-             => (M.HashMap TyCon FTycon)
-             -> (M.HashMap TyCon RTyCon)
+             => TCEmb TyCon
+             -> TCEnv
              -> RRType r
              -> RRType r
 -------------------------------------------------------------------------
@@ -547,8 +550,8 @@ addTyConInfo tce tyi = mapBot (expandRApp tce tyi)
 
 -------------------------------------------------------------------------
 expandRApp :: (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r)
-           => (M.HashMap TyCon FTycon)
-           -> (M.HashMap TyCon RTyCon)
+           => TCEmb TyCon
+           -> TCEnv
            -> RRType r
            -> RRType r
 -------------------------------------------------------------------------
@@ -608,14 +611,13 @@ pvArgs pv = [(s, t) | (t, s, _) <- pargs pv]
 
 
 appRTyCon :: SubsTy RTyVar (RType c RTyVar ()) RPVar
-          => M.HashMap TyCon FTycon
-          -> M.HashMap TyCon RTyCon -> RTyCon -> [RType c RTyVar r] -> RTyCon
+          => TCEmb TyCon -> TCEnv -> RTyCon -> [RType c RTyVar r] -> RTyCon
 appRTyCon tce tyi rc ts = RTyCon c ps' (rtc_info rc'')
   where
     c    = rtc_tc rc
     ps'  = subts (zip (RTV <$> αs) ts') <$> rTyConPVs rc'
     ts'  = if null ts then rVar <$> βs else toRSort <$> ts
-    rc'  = M.lookupDefault rc c tyi
+    rc'  = val $ M.lookupDefault (dummyLoc rc) c tyi
     αs   = tyConTyVarsDef $ rtc_tc rc'
     βs   = tyConTyVarsDef c
     rc'' = if isNumeric tce rc' then addNumSizeFun rc' else rc'
@@ -623,7 +625,7 @@ appRTyCon tce tyi rc ts = RTyCon c ps' (rtc_info rc'')
 
 -- RJ: The code of `isNumeric` is incomprehensible.
 -- Please fix it to use intSort instead of intFTyCon
-isNumeric :: M.HashMap TyCon FTycon -> RTyCon -> Bool
+isNumeric :: TCEmb TyCon -> RTyCon -> Bool
 isNumeric tce c
   =  fromMaybe
        (symbolFTycon . dummyLoc $ tyConName (rtc_tc c))
@@ -1146,7 +1148,7 @@ typeSort _tce (TyVarTy tv)
 typeSort _ τ
   = FObj $ typeUniqueSymbol τ
 
-tyConFTyCon :: M.HashMap TyCon FTycon -> TyCon -> FTycon
+tyConFTyCon :: TCEmb TyCon -> TyCon -> FTycon
 tyConFTyCon tce c    = fromMaybe (symbolFTycon $ dummyLoc $ tyConName c) (M.lookup c tce)
 
 typeSortForAll :: TCEmb TyCon -> Type -> Sort

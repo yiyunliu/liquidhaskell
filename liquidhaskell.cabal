@@ -216,7 +216,8 @@ Library
                     Paths_liquidhaskell,
 
                     Language.Haskell.Liquid.Spec,
-                    Language.Haskell.Liquid.Spec.Aliases,
+                    Language.Haskell.Liquid.Spec.Alias,
+                    Language.Haskell.Liquid.Spec.DataType,
                     Language.Haskell.Liquid.Spec.Env,
                     Language.Haskell.Liquid.Spec.Lookup,
                     Language.Haskell.Liquid.Spec.Measure,

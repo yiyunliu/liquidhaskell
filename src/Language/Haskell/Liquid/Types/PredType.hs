@@ -52,11 +52,11 @@ import           Data.List                       (nub)
 
 import           Data.Default
 
-makeTyConInfo :: [(TC.TyCon, TyConP)] -> M.HashMap TC.TyCon RTyCon
+makeTyConInfo :: [(TC.TyCon, TyConP)] -> TCEnv
 makeTyConInfo = hashMapMapWithKey mkRTyCon . M.fromList
 
-mkRTyCon ::  TC.TyCon -> TyConP -> RTyCon
-mkRTyCon tc (TyConP αs' ps _ tyvariance predvariance size) = RTyCon tc pvs' (mkTyConInfo tc tyvariance predvariance size)
+mkRTyCon ::  TC.TyCon -> TyConP -> Located RTyCon
+mkRTyCon tc (TyConP αs' ps _ tyvariance predvariance size) = dummyLoc $ RTyCon tc pvs' (mkTyConInfo tc tyvariance predvariance size)
   where τs   = [rVar α :: RSort |  α <- tyConTyVarsDef tc]
         pvs' = subts (zip αs' τs) <$> ps
 

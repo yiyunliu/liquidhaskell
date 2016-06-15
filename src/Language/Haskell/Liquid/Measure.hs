@@ -58,7 +58,7 @@ data Spec ty bndr  = Spec
   , invariants :: ![ty]                         -- ^ Data type invariants
   , ialiases   :: ![(ty, ty)]                   -- ^ Data type invariants to be checked
   , imports    :: ![Symbol]                     -- ^ Loaded spec module names
-  , dataDecls  :: ![DataDecl]                   -- ^ Predicated data definitions
+  , dataDecls  :: ![Located DataDecl]           -- ^ Predicated data definitions
   , includes   :: ![FilePath]                   -- ^ Included qualifier files
   , aliases    :: ![RTAlias Symbol BareType]    -- ^ RefType aliases
   , ealiases   :: ![RTAlias Symbol Expr]        -- ^ Expression aliases
@@ -78,7 +78,7 @@ data Spec ty bndr  = Spec
   , classes    :: ![RClass ty]                   -- ^ Refined Type-Classes
   , termexprs  :: ![(LocSymbol, [Located Expr])] -- ^ Terminating Conditions for functions
   , rinstance  :: ![RInstance ty]
-  , dvariance  :: ![(LocSymbol, [Variance])]
+  , dvariance  :: ![(LocSymbol, Located [Variance])]
   , bounds     :: !(RRBEnv ty)
   }
 

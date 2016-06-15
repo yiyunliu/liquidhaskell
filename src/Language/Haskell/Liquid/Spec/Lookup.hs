@@ -1,16 +1,22 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Language.Haskell.Liquid.Spec.Lookup (
     -- * Querying the GHC Context
     lookupGhcVar
   , lookupGhcVarL
   , lookupGhcTyCon
   , lookupGhcTyConL
+  , lookupGhcDataCon
+  , lookupGhcDataConL
   ) where
 
 import GHC
 
 import Bag
+import BasicTypes
 import HscTypes
 import MonadUtils
+import TysWiredIn
 import Var
 
 import Data.List
@@ -44,6 +50,19 @@ lookupGhcTyCon l x =
 lookupGhcTyConL :: LocSymbol -> SpecM TyCon
 lookupGhcTyConL x = lookupGhcTyCon (fSrcSpan x) (val x)
 
+lookupGhcDataCon :: SrcSpan -> Symbol -> SpecM DataCon
+lookupGhcDataCon l x
+  | "(," `isPrefixOfSym` x =
+    return $ tupleCon BoxedTuple $ lengthSym x - 1
+  | x == "[]" =
+    return nilDataCon
+  | x == ":" =
+    return consDataCon
+  | otherwise =
+    lookupGhcThing "data constructor" tyThingDataCon_maybe l x
+
+lookupGhcDataConL :: LocSymbol -> SpecM DataCon
+lookupGhcDataConL x = lookupGhcDataCon (fSrcSpan x) (val x)
 
 lookupGhcThing :: String -> (TyThing -> Maybe a) -> SrcSpan -> Symbol -> SpecM a
 lookupGhcThing desc unwrap l x = handleSourceError handle $ do

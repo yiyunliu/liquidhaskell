@@ -3,7 +3,6 @@
 module Language.Haskell.Liquid.Bare.Env (
     BareM
   , Warn
-  , TCEnv
 
   , BareEnv(..)
 
@@ -24,7 +23,6 @@ module Language.Haskell.Liquid.Bare.Env (
 import           HscTypes
 import           Prelude                              hiding (error)
 import           Text.Parsec.Pos
-import           TyCon
 import           Var
 
 import           Control.Monad.Except
@@ -51,8 +49,6 @@ import           Language.Haskell.Liquid.Types.Bounds
 type BareM = WriterT [Warn] (ExceptT Error (StateT BareEnv IO))
 
 type Warn  = String
-
-type TCEnv = M.HashMap TyCon RTyCon
 
 type InlnEnv = M.HashMap Symbol TInline
 

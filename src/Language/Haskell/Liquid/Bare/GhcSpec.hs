@@ -229,7 +229,7 @@ makeGhcSpec0 cfg defVars exports name sp
 makeGhcSpec1 :: [Var]
              -> [Var]
              -> TCEmb TyCon
-             -> M.HashMap TyCon RTyCon
+             -> TCEnv
              -> NameSet
              -> ModName
              -> [(Var,Located (RRType RReft))]
@@ -353,7 +353,7 @@ insertHMeasLogicEnv _
 
 makeGhcSpecCHOP1
   :: [(ModName,Ms.Spec ty bndr)]
-  -> BareM ([(DataCon,DataConP)],[Measure SpecType DataCon],[(Var,Located SpecType)],M.HashMap TyCon RTyCon,TCEmb TyCon)
+  -> BareM ([(DataCon,DataConP)],[Measure SpecType DataCon],[(Var,Located SpecType)],TCEnv,TCEmb TyCon)
 makeGhcSpecCHOP1 specs
   = do (tcs, dcs)      <- mconcat <$> mapM makeConTypes specs
        let tycons       = tcs        ++ wiredTyCons
@@ -458,7 +458,7 @@ atLoc' v = Loc (getSourcePos v) (getSourcePosE v)
 data ReplaceEnv = RE { _re_env  :: M.HashMap Symbol Symbol
                      , _re_fenv :: SEnv SortedReft
                      , _re_emb  :: TCEmb TyCon
-                     , _re_tyi  :: M.HashMap TyCon RTyCon
+                     , _re_tyi  :: TCEnv
                      }
 
 type ReplaceState = ( M.HashMap Var LocSpecType
@@ -469,7 +469,7 @@ type ReplaceM = ReaderT ReplaceEnv (State ReplaceState)
 
 replaceLocalBinds :: Bool
                   -> TCEmb TyCon
-                  -> M.HashMap TyCon RTyCon
+                  -> TCEnv
                   -> M.HashMap Var LocSpecType
                   -> [(Var, [Located Expr])]
                   -> SEnv SortedReft

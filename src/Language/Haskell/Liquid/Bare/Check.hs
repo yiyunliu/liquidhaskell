@@ -45,7 +45,6 @@ import           Language.Haskell.Liquid.WiredIn
 import qualified Language.Haskell.Liquid.Measure           as Ms
 
 import           Language.Haskell.Liquid.Bare.DataType     (dataConSpec)
-import           Language.Haskell.Liquid.Bare.Env
 import           Language.Haskell.Liquid.Bare.SymSort      (txRefSort)
 
 import           Debug.Trace

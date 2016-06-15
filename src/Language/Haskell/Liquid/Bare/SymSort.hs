@@ -4,7 +4,6 @@ module Language.Haskell.Liquid.Bare.SymSort (
     txRefSort
   ) where
 
-import qualified Data.HashMap.Strict                   as M
 import           Prelude                               hiding (error)
 import qualified GHC
 import qualified Data.List                             as L
@@ -17,7 +16,6 @@ import           Language.Haskell.Liquid.Types.RefType (appRTyCon, strengthen)
 import           Language.Haskell.Liquid.Types
 import           Language.Haskell.Liquid.GHC.Misc      (fSrcSpan)
 import           Language.Haskell.Liquid.Misc          (safeZipWithError)
-import           Language.Haskell.Liquid.Bare.Env
 
 
 -- EFFECTS: TODO is this the SAME as addTyConInfo? No. `txRefSort`
@@ -30,8 +28,8 @@ txRefSort tyi tce t = atLoc t $ mapBot (addSymSort (fSrcSpan t) tce tyi) (val t)
 
 addSymSort :: (PPrint t, Reftable t)
            => GHC.SrcSpan
-           -> M.HashMap TyCon FTycon
-           -> M.HashMap TyCon RTyCon
+           -> TCEmb TyCon
+           -> TCEnv
            -> RType RTyCon RTyVar (UReft t)
            -> RType RTyCon RTyVar (UReft t)
 addSymSort sp tce tyi (RApp rc@(RTyCon {}) ts rs r)

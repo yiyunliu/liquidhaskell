@@ -184,7 +184,7 @@ data CGInfo = CGInfo {
   , freshIndex :: !Integer                     -- ^ counter for generating fresh KVars
   , binds      :: !F.BindEnv                   -- ^ set of environment binders
   , annotMap   :: !(AnnInfo (Annot SpecType))  -- ^ source-position annotation map
-  , tyConInfo  :: !(M.HashMap TC.TyCon RTyCon) -- ^ information about type-constructors
+  , tyConInfo  :: !TCEnv                       -- ^ information about type-constructors
   , specDecr   :: ![(Var, [Int])]              -- ^ ? FIX THIS
   , termExprs  :: !(M.HashMap Var [F.Located F.Expr])    -- ^ Terminating Metrics for Recursive functions
   , specLVars  :: !(S.HashSet Var)             -- ^ Set of variables to ignore for termination checking

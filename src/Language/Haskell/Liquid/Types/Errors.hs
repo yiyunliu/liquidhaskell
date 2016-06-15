@@ -243,6 +243,16 @@ data TError t =
                 , locs  :: ![SrcSpan]
                 }
 
+  | ErrDupDataDecls { pos   :: !SrcSpan
+                    , tycon :: !Doc
+                    , locs  :: ![SrcSpan]
+                    }
+
+  | ErrDupVariance { pos   :: !SrcSpan
+                   , tycon :: !Doc
+                   , locs  :: ![SrcSpan]
+                   }
+
   | ErrExprAliasTyArgs { pos   :: !SrcSpan
                        , dname :: !Doc
                        , bargs :: ![Doc]
@@ -728,6 +738,15 @@ ppError' _ dSp _ (ErrDupQuals _ v ls)
   = dSp <+> text "Multiple Declarations!"
     $+$ (nest 2 $ text "Multiple Declarations of Qualifier" <+> ppVar v $+$ text "Declared at:")
     <+> (nest 4 $ vcat $ pprint <$> ls)
+
+ppError' _ dSp _ (ErrDupDataDecls _ t ls)
+  = dSp <+> text "Multiple Declarations!"
+    $+$ (nest 2 $ text "Multiple Data Declarations for" <+> t $+$ text "Declared at:")
+    <+> (nest 4 $ vcat $ pprint <$> ls)
+
+ppError' _ dSp _ (ErrDupVariance _ t fs)
+  = dSp <+> text "Multiple Conflicting Variance Specifications for" <+> pprint t
+        $+$ (nest 4 $ vcat $ pprint <$> fs)
 
 ppError' _ dSp dCtx (ErrExprAliasTyArgs _ name args)
   = dSp <+> text "Expression aliases should not have type arguments"
