@@ -444,7 +444,7 @@ data DataConP = DataConP { dc_loc     :: !SourcePos
                          , freePred   :: ![PVar RSort]
                          , freeLabels :: ![Symbol]
                          , tyConsts   :: ![SpecType] -- FIXME: WHAT IS THIS??
-                         , tyArgs     :: ![(Symbol, SpecType)] -- FIXME: These are backwards, why??
+                         , tyArgs     :: ![(LocSymbol, SpecType)] -- FIXME: These are backwards, why??
                          , tyRes      :: !SpecType
                          , dc_locE    :: !SourcePos
                          } deriving (Generic, Data, Typeable)
@@ -985,7 +985,7 @@ data DataDecl   = D { tycName   :: LocSymbol
                                 -- ^ PVar  Parameters
                     , tycTyLabs :: [Symbol]
                                 -- ^ PLabel  Parameters
-                    , tycDCons  :: [(LocSymbol, [(Symbol, LocBareType)])]
+                    , tycDCons  :: [(LocSymbol, [(LocSymbol, LocBareType)])]
                                 -- ^ [DataCon, [(fieldName, fieldType)]]
                     , tycSrcPos :: !SourcePos
                                 -- ^ Source Position

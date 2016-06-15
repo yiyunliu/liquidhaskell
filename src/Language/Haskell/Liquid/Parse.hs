@@ -410,8 +410,8 @@ funBindP = lowerIdP <* colon
 dummyBindP :: Parser Symbol
 dummyBindP = tempSymbol "db" <$> freshIntP
 
-bbindP :: Parser Symbol
-bbindP     = lowerIdP <* dcolon
+bbindP :: Parser LocSymbol
+bbindP     = locLowerIdP <* dcolon
 
 bareArrow :: (Monoid r)
           => Symbol -> RType BTyCon tv r -> ArrowSym -> RType BTyCon tv r
@@ -1011,27 +1011,27 @@ tupDataCon n    = dummyLoc $ symbol $ "(" <> replicate (n - 1) ',' <> ")"
 --------------------------------- Predicates ----------------------------------
 -------------------------------------------------------------------------------
 
-dataConFieldsP :: Parser [(Symbol, LocBareType)]
+dataConFieldsP :: Parser [(LocSymbol, LocBareType)]
 dataConFieldsP
   =   (braces $ sepBy predTypeDDP comma)
   <|> (sepBy dataConFieldP spaces)
 
-dataConFieldP :: Parser (Symbol, LocBareType)
+dataConFieldP :: Parser (LocSymbol, LocBareType)
 dataConFieldP
   = parens ( try predTypeDDP
-             <|> do v <- dummyBindP
+             <|> do v <- locParserP dummyBindP
                     t <- locParserP bareTypeP
                     return (v,t)
            )
-    <|> do v <- dummyBindP
+    <|> do v <- locParserP dummyBindP
            t <- locParserP bareTypeP
            return (v,t)
 
-predTypeDDP :: Parser (Symbol, LocBareType)
+predTypeDDP :: Parser (LocSymbol, LocBareType)
 predTypeDDP
   = liftM2 (,) bbindP (locParserP bareTypeP)
 
-dataConP :: Parser (Located Symbol, [(Symbol, LocBareType)])
+dataConP :: Parser (Located Symbol, [(LocSymbol, LocBareType)])
 dataConP
   = do x   <- locParserP dataConNameP
        spaces

@@ -58,15 +58,15 @@ makeSpecs' :: Config
            -> Ms.BareSpec
            -> SpecM (GlobalSpec, LocalSpec)
 makeSpecs' _cfg _cbs _vars _lvars _exports _mod bspec = do
-  tcEmbeds <- makeTyConEmbeds bspec
-  aliases <- makeAliases bspec
+  tcEmbeds           <- makeTyConEmbeds bspec
+  aliases            <- makeAliases bspec
   withLocalAliases aliases $ do
   (tyconEnv, dconsP) <- makeDataTypes bspec
-  varianceEnv <- makeVarianceEnv bspec
-  meas <- makeMeasures bspec
-  invariants <- makeInvariants bspec
-  ialiases <- makeIAliases bspec
-  qualifiers <- makeQualifiers bspec
+  varianceEnv        <- makeVarianceEnv bspec
+  meas               <- makeMeasures bspec dconsP
+  invariants         <- makeInvariants bspec
+  ialiases           <- makeIAliases bspec
+  qualifiers         <- makeQualifiers bspec
   return $
     ( emptyGlobalSpec
       { aliases     = aliases

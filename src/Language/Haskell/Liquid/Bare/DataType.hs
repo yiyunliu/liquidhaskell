@@ -153,7 +153,7 @@ ofBDataCon :: SourcePos
            -> [Located BPVar]
            -> [Symbol]
            -> [PVar RSort]
-           -> (Located Symbol,[(Symbol,LocBareType)])
+           -> (LocSymbol, [(LocSymbol, LocBareType)])
            -> BareM (DataCon,DataConP)
 ofBDataCon l l' tc αs ps ls πs (c, xts)
   = do c'      <- lookupGhcDataCon c
@@ -192,10 +192,10 @@ makeRecordSelectorSigs dcs = concat <$> mapM makeOne dcs
            , not (isFunTy t) -- NOTE: we only have measures for non-function fields
            , let vv = rTypeValueVar t
              -- the measure singleton refinement, eg `v = getBar foo`
-           , let mt = uReft (vv, PAtom Eq (EVar vv) (EApp (EVar x) (EVar z)))
+           , let mt = uReft (vv, PAtom Eq (EVar vv) (EApp (EVar $ val x) (EVar z)))
            ]
 
-    su   = mkSubst $ [ (x, EApp (EVar x) (EVar z)) | x <- xs ]
+    su   = mkSubst $ [ (val x, EApp (EVar $ val x) (EVar z)) | x <- xs ]
     args = tyArgs dcp
     xs   = map fst args
     z    = "lq$recSel"

@@ -123,7 +123,7 @@ listTyDataCons   = ( [(c, TyConP [RTV tyv] [p] [] [Covariant] [Covariant] (Just 
       lt         = rApp c [xt] [rPropP [] $ pdVarReft p] mempty
       xt         = rVar tyv
       xst        = rApp c [RVar (RTV tyv) px] [rPropP [] $ pdVarReft p] mempty
-      cargs      = [(xs, xst), (x, xt)]
+      cargs      = [(dummyLoc xs, xst), (dummyLoc x, xt)]
       fsize z    = mkEApp (dummyLoc "len") [EVar z]
 
 tupleTyDataCons :: Int -> ([(TyCon, TyConP)] , [(DataCon, DataConP)])
@@ -145,7 +145,7 @@ tupleTyDataCons n = ( [(c, TyConP (RTV <$> tyvs) ps [] tyvarinfo pdvarinfo Nothi
     pxs           = mkps pnames (ta:ts) ((fld, EVar x1) : zip flds (EVar <$> xs))
     lt            = rApp c (rVar <$> tyvs) (rPropP [] . pdVarReft <$> ups) mempty
     xts           = zipWith (\v p -> RVar (RTV v) (pdVarReft p)) tvs pxs
-    cargs         = reverse $ (x1, rVar tv) : zip xs xts
+    cargs         = reverse $ (dummyLoc x1, rVar tv) : zip (dummyLoc <$> xs) xts
     pnames        = mks_ "p"
     mks  x        = (\i -> symbol (x++ show i)) <$> [1..n]
     mks_ x        = (\i -> symbol (x++ show i)) <$> [2..n]

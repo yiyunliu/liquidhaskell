@@ -84,8 +84,8 @@ makeClasses cmod cfg vs (mod, spec) = inModule mod $ mapM mkClass $ Ms.classes s
                  let as' = [rVar $ symbolTyVar $ F.symbol a | a <- as ]
                  let ms' = [ (s, rFun "" (RApp cc (flip RVar mempty <$> as) [] mempty) <$> t) | (s, t) <- ms]
                  vts <- makeSpec (noCheckUnknown cfg || cmod /= mod) vs ms'
-                 let sts = [(val s, unClass $ val t) | (s, _)    <- ms
-                                                     | (_, _, t) <- vts]
+                 let sts = [(s, unClass $ val t) | (s, _)    <- ms
+                                                 | (_, _, t) <- vts]
                  let t   = rCls tc as'
                  let dcp = DataConP l αs [] [] (val <$> ss') (reverse sts) t l'
                  return ((dc,dcp),vts)

@@ -68,7 +68,7 @@ makeDataCon :: TyCon
             -> [RTyVar]
             -> [RPVar]
             -> [Symbol]
-            -> (LocSymbol, [(Symbol, LocBareType)])
+            -> (LocSymbol, [(LocSymbol, LocBareType)])
             -> SpecM (DataCon, DataConP)
 makeDataCon tc as ps ls (c, xts) = do
   c' <- lookupGhcDataConL c

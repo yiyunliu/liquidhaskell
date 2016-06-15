@@ -99,6 +99,8 @@ bareMeasureNames bspec = concat
   , val . name <$> Ms.cmeasures bspec
   , val . name <$> Ms.imeasures bspec
   , val <$> S.toList (Ms.hmeas bspec)
+  , concatMap (concatMap ((val . fst <$>) . snd) . tycDCons . val) $
+      Ms.dataDecls bspec
   ]
 
 runSpecM' :: SpecM a -> SpecEnv -> Ghc (Either [Error] a)

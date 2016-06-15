@@ -69,11 +69,11 @@ dataConPSpecType dc (DataConP _ vs ps ls cs yts rt _) = mkArrow vs ps ls ts' rt'
     ys       = mkDSym <$> xs
     tx _  []     []     []     = []
     tx su (x:xs) (y:ys) (t:ts) = (y, subst (F.mkSubst su) t, mempty)
-                               : tx ((x, F.EVar y):su) xs ys ts
+                               : tx ((val x, F.EVar y):su) xs ys ts
     tx _ _ _ _ = panic Nothing "PredType.dataConPSpecType.tx called on invalid inputs"
     yts'     = tx [] xs ys ts
     ts'      = map ("" , , mempty) cs ++ yts'
-    su       = F.mkSubst [(x, F.EVar y) | (x, y) <- zip xs ys]
+    su       = F.mkSubst [(val x, F.EVar y) | (x, y) <- zip xs ys]
     rt'      = subst su rt
 
 instance PPrint TyConP where

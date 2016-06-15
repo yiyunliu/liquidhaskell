@@ -124,7 +124,7 @@ checkRefinedClasses definitions instances
 checkDuplicateFieldNames :: [(DataCon, DataConP)]  -> [Error]
 checkDuplicateFieldNames = mapMaybe go
   where
-    go (d, dts)          = checkNoDups (dc_loc dts) d (fst <$> tyArgs dts)
+    go (d, dts)          = checkNoDups (dc_loc dts) d (val . fst <$> tyArgs dts)
     checkNoDups l d xs   = mkErr l d <$> firstDuplicate xs
 
     mkErr l d x = ErrBadData (sourcePosSrcSpan l)
