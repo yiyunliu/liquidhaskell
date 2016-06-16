@@ -20,7 +20,7 @@ cgInfoFInfo info cgi fi = do
   return    $ tgtFI <> impFI
 
 targetFInfo :: GhcInfo -> CGInfo -> FilePath -> F.FInfo Cinfo
-targetFInfo info cgi fn = F.fi cs ws bs ls ks packs qs bi fn aHO aHOqs
+targetFInfo info cgi fn = F.fi cs ws bs ls ks packs qs bi fn aHO aHOqs 
   where
    packs = F.makePack (kvPacks cgi)
    cs    = fixCs  cgi

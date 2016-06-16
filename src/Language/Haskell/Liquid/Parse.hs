@@ -32,7 +32,7 @@ import           Data.Data
 
 import           Data.Char                              (isSpace, isAlpha, isUpper, isAlphaNum)
 import           Data.List                              (foldl', partition)
-import           Data.Either                            
+import           Data.Either
 
 import           GHC                                    (ModuleName, mkModuleName)
 import           Text.PrettyPrint.HughesPJ              (text)
@@ -206,12 +206,12 @@ bareAtomP ref
  <|> try (dummyP (bbaseP <* spaces))
 
 
-refBindP :: Parser Symbol 
-         -> Parser Expr 
-         -> Parser (Reft -> BareType) 
+refBindP :: Parser Symbol
+         -> Parser Expr
+         -> Parser (Reft -> BareType)
          -> Parser BareType
 refBindP bp rp kindP
-  = braces $ 
+  = braces $
    try (do x  <- bp
            i  <- freshIntP
            t  <- kindP
@@ -409,9 +409,6 @@ funBindP = lowerIdP <* colon
 
 dummyBindP :: Parser Symbol
 dummyBindP = tempSymbol "db" <$> freshIntP
-
-bbindP :: Parser LocSymbol
-bbindP     = locLowerIdP <* dcolon
 
 bareArrow :: (Monoid r)
           => Symbol -> RType BTyCon tv r -> ArrowSym -> RType BTyCon tv r
@@ -664,9 +661,7 @@ instance Show (Pspec a b) where
   show (ASize  _) = "ASize"
 
 mkSpec :: ModName -> [BPspec] -> (ModName, Measure.Spec (Located BareType) LocSymbol)
-mkSpec name xs         = (name,)
-                       $ Measure.qualifySpec (symbol name)
-                       $ Measure.Spec
+mkSpec name xs         = (name,) $ Measure.qualifySpec (symbol name) Measure.Spec
   { Measure.measures   = [m | Meas   m <- xs]
   , Measure.asmSigs    = [a | Assm   a <- xs]
   , Measure.sigs       = [a | Asrt   a <- xs]
@@ -731,7 +726,7 @@ specP
     <|> (reservedToken "Strict"    >> liftM Lazy   lazyVarP  )
     <|> (reservedToken "Lazy"      >> liftM Lazy   lazyVarP  )
     <|> (reservedToken "LIQUID"    >> liftM Pragma pragmaP   )
-    <|> ({- DEFAULT -}                liftM Asrts  tyBindsP  )
+    <|> {- DEFAULT -}                 liftM Asrts  tyBindsP
 
 reservedToken :: Stream s m Char => String -> ParsecT s u m ()
 reservedToken str = try(string str >> spaces1)
@@ -882,7 +877,7 @@ instanceP
        tvs  <- (try oneClassArg) <|> (manyTill iargsP (try $ reserved "where"))
        ms   <- sepBy tyBindP semi
        spaces
-       return $ RI c tvs ms 
+       return $ RI c tvs ms
   where
     superP   = locParserP (toRCls <$> bareAtomP (refBindP bindP))
     supersP  = try (((parens (superP `sepBy1` comma)) <|> fmap pure superP)
@@ -1013,23 +1008,27 @@ tupDataCon n    = dummyLoc $ symbol $ "(" <> replicate (n - 1) ',' <> ")"
 
 dataConFieldsP :: Parser [(LocSymbol, LocBareType)]
 dataConFieldsP
-  =   (braces $ sepBy predTypeDDP comma)
-  <|> (sepBy dataConFieldP spaces)
+   =  braces (sepBy predTypeDDP comma)
+  <|> sepBy dataConFieldP spaces
 
 dataConFieldP :: Parser (LocSymbol, LocBareType)
 dataConFieldP
-  = parens ( try predTypeDDP
-             <|> do v <- locParserP dummyBindP
-                    t <- locParserP bareTypeP
-                    return (v,t)
-           )
-    <|> do v <- locParserP dummyBindP
-           t <- locParserP bareTypeP
-           return (v,t)
+   =  parens (try predTypeDDP <|> dbTypeP)
+  <|> dbTypeP
+  where
+    dbTypeP = (,) <$> (dummyLoc <$> dummyBindP) <*> locParserP bareTypeP
 
 predTypeDDP :: Parser (LocSymbol, LocBareType)
-predTypeDDP
-  = liftM2 (,) bbindP (locParserP bareTypeP)
+predTypeDDP = (,) <$> bbindP <*> locParserP bareTypeP
+
+bbindP   :: Parser LocSymbol
+bbindP   = locLowerIdP <* dcolon
+{-
+lowerIdP :: Parser Symbol
+lowerIdP = condIdP symChars (isSmall . head)
+-}
+
+>>>>>>> develop
 
 dataConP :: Parser (Located Symbol, [(LocSymbol, LocBareType)])
 dataConP
@@ -1049,7 +1048,7 @@ dataConNameP
 
 dataSizeP :: Parser (Maybe (Symbol -> Expr))
 dataSizeP
-  = (brackets $ (Just . mkFun) <$> locLowerIdP)
+  = brackets (Just . mkFun <$> locLowerIdP)
   <|> return Nothing
   where
     mkFun s x = mkEApp (symbol <$> s) [EVar x]

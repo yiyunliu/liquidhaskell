@@ -15,8 +15,7 @@ import Language.Haskell.Liquid.Types.RefType
 import Language.Haskell.Liquid.GHC.Misc  (getSourcePos)
 import Language.Haskell.Liquid.Types.PredType
 import Language.Haskell.Liquid.Types
-import Language.Fixpoint.Types
-
+import Language.Fixpoint.Types hiding (mkQual)
 
 
 -- import Control.Applicative      ((<$>))
@@ -49,7 +48,7 @@ specificationQualifiers k info lEnv
         , q <- refTypeQuals lEnv (getSourcePos x) (tcEmbeds $ gblSpec info) (val t)
         -- NOTE: large qualifiers are VERY expensive, so we only mine
         -- qualifiers up to a given size, controlled with --max-params
-        , length (q_params q) <= k + 1
+        , length (qParams q) <= k + 1
     ]
     -- where lEnv = trace ("Literals: " ++ show lEnv') lEnv'
 

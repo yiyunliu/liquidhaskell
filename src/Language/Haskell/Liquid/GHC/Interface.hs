@@ -142,9 +142,7 @@ configureDynFlags cfg tmp = do
                                 : packageFlags df'
                  -- , profAuto     = ProfAutoCalls
                  , ghcLink      = LinkInMemory
-                 -- FIXME: this *should* be HscNothing, but that prevents us from
-                 -- looking up *unexported* names in another source module..
-                 , hscTarget    = HscInterpreted -- HscNothing
+                 , hscTarget    = HscInterpreted
                  , ghcMode      = CompManager
                  -- prevent GHC from printing anything, unless in Loud mode
                  , log_action   = if loud
@@ -305,7 +303,7 @@ processModule cfg0 logicMap tgtFiles depGraph specEnv modSummary = do
   parsed                 <- parseModule $ keepRawTokenStream modSummary
   typechecked            <- typecheckModule $ ignoreInline parsed
   desugared              <- desugarModule typechecked
-  _                      <- loadModule desugared
+  _                      <- loadModule' desugared
   let specComments        = extractSpecComments parsed
   let specQuotes          = extractSpecQuotes typechecked
   (modName, bareSpec)    <- either throw return $ hsSpecificationP (moduleName mod) specComments specQuotes
@@ -378,6 +376,17 @@ loadDependenciesOf modName = do
   loadResult <- load $ LoadDependenciesOf modName
   when (failed loadResult) $ liftIO $ throwGhcExceptionIO $ ProgramError $
    "Failed to load dependencies of module " ++ showPpr modName
+
+loadModule' :: TypecheckedModule -> Ghc TypecheckedModule
+loadModule' tm = loadModule tm'
+  where
+    pm   = tm_parsed_module tm
+    ms   = pm_mod_summary pm
+    df   = ms_hspp_opts ms
+    df'  = df { hscTarget = HscNothing, ghcLink = NoLink }
+    ms'  = ms { ms_hspp_opts = df' }
+    pm'  = pm { pm_mod_summary = ms' }
+    tm'  = tm { tm_parsed_module = pm' }
 
 modSummaryHsFile :: ModSummary -> FilePath
 modSummaryHsFile modSummary =
@@ -547,18 +556,27 @@ mergeVarianceEnv = M.unionWithKey dup
 
 -- Handle Spec Files -----------------------------------------------------------
 
-findAndParseSpecFiles :: Config -> [FilePath] -> ModSummary -> [Module]
+findAndParseSpecFiles :: Config
+                      -> [FilePath]
+                      -> ModSummary
+                      -> [Module]
                       -> Ghc [(ModName, Ms.BareSpec)]
 findAndParseSpecFiles cfg paths modSummary reachable = do
   impSumms <- mapM getModSummary (moduleName <$> reachable)
   imps''   <- nub . concat <$> mapM modSummaryImports (modSummary : impSumms)
   imps'    <- filterM ((not <$>) . isHomeModule) imps''
-  let imps  = moduleNameString . moduleName <$> imps'
+  let imps  = m2s <$> imps'
   fs'      <- moduleFiles Spec paths imps
+  -- liftIO    $ print ("moduleFiles-imps'\n"  ++ show (m2s <$> imps'))
+  -- liftIO    $ print ("moduleFiles-imps\n"   ++ show imps)
+  -- liftIO    $ print ("moduleFiles-Paths\n"  ++ show paths)
+  -- liftIO    $ print ("moduleFiles-Specs\n"  ++ show fs')
   patSpec  <- getPatSpec paths $ totality cfg
   rlSpec   <- getRealSpec paths $ not $ linear cfg
   let fs    = patSpec ++ rlSpec ++ fs'
   transParseSpecs paths mempty mempty fs
+  where
+    m2s = moduleNameString . moduleName
 
 getPatSpec :: [FilePath] -> Bool -> Ghc [FilePath]
 getPatSpec paths totalitycheck
@@ -711,12 +729,12 @@ instance PPrint GhcInfo where
 -- RJ: the silly guards below are to silence the unused-var checker
 pprintCBs :: [CoreBind] -> Doc
 pprintCBs
-  | otherwise = pprintCBsVerbose
   | otherwise = pprintCBsTidy
+  | otherwise = pprintCBsVerbose
   where
     pprintCBsTidy    = pprDoc . tidyCBs
     pprintCBsVerbose = text . O.showSDocDebug unsafeGlobalDynFlags . O.ppr . tidyCBs
- 
+
 instance Show GhcInfo where
   show = showpp
 
@@ -736,4 +754,3 @@ instance Result SourceError where
 
 errMsgErrors :: ErrMsg -> [TError t]
 errMsgErrors e = [ ErrGhc (errMsgSpan e) (pprint e)]
-

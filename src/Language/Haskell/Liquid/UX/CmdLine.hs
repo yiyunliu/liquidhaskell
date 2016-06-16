@@ -53,8 +53,8 @@ import System.FilePath                     (dropFileName, isAbsolute,
                                             takeDirectory, (</>))
 
 import Language.Fixpoint.Types.Config      hiding (Config, linear, elimBound, elimStats,
-                                                   getOpts, cores, minPartSize,
-                                                   maxPartSize, newcheck, eliminate, defConfig)
+                                                   nonLinCuts, getOpts, cores, minPartSize,
+                                                   maxPartSize, newcheck, eliminate, defConfig, extensionality)
 -- import Language.Fixpoint.Utils.Files
 import Language.Fixpoint.Misc
 import Language.Fixpoint.Types.Names
@@ -105,6 +105,10 @@ config = cmdArgsMode $ Config {
  , higherorder
     = def
           &= help "Allow higher order binders into the logic"
+
+ , extensionality
+    = def
+          &= help "Allow function extentionality axioms"
 
  , higherorderqs
     = def
@@ -254,6 +258,10 @@ config = cmdArgsMode $ Config {
     = False &= name "no-eliminate"
             &= help "Don't use KVar elimination during solving"
 
+  , oldEliminate
+    = False &= name "old-eliminate"
+            &= help "Use old eliminate algorithm (temp. for benchmarking)"
+
   , noPatternInline
     = False &= name "no-pattern-inline"
             &= help "Don't inline special patterns (e.g. `>>=` and `return`) during constraint generation."
@@ -261,6 +269,14 @@ config = cmdArgsMode $ Config {
   , noSimplifyCore
     = False &= name "no-simplify-core"
             &= help "Don't simplify GHC core before constraint generation"
+
+  , packKVars
+    = False &= name "pack-kvars"
+            &= help "Use kvar packing during elimination"
+
+  , nonLinCuts
+    = True  &= name "non-linear-cuts"
+            &= help "(TRUE) Treat non-linear kvars as cuts"
 
  } &= verbosity
    &= program "liquid"
@@ -385,6 +401,7 @@ defConfig = Config { files             = def
                    , fullcheck         = def
                    , linear            = def
                    , higherorder       = def
+                   , extensionality    = def
                    , higherorderqs     = def
                    , diffcheck         = def
                    , saveQuery         = def
@@ -421,8 +438,11 @@ defConfig = Config { files             = def
                    , timeBinds         = False
                    , untidyCore        = False
                    , noEliminate       = False
+                   , oldEliminate      = False
                    , noPatternInline   = False
                    , noSimplifyCore    = False
+                   , packKVars         = False
+                   , nonLinCuts        = True
                    }
 
 ------------------------------------------------------------------------
