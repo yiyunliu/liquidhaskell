@@ -14,3 +14,6 @@ prop0 = dsum m bot (\x -> liquidAssertB ((m `plus` bot) `leq` x))
 
 prop1 = liquidAssertB (1 `leq` 0)
 
+{-@ qualif PPLUS0(v:int): v >= ~A + ~B @-}
+{-@ qualif PPLUS1(v:int): v > ~A + ~B @-}
+

@@ -54,3 +54,8 @@ myfilter f (x:xs) = if f x
 
 
 
+{-@ qualif Cup1(v: [a] , xs : [a] , ys : [a]): (listElts v = Set_cup (listElts xs) (listElts ys)) @-}
+{-@ qualif Cup2(v: [a] , xs : [a] , ys : [a]): (listElts xs = Set_cup (listElts v) (listElts ys)) @-}
+{-@ qualif IsEmp(v: [a]) : (Set_emp (listElts v)) @-}
+{-@ qualif EqSet(v: [a], xs: [a]) : (listElts v = listElts xs) @-}
+

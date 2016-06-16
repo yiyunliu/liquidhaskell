@@ -152,6 +152,7 @@ makeGhcSpec' cfg cbs vars defVars exports specs
        (measures, cms', ms', cs', xs')         <- makeGhcSpecCHOP2 cbs specs dcSs datacons cls embs
        (invs, ialias, sigs, asms)              <- makeGhcSpecCHOP3 cfg vars defVars specs name mts embs
        quals   <- mconcat <$> mapM makeQualifiers specs
+       consts  <- mconcat <$> mapM makeConstants specs
        syms                                    <- makeSymbols (varInModule name) (vars ++ map fst cs') xs' (sigs ++ asms ++ cs') ms' (map snd invs ++ (snd <$> ialias))
        let su  = mkSubst [ (x, mkVarExpr v) | (x, v) <- syms]
        secondM (makeGhcSpec0 cfg defVars exports name) (emptyGlobalSpec, emptyLocalSpec)
@@ -162,7 +163,7 @@ makeGhcSpec' cfg cbs vars defVars exports specs
          >>= firstM (makeGhcAxioms embs cbs name specs)
          >>= firstM (makeExactDataCons name (exactDC cfg) (snd <$> syms))
          -- This step need the updated logic map, ie should happen after makeGhcAxioms
-         >>= makeGhcSpec4 quals defVars specs name su
+         >>= makeGhcSpec4 quals consts defVars specs name su
          >>= secondM addProofType
 
 
@@ -289,13 +290,14 @@ makeGhcSpec3 datacons embs syms (gbl, lcl)
          )
 
 makeGhcSpec4 :: [Qualifier]
+             -> M.HashMap LocSymbol Sort
              -> [Var]
              -> [(ModName,Ms.Spec ty bndr)]
              -> ModName
              -> Subst
              -> (GlobalSpec, LocalSpec)
              -> BareM (GlobalSpec, LocalSpec)
-makeGhcSpec4 quals defVars specs name su (gbl, lcl)
+makeGhcSpec4 quals consts defVars specs name su (gbl, lcl)
   = do decr'   <- mconcat <$> mapM (makeHints defVars . snd) specs
        texprs' <- mconcat <$> mapM (makeTExpr defVars . snd) specs
        lazies  <- mkThing makeLazy
@@ -314,6 +316,7 @@ makeGhcSpec4 quals defVars specs name su (gbl, lcl)
        let txdcons d = d{tyRes = f $ tyRes d, tyConsts = f <$> tyConsts d, tyArgs = tx <$> tyArgs d}
        return
         ( gbl { qualifiers = M.fromList $ (\q -> (qName q, q)) <$> subst su quals
+              , constants  = consts
               , tySigs     = tx <$> msgs
               , asmSigs    = tx <$> asmSigs gbl
               , inSigs     = tx <$> inSigs  gbl

@@ -305,7 +305,6 @@ data GhcInfo = GI {
   , impVars  :: ![Var]
   , defVars  :: ![Var]
   , useVars  :: ![Var]
-  , hqFiles  :: ![FilePath]
   , imports  :: ![String]
   , includes :: ![FilePath]
   , gblSpec  :: !GlobalSpec
@@ -345,6 +344,9 @@ data GlobalSpec = GS {
   , qualifiers  :: !(M.HashMap Symbol Qualifier)
     -- ^ Qualifiers in Source/Spec files
     -- e.g tests/pos/qualTest.hs
+  , constants   :: !(M.HashMap LocSymbol Sort)
+    -- ^ Fixpoint constant symbols
+    -- e.g. include/Prelude.spec
   , tyconEnv    :: TCEnv
     -- ^ Information attached to type constructors
   , varianceEnv :: !VarianceEnv
@@ -359,7 +361,7 @@ data GlobalSpec = GS {
 emptyGlobalSpec :: GlobalSpec
 emptyGlobalSpec = GS mempty mempty mempty mempty mempty mempty mempty mempty
                      mempty mempty mempty mempty mempty mempty mempty mempty
-                     mempty
+                     mempty mempty
 
 -- | Specifications associated locally with the module, only needed when it is
 -- being verified.

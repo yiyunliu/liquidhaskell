@@ -975,39 +975,12 @@ Formal Grammar of Refinement Predicates
 Specifying Qualifiers
 =====================
 
-There are several ways to specify qualifiers.
-
-By Separate `.hquals` Files
----------------------------
-
-You can write qualifier files e.g. [Prelude.hquals](include/Prelude.hquals)
-
-If a module is called or imports
-
-    Foo.Bar.Baz
-
-Then the system automatically searches for
-
-    include/Foo/Bar/Baz.hquals
-
-By Including `.hquals` Files
-----------------------------
-
-Additional qualifiers may be used by adding lines of the form:
-
-    {-@ include <path/to/file.hquals> @-}
-
-to the Haskell source. See, [this](tests/pos/meas5.hs) for example.
-
-
-In Haskell Source or Spec Files
--------------------------------
-
-Finally, you can specifiers directly inside source (.hs or .lhs) or spec (.spec)
+You can specifiers directly inside source (.hs or .lhs) or spec (.spec)
 files by writing as shown [here](tests/pos/qualTest.hs)
 
     {-@ qualif Foo(v:Int, a: Int) : (v = a + 100)   @-}
 
+Importing a module will also import all of its qualifiers.
 
 **Note** In addition to these, LiquidHaskell scrapes qualifiers from all
 the specifications you write i.e.
@@ -1015,7 +988,6 @@ the specifications you write i.e.
 1. all imported type signatures,
 2. measure bodies and,
 3. data constructor definitions.
-
 
 Generating HTML Output
 ======================

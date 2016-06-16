@@ -19,3 +19,5 @@ incr :: Int -> Int
 incr zzz = zzz + 1
 
 zoo = incr 29
+
+{-@ qualif Foo(v: Int): v = 10 @-}

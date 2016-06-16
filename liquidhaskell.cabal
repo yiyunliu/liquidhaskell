@@ -14,12 +14,10 @@ Build-Type:          Simple
 Cabal-version:       >=1.18
 
 
-data-files: include/*.hquals
-          , include/*.hs
+data-files: include/*.hs
           , include/*.spec
           , include/CoreToLogic.lg
           , include/Control/*.spec
-          , include/Data/*.hquals
           , include/Data/*.spec
           , include/Data/Text/*.spec
           , include/Data/Text/Fusion/*.spec
@@ -27,7 +25,6 @@ data-files: include/*.hquals
           , include/Foreign/*.spec
           , include/Foreign/C/*.spec
           , include/Foreign/Marshal/*.spec
-          , include/GHC/*.hquals
           , include/GHC/*.spec
           , include/GHC/IO/*.spec
           , include/Language/Haskell/Liquid/*.hs
@@ -39,7 +36,6 @@ data-files: include/*.hquals
 extra-source-files: tests/pos/*.hs
                   , tests/neg/*.hs
                   , tests/crash/*.hs
-                  , tests/pos/*.hquals
                   , tests/ffi-include/foo.c
                   , tests/ffi-include/foo.h
 

@@ -325,8 +325,6 @@ data Map k a  = Bin Size k a (Map k a) (Map k a)
 
 type Size     = Int
 
-{-@ include <Base.hquals> @-}
-
 {-@ data Map [mlen] k a <l :: root:k -> k -> Prop, r :: root:k -> k -> Prop>
          = Bin (sz    :: Size) 
                (key   :: k) 
@@ -3141,3 +3139,11 @@ foldlStrict f = go
     go z []     = z
     go z (x:xs) = let z' = f z x in z' `seq` go z' xs
 {-# INLINE foldlStrict #-}
+
+{--------------------------------------------------------------------
+  Qualifiers
+--------------------------------------------------------------------}
+
+{-@ qualif Bound(v: Goober.Map k a , x : k): ((isBin v) => (x < (key v))) @-}
+{-@ qualif Bound(v: Goober.Map k a , x : k): ((isBin v) => (x > (key v))) @-}
+

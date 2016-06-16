@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -12,9 +13,6 @@ module Language.Haskell.Liquid.Spec.Resolve (
   , resolve
   , resolveL
   , resolveL'
-  , resolveP
-  , resolvePL
-  , resolvePL'
   ) where
 
 import GHC hiding (Located)
@@ -44,26 +42,14 @@ import Language.Haskell.Liquid.Spec.Lookup
 -- | Resolve Names in Symbols --------------------------------------------------
 --------------------------------------------------------------------------------
 
-resolve :: Resolve a b => SrcSpan -> a -> SpecM b
-resolve l x = runResolveM (resolve' x) mempty l
+resolve :: Resolve a b => [Symbol] -> [PVar t] -> SrcSpan -> a -> SpecM b
+resolve ls ps l x = runResolveM (resolve' x) ls ps l
 
-resolveL :: Resolve a b => Located a -> SpecM b
-resolveL x = resolve (fSrcSpan x) (val x)
+resolveL :: Resolve a b => [Symbol] -> [PVar t] -> Located a -> SpecM b
+resolveL ls ps x = resolve ls ps (fSrcSpan x) (val x)
 
-resolveL' :: Resolve a b => Located a -> SpecM (Located b)
-resolveL' x = traverse (resolve $ fSrcSpan x) x
-
-
-resolveP :: Resolve a b => [PVar t] -> SrcSpan -> a -> SpecM b
-resolveP ps l x = runResolveM (resolve' x) pmap l
-  where
-    pmap = M.fromList $ (\p -> (pname p, p)) . uPVar <$> ps
-
-resolvePL :: Resolve a b => [PVar t] -> Located a -> SpecM b
-resolvePL ps x = resolveP ps (fSrcSpan x) (val x)
-
-resolvePL' :: Resolve a b => [PVar t] -> Located a -> SpecM (Located b)
-resolvePL' ps x = traverse (resolveP ps $ fSrcSpan x) x
+resolveL' :: Resolve a b => [Symbol] -> [PVar t] -> Located a -> SpecM (Located b)
+resolveL' ls ps x = traverse (resolve ls ps $ fSrcSpan x) x
 
 --------------------------------------------------------------------------------
 -- | Internal Resolution Monad -------------------------------------------------
@@ -73,18 +59,38 @@ type ResolveM = ReaderT ResolveEnv SpecM
 
 data ResolveEnv
   = ResolveEnv
-    { resolveEnvPredVars :: !(M.HashMap Symbol UsedPVar)
-    , resolveEnvLocation :: !SrcSpan
+    { resolveEnvLocalScope :: ![Symbol]
+    , resolveEnvPredVars   :: !(M.HashMap Symbol UsedPVar)
+    , resolveEnvLocation   :: !SrcSpan
     }
 
 runResolveM :: ResolveM a
-            -> M.HashMap Symbol UsedPVar
+            -> [Symbol]
+            -> [PVar t]
             -> SrcSpan
             -> SpecM a
-runResolveM act pvs l = runReaderT act $ ResolveEnv
-  { resolveEnvPredVars = pvs
-  , resolveEnvLocation = l
+runResolveM act locals pvs l = runReaderT act $ ResolveEnv
+  { resolveEnvLocalScope = locals
+  , resolveEnvPredVars   = pmap
+  , resolveEnvLocation   = l
   }
+  where
+    pmap = M.fromList $ (\p -> (pname p, p)) . uPVar <$> pvs
+
+
+withLocalScope :: [Symbol] -> ResolveM a -> ResolveM a
+withLocalScope ls act = withReaderT adj act
+  where
+    adj env = env
+      { resolveEnvLocalScope = ls ++ resolveEnvLocalScope env
+      }
+
+isInLiquidScope :: Symbol -> ResolveM Bool
+isInLiquidScope s = do
+  env <- ask
+  if s `elem` resolveEnvLocalScope env
+    then return True
+    else (||) <$> isMeasureName s <*> isLiteralName s
 
 
 withPredVar :: UsedPVar -> ResolveM a -> ResolveM a
@@ -133,7 +139,7 @@ instance ( PPrint r
     RVar (symbolRTyVar $ btv_tv v) <$> resolve' r
 
   resolve' (RFun b i o r) =
-    withFixScope [getBind r] $ resolveRFun b i o r
+    withLocalScope [getBind r] $ resolveRFun b i o r
 
   resolve' (RAllT tv ty) =
     RAllT (symbolRTyVar $ btv_tv tv) <$> resolve' ty
@@ -141,23 +147,23 @@ instance ( PPrint r
     pv' <- resolve' pv
     RAllP pv' <$> withPredVar (uPVar pv') (resolve' ty)
   resolve' (RAllS sb ty) =
-    RAllS sb <$> withFixScope [sb] (resolve' ty)
+    RAllS sb <$> withLocalScope [sb] (resolve' ty)
 
   resolve' (RApp tc ts ps r) =
-    withFixScope [getBind r] $ resolveRApp tc ts ps r
+    withLocalScope [getBind r] $ resolveRApp tc ts ps r
 
   -- TOOD: Correct scoping behavior?
   resolve' (RAllE b a ty) =
-    RAllE b <$> resolve' a <*> withFixScope [b] (resolve' ty)
+    RAllE b <$> resolve' a <*> withLocalScope [b] (resolve' ty)
   -- TOOD: Correct scoping behavior?
   resolve' (REx b e ty) =
-    REx b <$> resolve' e <*> withFixScope [b] (resolve' ty)
+    REx b <$> resolve' e <*> withLocalScope [b] (resolve' ty)
 
   resolve' (RExprArg e) =
     RExprArg <$> resolve' e
 
   resolve' (RAppTy t1 t2 r) =
-    withFixScope [getBind r] $
+    withLocalScope [getBind r] $
       RAppTy <$> resolve' t1 <*> resolve' t2 <*> resolve' r
 
   -- TODO: Correct scoping behavior?
@@ -165,7 +171,7 @@ instance ( PPrint r
     RRTy <$> mapM (secondM resolve') env
          <*> resolve' ref
          <*> pure obl
-         <*> withFixScope (fst <$> env) (resolve' ty)
+         <*> withLocalScope (fst <$> env) (resolve' ty)
 
   resolve' (RHole r) =
     RHole <$> resolve' r
@@ -174,7 +180,7 @@ instance (Resolve a1 b1, Resolve a2 b2) => Resolve (Ref a1 a2) (Ref b1 b2) where
   -- TODO: Correct scoping behavior?
   resolve' (RProp as b) =
     RProp <$> mapM (secondM resolve') as
-          <*> withFixScope (fst <$> as) (resolve' b)
+          <*> withLocalScope (fst <$> as) (resolve' b)
 
 instance Resolve BPVar RPVar where
   resolve' (PV n k a as) =
@@ -198,7 +204,7 @@ instance Resolve a b => Resolve (UReft a) (UReft b) where
 
 instance Resolve Reft Reft where
   resolve' (Reft (s, ra)) =
-    Reft . (s,) <$> withFixScope [s] (resolve' ra)
+    Reft . (s,) <$> withLocalScope [s] (resolve' ra)
 
 instance Resolve Predicate Predicate where
   resolve' (Pr pvs) =
@@ -208,7 +214,7 @@ instance Resolve Qualifier Qualifier where
   -- TODO: Correct scoping behavior?
   resolve' (Q n ps b l) = withLocation (sourcePosSrcSpan l) $
     Q n <$> mapM (secondM resolve') ps
-        <*> withFixScope (fst <$> ps) (resolve' b)
+        <*> withLocalScope (fst <$> ps) (resolve' b)
         <*> return l
 
 instance Resolve Expr Expr where
@@ -246,7 +252,7 @@ instance Resolve Expr Expr where
   resolve' (PAll vs p) =
     PAll <$> mapM (secondM resolve') vs <*> resolve' p
   resolve' (ELam (x, t) e) =
-    ELam <$> ((x,) <$> withFixScope [x] (resolve' t)) <*> resolve' e
+    ELam <$> ((x,) <$> withLocalScope [x] (resolve' t)) <*> resolve' e
 
   resolve' (ETApp e s) =
     ETApp <$> resolve' e <*> resolve' s
@@ -312,7 +318,7 @@ resolveRFun b i o r = go_bound
           Nothing -> go_fun
       _ -> go_fun
     go_fun = RFun b <$> resolve' i
-                    <*> withFixScope [b] (resolve' o)
+                    <*> withLocalScope [b] (resolve' o)
                     <*> resolve' r
 
 resolveRApp :: ( PPrint r
@@ -461,15 +467,18 @@ replaceParam pv = do
 resolveTyCon :: FTycon -> ResolveM FTycon
 resolveTyCon c
   | tcs' `elem` prims = return c
+  | tcs' `elem` primTyCons = return c
   | otherwise = symbolFTycon . Loc l l' . symbol <$> lift (lookupGhcTyConL tcs)
   where
     tcs@(Loc l l' tcs') = fTyconSymbol c
+    primTyCons =
+      ["int", "bool", "real", "num", "function", strConName, listConName]
 
 resolveExprApp :: Symbol -> [Expr] -> ResolveM Expr
 resolveExprApp f es = go_scope
   where
     go_scope = do
-      inScope <- isInFixScope f
+      inScope <- isInLiquidScope f
       if inScope
         then go_app f
         else go_alias

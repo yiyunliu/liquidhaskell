@@ -321,8 +321,6 @@ data Map k a  = Bin Size k a (Map k a) (Map k a)
 
 type Size     = Int
 
-{-@ include <Base.hquals> @-}
-
 {-@ 
   data Map k a <l :: root:k -> k -> Bool, r :: root:k -> k -> Bool>
        = Bin (sz    :: Size) 

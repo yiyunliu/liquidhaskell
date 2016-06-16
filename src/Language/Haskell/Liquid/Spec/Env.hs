@@ -26,8 +26,6 @@ import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.Trans.Reader (liftCatch)
 
-import Data.List
-
 import qualified Data.HashMap.Strict as M
 import qualified Data.HashSet as S
 
@@ -51,12 +49,12 @@ newtype SpecM a
 
 data SpecEnv
   = SpecEnv
-    { specEnvCurrentModule :: !(Maybe Module)
+    { specEnvMeasureNames  :: !(S.HashSet Symbol)
+    , specEnvLiteralNames  :: !(S.HashSet Symbol)
     , specEnvExternBounds  :: !RBEnv
     , specEnvLocalBounds   :: !RBEnv
     , specEnvExternAliases :: !RTEnv
     , specEnvLocalAliases  :: !RTEnv
-    , specEnvFixScope      :: !(S.HashSet Symbol)
     }
 
 
@@ -84,19 +82,17 @@ instance GhcMonad SpecM where
   getSession = liftGhc getSession
   setSession = liftGhc . setSession
 
-runSpecM :: SpecM a
-         -> GlobalSpec
-         -> Maybe Module
-         -> Ms.BareSpec
-         -> Ghc (Either [Error] a)
-runSpecM act extern mod bspec = runSpecM' act $ SpecEnv
-  { specEnvCurrentModule = mod
+runSpecM :: SpecM a -> GlobalSpec -> Ms.BareSpec -> Ghc (Either [Error] a)
+runSpecM act extern bspec = runSpecM' act $ SpecEnv
+  { specEnvMeasureNames  = S.fromList $
+                             bareMeasureNames bspec ++ M.keys (meas extern)
+  , specEnvLiteralNames  = S.fromList $ val <$>
+                             ((fst <$> Ms.constants bspec)
+                              ++ M.keys (constants extern))
   , specEnvExternBounds  = bounds extern
   , specEnvLocalBounds   = mempty
   , specEnvExternAliases = aliases extern
   , specEnvLocalAliases  = mempty
-  , specEnvFixScope      = S.fromList $
-                             bareMeasureNames bspec ++ M.keys (meas extern)
   }
 
 bareMeasureNames :: Ms.BareSpec -> [Symbol]
@@ -139,7 +135,8 @@ instance MonadErrors e m => MonadErrors e (ReaderT r m) where
 class Monad m => MonadSpec m where
   liftGhc :: Ghc a -> m a
 
-  getCurrentModule :: m (Maybe Module)
+  isMeasureName :: Symbol -> m Bool
+  isLiteralName :: Symbol -> m Bool
 
   withLocalBounds :: RBEnv -> m a -> m a
   lookupBound :: Symbol -> m (Maybe RBound)
@@ -148,13 +145,11 @@ class Monad m => MonadSpec m where
   lookupExprAlias :: Symbol -> m (Maybe (RTAlias Symbol Expr))
   lookupTypeAlias :: Symbol -> m (Maybe (RTAlias RTyVar SpecType))
 
-  withFixScope :: [Symbol] -> m a -> m a
-  isInFixScope :: Symbol -> m Bool
-
 instance MonadSpec SpecM where
   liftGhc = SpecM . lift . lift
 
-  getCurrentModule = SpecM $ asks specEnvCurrentModule
+  isMeasureName s = SpecM $ asks (S.member s . specEnvMeasureNames)
+  isLiteralName s = SpecM $ asks (S.member s . specEnvLiteralNames)
 
   withLocalBounds bounds = SpecM . withReaderT adj . unSpecM
     where
@@ -173,17 +168,11 @@ instance MonadSpec SpecM where
     M.lookup s (typeAliases $ specEnvLocalAliases env) <|>
     M.lookup s (typeAliases $ specEnvExternAliases env)
 
-  withFixScope fs = SpecM . withReaderT adj . unSpecM
-    where
-      adj env = env
-        { specEnvFixScope = foldl' (flip S.insert) (specEnvFixScope env) fs
-        }
-  isInFixScope s = SpecM $ asks $ (s `S.member`) . specEnvFixScope
-
 instance MonadSpec m => MonadSpec (ReaderT r m) where
   liftGhc = lift . liftGhc
 
-  getCurrentModule = lift getCurrentModule
+  isMeasureName = lift . isMeasureName
+  isLiteralName = lift . isLiteralName
 
   withLocalBounds = liftWithReaderT . withLocalBounds
   lookupBound = lift . lookupBound
@@ -191,9 +180,6 @@ instance MonadSpec m => MonadSpec (ReaderT r m) where
   withLocalAliases = liftWithReaderT . withLocalAliases
   lookupExprAlias = lift . lookupExprAlias
   lookupTypeAlias = lift . lookupTypeAlias
-
-  withFixScope = liftWithReaderT . withFixScope
-  isInFixScope = lift . isInFixScope
 
 liftWithReaderT :: Monad m => (m a -> m a) -> ReaderT r m a -> ReaderT r m a
 liftWithReaderT f act = do

@@ -36,8 +36,6 @@ type Size     = Int
 
 data MaybeS a = NothingS | JustS a
 
-{-@ include <Base.hquals> @-}
-
 {-@ 
   data Map k a <l :: root:k -> k -> Bool, r :: root:k -> k -> Bool>
        = Bin (sz    :: Size) 

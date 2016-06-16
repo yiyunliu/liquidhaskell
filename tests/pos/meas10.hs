@@ -2,11 +2,11 @@ module Meas where
 
 import Data.Set (Set(..))
 
-{-@ include <listSet.hquals> @-}
+import ListSets
 
-{-@ myrev :: xs:[a] -> {v:[a]| listElts(v) = listElts(xs)} @-}
-myrev :: [a] -> [a]
-myrev xs = go [] xs 
+{-@ myrev2 :: xs:[a] -> {v:[a]| listElts(v) = listElts(xs)} @-}
+myrev2 :: [a] -> [a]
+myrev2 xs = go [] xs 
 {-@ Decrease go 2 @-}
    where go acc []     = acc
          go acc (y:ys) = go (y:acc) ys

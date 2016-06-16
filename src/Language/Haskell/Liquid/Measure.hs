@@ -51,19 +51,20 @@ import           Language.Haskell.Liquid.UX.Tidy
 type BareSpec      = Spec (Located BareType) LocSymbol
 
 data Spec ty bndr  = Spec
-  { measures   :: ![Measure ty bndr]            -- ^ User-defined properties for ADTs
-  , asmSigs    :: ![(LocSymbol, ty)]            -- ^ Assumed (unchecked) types
-  , sigs       :: ![(LocSymbol, ty)]            -- ^ Imported functions and types
-  , localSigs  :: ![(LocSymbol, ty)]            -- ^ Local type signatures
-  , invariants :: ![ty]                         -- ^ Data type invariants
-  , ialiases   :: ![(ty, ty)]                   -- ^ Data type invariants to be checked
-  , imports    :: ![Symbol]                     -- ^ Loaded spec module names
-  , dataDecls  :: ![Located DataDecl]           -- ^ Predicated data definitions
-  , includes   :: ![FilePath]                   -- ^ Included qualifier files
-  , aliases    :: ![RTAlias Symbol BareType]    -- ^ RefType aliases
-  , ealiases   :: ![RTAlias Symbol Expr]        -- ^ Expression aliases
-  , embeds     :: !(TCEmb LocSymbol)            -- ^ GHC-Tycon-to-fixpoint Tycon map
-  , qualifiers :: ![Qualifier]                  -- ^ Qualifiers in source/spec files
+  { measures   :: ![Measure ty bndr]             -- ^ User-defined properties for ADTs
+  , asmSigs    :: ![(LocSymbol, ty)]             -- ^ Assumed (unchecked) types
+  , sigs       :: ![(LocSymbol, ty)]             -- ^ Imported functions and types
+  , localSigs  :: ![(LocSymbol, ty)]             -- ^ Local type signatures
+  , invariants :: ![ty]                          -- ^ Data type invariants
+  , ialiases   :: ![(ty, ty)]                    -- ^ Data type invariants to be checked
+  , imports    :: ![Symbol]                      -- ^ Loaded spec module names
+  , dataDecls  :: ![Located DataDecl]            -- ^ Predicated data definitions
+  , includes   :: ![FilePath]                    -- ^ Included qualifier files
+  , aliases    :: ![RTAlias Symbol BareType]     -- ^ RefType aliases
+  , ealiases   :: ![RTAlias Symbol Expr]         -- ^ Expression aliases
+  , embeds     :: !(TCEmb LocSymbol)             -- ^ GHC-Tycon-to-fixpoint Tycon map
+  , qualifiers :: ![Qualifier]                   -- ^ Qualifiers in source/spec files
+  , constants  :: ![(LocSymbol, Located Sort)]   -- ^ Fixpoint constants n source/spec files
   , decr       :: ![(LocSymbol, [Int])]          -- ^ Information on decreasing arguments
   , lvars      :: ![LocSymbol]                   -- ^ Variables that should be checked in the environment they are used
   , lazy       :: !(S.HashSet LocSymbol)         -- ^ Ignore Termination Check in these Functions
@@ -145,6 +146,7 @@ instance Monoid (Spec ty bndr) where
            , ealiases   =           ealiases s1   ++ ealiases s2
            , embeds     = M.union   (embeds s1)      (embeds s2)
            , qualifiers =           qualifiers s1 ++ qualifiers s2
+           , constants  =           constants s1  ++ constants s2
            , decr       =           decr s1       ++ decr s2
            , lvars      =           lvars s1      ++ lvars s2
            , lazy       = S.union   (lazy s1)        (lazy s2)
@@ -177,6 +179,7 @@ instance Monoid (Spec ty bndr) where
            , ealiases   = []
            , embeds     = M.empty
            , qualifiers = []
+           , constants  = []
            , decr       = []
            , lvars      = []
            , lazy       = S.empty

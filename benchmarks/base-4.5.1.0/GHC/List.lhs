@@ -524,7 +524,6 @@ break p xs@(x:xs')
 -- | 'reverse' @xs@ returns the elements of @xs@ in reverse order.
 -- @xs@ must be finite.
 {-@ assert reverse      :: xs:[a] -> {v: [a] | len(v) = len(xs)} @-}
-{-@ include <len.hquals> @-}
 reverse                 :: [a] -> [a]
 #ifdef USE_REPORT_PRELUDE
 reverse                 =  foldl (flip (:)) []

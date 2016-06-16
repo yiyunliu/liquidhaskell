@@ -611,6 +611,7 @@ data Pspec ty ctor
   | EAlias  (RTAlias Symbol Expr)
   | Embed   (LocSymbol, FTycon)
   | Qualif  Qualifier
+  | Const   (LocSymbol, Located Sort)
   | Decr    (LocSymbol, [Int])
   | LVars   LocSymbol
   | Lazy    LocSymbol
@@ -644,6 +645,7 @@ instance Show (Pspec a b) where
   show (EAlias _) = "EAlias"
   show (Embed  _) = "Embed"
   show (Qualif _) = "Qualif"
+  show (Const  _) = "Const"
   show (Decr   _) = "Decr"
   show (LVars  _) = "LVars"
   show (Lazy   _) = "Lazy"
@@ -676,6 +678,7 @@ mkSpec name xs         = (name,) $ Measure.qualifySpec (symbol name) Measure.Spe
   , Measure.ealiases   = [e | EAlias e <- xs]
   , Measure.embeds     = M.fromList [e | Embed e <- xs]
   , Measure.qualifiers = [q | Qualif q <- xs]
+  , Measure.constants  = [c | Const c  <- xs]
   , Measure.decr       = [d | Decr d   <- xs]
   , Measure.lvars      = [d | LVars d  <- xs]
   , Measure.lazy       = S.fromList [s | Lazy   s <- xs]
@@ -721,6 +724,7 @@ specP
     <|> (reservedToken "expression">> liftM EAlias ealiasP   )
     <|> (reservedToken "embed"     >> liftM Embed  embedP    )
     <|> (reservedToken "qualif"    >> liftM Qualif (qualifierP sortP))
+    <|> (reservedToken "constant"  >> liftM Const  fConstantP )
     <|> (reservedToken "Decrease"  >> liftM Decr   decreaseP )
     <|> (reservedToken "LAZYVAR"   >> liftM LVars  lazyVarP  )
     <|> (reservedToken "Strict"    >> liftM Lazy   lazyVarP  )
@@ -752,6 +756,9 @@ hboundP = locParserP binderP
 
 inlineP :: Parser LocSymbol
 inlineP = locParserP binderP
+
+fConstantP :: Parser (LocSymbol, Located Sort)
+fConstantP = (,) <$> locParserP symbolP <*> (colon *> locParserP sortP)
 
 asizeP :: Parser LocSymbol
 asizeP = locParserP binderP

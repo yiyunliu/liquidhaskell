@@ -6,6 +6,7 @@
 module Language.Haskell.Liquid.Bare.Spec (
     makeClasses
   , makeQualifiers
+  , makeConstants
   , makeHints
   , makeLVar
   , makeLazy
@@ -95,6 +96,11 @@ makeQualifiers :: (ModName, Ms.Spec ty bndr)
 makeQualifiers (mod,spec) = inModule mod mkQuals
   where
     mkQuals = mapM (\q -> resolve (F.qPos q) q) $ Ms.qualifiers spec
+
+makeConstants :: (ModName, Ms.Spec ty bndr) -> BareM (M.HashMap LocSymbol F.Sort)
+makeConstants (mod,spec) = inModule mod $ M.fromList <$> mkConsts
+  where
+    mkConsts = mapM (\(n, s) -> (n,) <$> resolve (loc s) (val s)) $ Ms.constants spec
 
 makeHints :: [Var] -> Ms.Spec ty bndr -> BareM [(Var, [Int])]
 makeHints   vs spec = varSymbols id vs $ Ms.decr spec

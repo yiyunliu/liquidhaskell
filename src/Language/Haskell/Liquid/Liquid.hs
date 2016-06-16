@@ -176,7 +176,7 @@ pprintMany xs = vcat [ F.pprint x $+$ text " " | x <- xs ]
 
 solveCs :: Config -> FilePath -> CGInfo -> GhcInfo -> Maybe [String] -> IO (Output Doc)
 solveCs cfg tgt cgi info names
-  = do finfo          <- cgInfoFInfo info cgi tgt
+  = do let finfo = targetFInfo info cgi tgt
        F.Result r sol <- solve (fixConfig tgt cfg) finfo
        let warns = logErrors cgi
        let annm  = annotMap cgi

@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 
 module Language.Haskell.Liquid.Spec (
@@ -48,16 +47,17 @@ makeSpecs :: Config
           -> Ghc (GlobalSpec, LocalSpec)
 makeSpecs cfg extern cbs vars lvars exports mod bspec =
   either throw return =<<
-    runSpecM (makeSpecs' cfg cbs vars lvars exports bspec) extern mod bspec
+    runSpecM (makeSpecs' cfg cbs vars lvars exports mod bspec) extern bspec
   
 makeSpecs' :: Config
            -> CoreProgram
            -> [Var]
            -> [Var]
            -> NameSet
+           -> Maybe Module
            -> Ms.BareSpec
            -> SpecM (GlobalSpec, LocalSpec)
-makeSpecs' _cfg _cbs _vars _lvars _exports bspec = do
+makeSpecs' _cfg _cbs _vars _lvars _exports _mod bspec = do
   tcEmbeds           <- makeTyConEmbeds bspec
   aliases            <- makeAliases bspec
   withLocalAliases aliases $ do
@@ -67,6 +67,7 @@ makeSpecs' _cfg _cbs _vars _lvars _exports bspec = do
   invariants         <- makeInvariants bspec
   ialiases           <- makeIAliases bspec
   qualifiers         <- makeQualifiers bspec
+  constants          <- makeConstants bspec
   return $
     ( emptyGlobalSpec
       { aliases     = aliases
@@ -75,6 +76,7 @@ makeSpecs' _cfg _cbs _vars _lvars _exports bspec = do
       , ialiases    = ialiases
       , tcEmbeds    = tcEmbeds
       , qualifiers  = qualifiers
+      , constants   = constants
       , tyconEnv    = tyconEnv
       , varianceEnv = varianceEnv
       }
@@ -105,20 +107,21 @@ makeIAliases = mapM go . Ms.ialiases
     go (t1, t2) = (,) <$> makeInvariantTy t1 <*> makeInvariantTy t2
 
 makeInvariantTy :: Located BareType -> SpecM LocSpecType
-makeInvariantTy = fmap (fmap generalize) . resolveL'
+makeInvariantTy = fmap (fmap generalize) . resolveL' [] []
 
 -- | Make Qualifiers -----------------------------------------------------------
 
 makeQualifiers :: Ms.BareSpec -> SpecM (M.HashMap Symbol Qualifier)
 makeQualifiers = fmap M.fromList . mapM go . Ms.qualifiers
   where
-    go q = (,) <$> mangleQualifierName (qName q)
-               <*> resolve (sourcePosSrcSpan $ qPos q) q
+    go q = (qName q,) <$> resolve [] [] (sourcePosSrcSpan $ qPos q) q
 
-mangleQualifierName :: Symbol -> SpecM Symbol
-mangleQualifierName q = do
-  mod <- maybe "spec" symbol <$> getCurrentModule
-  return $ "inline" `suffixSymbol` mod `suffixSymbol` q
+-- | Make Constants ------------------------------------------------------------
+
+makeConstants :: Ms.BareSpec -> SpecM (M.HashMap LocSymbol Sort)
+makeConstants = fmap M.fromList . mapM (uncurry go) . Ms.constants
+  where
+    go n s = (n,) <$> resolveL [] [] s
 
 --------------------------------------------------------------------------------
 -- | Post-Process Module Specs -------------------------------------------------

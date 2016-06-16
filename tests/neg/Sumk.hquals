@@ -1,2 +1,0 @@
-qualif PPLUS0(v:int): v >= ~A + ~B
-qualif PPLUS1(v:int): v > ~A + ~B

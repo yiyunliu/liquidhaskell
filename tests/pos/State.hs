@@ -32,3 +32,14 @@ bindST (S m) k = S $ \s -> let (a, s') = m s in apply (k a) s'
   @-}
 apply :: ST a s -> s -> (a, s)
 apply (S f) s = f s
+
+
+{-@ qualif Snd( v : b_t, 
+                p : FAppTy (FAppTy Pred  b_t)  a, 
+                a : FAppTy (FAppTy fix##40##41#  a)  b): 
+              (papp2 p v (fst a)) @-}
+
+{-@ qualif Fst( v : a, 
+                a : FAppTy (FAppTy fix##40##41#  a)  b): 
+               (v = fst a)  @-}
+

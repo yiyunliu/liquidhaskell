@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts         #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -19,14 +20,12 @@ import qualified Data.List                           as L
 
 import qualified Data.HashMap.Strict                 as M
 
-import           Language.Fixpoint.Types.Names       (prims, unconsSym)
+import           Language.Fixpoint.Types.Names
 import Language.Fixpoint.Types (Expr(..),
                                 Qualifier(..),
                                 Reft(..),
                                 Sort(..),
-                                Symbol,
                                 fTyconSymbol,
-                                symbol,
                                 symbolFTycon)
 
 import           Language.Haskell.Liquid.Misc        (secondM, third3M)
@@ -102,10 +101,13 @@ instance Resolvable Sort where
   resolve l (FAbs i  s)   = FAbs i <$> (resolve l s)
   resolve l (FFunc s1 s2) = FFunc <$> (resolve l s1) <*> (resolve l s2)
   resolve _ (FTC c)
-    | tcs' `elem` prims   = FTC <$> return c
-    | otherwise           = FTC <$> (symbolFTycon . Loc l l' . symbol <$> lookupGhcTyCon tcs)
+    | tcs' `elem` prims      = FTC <$> return c
+    | tcs' `elem` primTyCons = FTC <$> return c
+    | otherwise              = FTC <$> (symbolFTycon . Loc l l' . symbol <$> lookupGhcTyCon tcs)
     where
       tcs@(Loc l l' tcs') = fTyconSymbol c
+      primTyCons =
+        ["int", "bool", "real", "num", "function", strConName, listConName]
   resolve l (FApp t1 t2) = FApp <$> resolve l t1 <*> resolve l t2
 
 instance Resolvable (UReft Reft) where

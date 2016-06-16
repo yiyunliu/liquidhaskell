@@ -50,7 +50,7 @@ makeDataType (Loc l l' (D tc as ps ls cts _ sfun)) = do
   tc' <- lookupGhcTyConL tc
   -- FIXME: symbolRTyVar is probably the wrong way to do this
   let as' = symbolRTyVar <$> as
-  ps' <- mapM resolveL ps
+  ps' <- mapM (resolveL [] []) ps
   cts' <- mapM (makeDataCon tc' as' ps' ls) cts
   let rtc = makeRTyCon tc' as' ps' sfun (snd <$> cts')
   return ((tc', Loc l l' rtc), cts')
@@ -73,7 +73,7 @@ makeDataCon :: TyCon
 makeDataCon tc as ps ls (c, xts) = do
   c' <- lookupGhcDataConL c
   let (xs, ts) = unzip xts
-  ts' <- mapM (resolvePL ps) ts
+  ts' <- mapM (resolveL [] ps) ts
   let xts' = reverse $ zip xs ts'
   let cs = ofType <$> dataConStupidTheta c'
   let rs = rVar . rtv_tv <$> as

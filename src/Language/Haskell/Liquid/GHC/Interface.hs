@@ -325,8 +325,7 @@ processModule cfg0 logicMap tgtFiles depGraph specEnv modSummary = do
   let homeSpecs           = getCachedBareSpecs specEnv reachable
   (gbl', gbl, lcl, imps, incs) <- toGhcSpec cfg coreBinds (impVs ++ defVs) letVs mod modName modGuts bareSpec logicMap specSpecs homeSpecs
   _                      <- liftIO $ whenLoud $ putStrLn $ "Module Imports: " ++ show imps
-  hqualsFiles            <- moduleHquals modGuts paths file imps incs
-  let ghcInfo             = GI file (moduleName mod) hscEnv cfg coreBinds derVs impVs (letVs ++ dataCons) useVs hqualsFiles imps incs gbl lcl
+  let ghcInfo             = GI file (moduleName mod) hscEnv cfg coreBinds derVs impVs (letVs ++ dataCons) useVs imps incs gbl lcl
   let specEnv'            = extendModuleEnv specEnv mod (modName, noTerm bareSpec, gbl')
   return (specEnv', if file `S.member` tgtFiles then Just ghcInfo else Nothing)
 
@@ -614,20 +613,6 @@ noTerm spec = spec { Ms.decr = mempty, Ms.lazy = mempty, Ms.termexprs = mempty }
 parseSpecFile :: FilePath -> IO (ModName, Ms.BareSpec)
 parseSpecFile file = either throw return . specSpecificationP file =<< readFile file
 
--- Find Hquals Files -----------------------------------------------------------
-
-moduleHquals :: MGIModGuts
-             -> [FilePath]
-             -> FilePath
-             -> [String]
-             -> [FilePath]
-             -> Ghc [FilePath]
-moduleHquals mgi paths target imps incs = do
-  hqs   <- specIncludes Hquals paths incs
-  hqs'  <- moduleFiles Hquals paths (mgi_namestring mgi : imps)
-  hqs'' <- liftIO $ filterM doesFileExist [extFileName Hquals target]
-  return $ sortNub $ hqs'' ++ hqs ++ hqs'
-
 -- Find Files for Modules ------------------------------------------------------
 
 moduleFiles :: Ext -> [FilePath] -> [String] -> Ghc [FilePath]
@@ -642,21 +627,6 @@ moduleFile ext paths name
       Nothing -> liftIO $ getFileInDirs (extModuleName name ext) paths
       Just ms -> return $ normalise <$> ml_hs_file (ms_location ms)
   | otherwise = liftIO $ getFileInDirs (extModuleName name ext) paths
-
-specIncludes :: Ext -> [FilePath] -> [FilePath] -> Ghc [FilePath]
-specIncludes ext paths reqs = do
-  let libFile = extFileNameR ext $ symbolString preludeName
-  let incFiles = catMaybes $ reqFile ext <$> reqs
-  liftIO $ forM (libFile : incFiles) $ \f -> do
-    mfile <- getFileInDirs f paths
-    case mfile of
-      Just file -> return file
-      Nothing -> panic Nothing $ "cannot find " ++ f ++ " in " ++ show paths
-
-reqFile :: Ext -> FilePath -> Maybe FilePath
-reqFile ext s
-  | isExtFile ext s = Just s
-  | otherwise = Nothing
 
 --------------------------------------------------------------------------------
 -- Assemble Information for Spec Extraction ------------------------------------

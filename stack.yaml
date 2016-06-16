@@ -24,4 +24,3 @@ resolver: lts-6.0
 ghc-options:
   double-conversion: -opta-Wa,-mrelax-relocations=no
 rebuild-ghc-options: true
-apply-ghc-options: everything
