@@ -9,11 +9,11 @@ import LiquidHaskell
 import Prelude hiding (map)
 
 --------------------------------------------------------------------------
-[lq| prop :: List Even -> List Even |]
+[lq| prop :: List MyEven -> List MyEven |]
 prop = map ((+ 0) . (+ 1))
 --------------------------------------------------------------------------
 
-[lq| type Even = {v:Int | v mod 2 == 0 } |]
+[lq| type MyEven = {v:Int | v mod 2 == 0 } |]
 
 data List a = Nil | Cons a (List a)
 

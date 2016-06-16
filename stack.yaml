@@ -12,9 +12,16 @@ packages:
 extra-deps:
 - daemons-0.2.1
 - dotgen-0.4.2
+- double-conversion-2.0.1.0
 - fgl-visualize-0.1.0.1
 - intern-0.9.1.4
 - located-base-0.1.0.0
 
 compiler-check: newer-minor
 resolver: lts-6.0
+
+# Work around https://ghc.haskell.org/trac/ghc/ticket/12147
+ghc-options:
+  double-conversion: -opta-Wa,-mrelax-relocations=no
+rebuild-ghc-options: true
+apply-ghc-options: everything
