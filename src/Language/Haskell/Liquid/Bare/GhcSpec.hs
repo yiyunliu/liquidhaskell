@@ -145,7 +145,7 @@ makeGhcSpec' :: Config -> [CoreBind] -> [Var] -> [Var] -> NameSet -> [(ModName, 
 makeGhcSpec' cfg cbs vars defVars exports specs
   = do name          <- modName <$> get
        makeRTEnv  specs
-       (tycons, datacons, dcSs, recSs, tyi, embs) <- makeGhcSpecCHOP1 cfg specs
+       (_tycons, datacons, dcSs, recSs, tyi, embs) <- makeGhcSpecCHOP1 cfg specs
        makeBounds embs name defVars cbs specs
        modify                                   $ \be -> be { tcEnv = tyi }
        (cls, mts)                              <- second mconcat . unzip . mconcat <$> mapM (makeClasses name cfg vars) specs
@@ -313,7 +313,7 @@ makeGhcSpec4 quals defVars specs name su (gbl, lcl)
        let mtx  = txRefToLogic lmap inlmap
        let txdcons d = d{tyRes = f $ tyRes d, tyConsts = f <$> tyConsts d, tyArgs = tx <$> tyArgs d}
        return
-        ( gbl { qualifiers = M.fromList $ (\q -> (q_name q, q)) <$> subst su quals
+        ( gbl { qualifiers = M.fromList $ (\q -> (qName q, q)) <$> subst su quals
               , tySigs     = tx <$> msgs
               , asmSigs    = tx <$> asmSigs gbl
               , inSigs     = tx <$> inSigs  gbl
@@ -362,7 +362,7 @@ makeGhcSpecCHOP1 cfg specs
        datacons        <- makePluggedDataCons embs tyi (concat dcs ++ wiredDataCons)
        let dcSelectors  = concatMap (makeMeasureSelectors (exactDC cfg)) datacons
        recSels         <- makeRecordSelectorSigs datacons
-       return             (second val <$> datacons, dcSelectors, recSels, tyi, embs)
+       return             (tycons, second val <$> datacons, dcSelectors, recSels, tyi, embs)
 
 makeGhcSpecCHOP3 :: Config -> [Var] -> [Var] -> [(ModName, Ms.BareSpec)]
                  -> ModName -> [(ModName, Var, LocSpecType)]

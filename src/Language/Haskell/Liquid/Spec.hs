@@ -112,7 +112,7 @@ makeInvariantTy = fmap (fmap generalize) . resolveL'
 makeQualifiers :: Ms.BareSpec -> SpecM (M.HashMap Symbol Qualifier)
 makeQualifiers = fmap M.fromList . mapM go . Ms.qualifiers
   where
-    go q = (q_name q,) <$> resolve (sourcePosSrcSpan $ q_pos q) q
+    go q = (qName q,) <$> resolve (sourcePosSrcSpan $ qPos q) q
 
 --------------------------------------------------------------------------------
 -- | Post-Process Module Specs -------------------------------------------------

@@ -1028,8 +1028,6 @@ lowerIdP :: Parser Symbol
 lowerIdP = condIdP symChars (isSmall . head)
 -}
 
->>>>>>> develop
-
 dataConP :: Parser (Located Symbol, [(LocSymbol, LocBareType)])
 dataConP
   = do x   <- locParserP dataConNameP

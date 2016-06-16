@@ -294,7 +294,7 @@ measEnv sp xts cbs lts asms itys hs cfg
   = CGE { cgLoc = Sp.empty
         , renv  = fromMapREnv (val <$> meas sp) mempty
         , syenv = F.fromMapSEnv $ freeSyms sp
-        , fenv  = initFEnv $ inserts (rTypeSort tce . val <$> meas sp) lts
+        , fenv  = initFEnv $ lts ++ (second (rTypeSort tce . val) <$> M.toList (meas sp))
         , denv  = dicts sp
         , recs  = S.empty
         , fargs = S.empty

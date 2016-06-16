@@ -303,7 +303,7 @@ processModule cfg0 logicMap tgtFiles depGraph specEnv modSummary = do
   parsed                 <- parseModule $ keepRawTokenStream modSummary
   typechecked            <- typecheckModule $ ignoreInline parsed
   desugared              <- desugarModule typechecked
-  _                      <- loadModule' desugared
+  _                      <- loadModule' typechecked
   let specComments        = extractSpecComments parsed
   let specQuotes          = extractSpecQuotes typechecked
   (modName, bareSpec)    <- either throw return $ hsSpecificationP (moduleName mod) specComments specQuotes
@@ -528,8 +528,8 @@ mergeQualifiers :: M.HashMap Symbol Qualifier
 mergeQualifiers = M.unionWith dup
   where
     dup v1 v2 = throw
-      ( ErrDupQuals (sourcePosSrcSpan $ q_pos v1) (pprint $ q_name v1)
-                    (sourcePosSrcSpan . q_pos <$> [v1, v2])
+      ( ErrDupQuals (sourcePosSrcSpan $ qPos v1) (pprint $ qName v1)
+                    (sourcePosSrcSpan . qPos <$> [v1, v2])
         :: Error )
 
 mergeTyconEnv :: TCEnv -> TCEnv -> TCEnv
