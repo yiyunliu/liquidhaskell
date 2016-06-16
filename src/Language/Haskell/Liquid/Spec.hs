@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 
 module Language.Haskell.Liquid.Spec (
@@ -47,17 +48,16 @@ makeSpecs :: Config
           -> Ghc (GlobalSpec, LocalSpec)
 makeSpecs cfg extern cbs vars lvars exports mod bspec =
   either throw return =<<
-    runSpecM (makeSpecs' cfg cbs vars lvars exports mod bspec) extern bspec
+    runSpecM (makeSpecs' cfg cbs vars lvars exports bspec) extern mod bspec
   
 makeSpecs' :: Config
            -> CoreProgram
            -> [Var]
            -> [Var]
            -> NameSet
-           -> Maybe Module
            -> Ms.BareSpec
            -> SpecM (GlobalSpec, LocalSpec)
-makeSpecs' _cfg _cbs _vars _lvars _exports _mod bspec = do
+makeSpecs' _cfg _cbs _vars _lvars _exports bspec = do
   tcEmbeds           <- makeTyConEmbeds bspec
   aliases            <- makeAliases bspec
   withLocalAliases aliases $ do
@@ -112,7 +112,13 @@ makeInvariantTy = fmap (fmap generalize) . resolveL'
 makeQualifiers :: Ms.BareSpec -> SpecM (M.HashMap Symbol Qualifier)
 makeQualifiers = fmap M.fromList . mapM go . Ms.qualifiers
   where
-    go q = (qName q,) <$> resolve (sourcePosSrcSpan $ qPos q) q
+    go q = (,) <$> mangleQualifierName (qName q)
+               <*> resolve (sourcePosSrcSpan $ qPos q) q
+
+mangleQualifierName :: Symbol -> SpecM Symbol
+mangleQualifierName q = do
+  mod <- maybe "spec" symbol <$> getCurrentModule
+  return $ "inline" `suffixSymbol` mod `suffixSymbol` q
 
 --------------------------------------------------------------------------------
 -- | Post-Process Module Specs -------------------------------------------------

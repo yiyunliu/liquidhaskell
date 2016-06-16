@@ -212,7 +212,6 @@ import           Data.String
 import           DataCon
 import           GHC                                    (HscEnv, ModuleName, moduleNameString, getName)
 import           GHC.Generics
-import           Module                                 (moduleNameFS)
 import           NameSet
 import           PrelInfo                               (isNumericClass)
 import Prelude                          hiding  (error)
@@ -1593,9 +1592,6 @@ instance Show ModName where
 
 instance Symbolic ModName where
   symbol (ModName _ m) = symbol m
-
-instance Symbolic ModuleName where
-  symbol = symbol . moduleNameFS
 
 data ModType = Target | SrcImport | SpecImport deriving (Eq,Ord)
 

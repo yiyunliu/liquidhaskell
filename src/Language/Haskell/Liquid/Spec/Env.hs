@@ -51,7 +51,8 @@ newtype SpecM a
 
 data SpecEnv
   = SpecEnv
-    { specEnvExternBounds  :: !RBEnv
+    { specEnvCurrentModule :: !(Maybe Module)
+    , specEnvExternBounds  :: !RBEnv
     , specEnvLocalBounds   :: !RBEnv
     , specEnvExternAliases :: !RTEnv
     , specEnvLocalAliases  :: !RTEnv
@@ -83,9 +84,14 @@ instance GhcMonad SpecM where
   getSession = liftGhc getSession
   setSession = liftGhc . setSession
 
-runSpecM :: SpecM a -> GlobalSpec -> Ms.BareSpec -> Ghc (Either [Error] a)
-runSpecM act extern bspec = runSpecM' act $ SpecEnv
-  { specEnvExternBounds  = bounds extern
+runSpecM :: SpecM a
+         -> GlobalSpec
+         -> Maybe Module
+         -> Ms.BareSpec
+         -> Ghc (Either [Error] a)
+runSpecM act extern mod bspec = runSpecM' act $ SpecEnv
+  { specEnvCurrentModule = mod
+  , specEnvExternBounds  = bounds extern
   , specEnvLocalBounds   = mempty
   , specEnvExternAliases = aliases extern
   , specEnvLocalAliases  = mempty
@@ -133,6 +139,8 @@ instance MonadErrors e m => MonadErrors e (ReaderT r m) where
 class Monad m => MonadSpec m where
   liftGhc :: Ghc a -> m a
 
+  getCurrentModule :: m (Maybe Module)
+
   withLocalBounds :: RBEnv -> m a -> m a
   lookupBound :: Symbol -> m (Maybe RBound)
 
@@ -145,6 +153,8 @@ class Monad m => MonadSpec m where
 
 instance MonadSpec SpecM where
   liftGhc = SpecM . lift . lift
+
+  getCurrentModule = SpecM $ asks specEnvCurrentModule
 
   withLocalBounds bounds = SpecM . withReaderT adj . unSpecM
     where
@@ -172,6 +182,8 @@ instance MonadSpec SpecM where
 
 instance MonadSpec m => MonadSpec (ReaderT r m) where
   liftGhc = lift . liftGhc
+
+  getCurrentModule = lift getCurrentModule
 
   withLocalBounds = liftWithReaderT . withLocalBounds
   lookupBound = lift . lookupBound

@@ -43,7 +43,7 @@ import           CoreMonad
 import           Text.Parsec.Pos                            (sourceName, sourceLine, sourceColumn, newPos)
 
 import           Name
-import           Module                                     (moduleNameFS)
+import           Module
 import           Unique
 import           Finder                                     (findImportedModule, cannotFindModule)
 import           Panic                                      (throwGhcException)
@@ -454,6 +454,15 @@ qualifiedNameSymbol n = symbol $ concatFS [modFS, occFS, uniqFS]
 
 instance Symbolic FastString where
   symbol = symbol . fastStringText
+
+instance Symbolic ModuleName where
+  symbol = symbol . moduleNameFS
+
+instance Symbolic PackageKey where
+  symbol = symbol . packageKeyFS
+
+instance Symbolic Module where
+  symbol m = symbol (modulePackageKey m) `suffixSymbol` symbol (moduleName m)
 
 fastStringText :: FastString -> T.Text
 fastStringText = T.decodeUtf8 . fastStringToByteString
