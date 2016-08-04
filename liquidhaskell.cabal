@@ -114,8 +114,8 @@ executable target
 Library
    Default-Language: Haskell98
    Build-Depends: base >= 4 && < 5
-                , ghc >= 7.10.2 && < 7.11
-                , liquiddesugar >= 7.10 && < 7.11
+                , ghc (>= 7.10.2 && < 7.11) || (>= 8.0.0 && < 8.1)
+                , liquiddesugar (>= 7.10 && < 7.11) || (>= 8.0 && < 8.1)
                 , template-haskell >= 2.9
                 , time >= 1.4
                 , array >= 0.5
