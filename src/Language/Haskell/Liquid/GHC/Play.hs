@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE CPP                       #-}
 
 module Language.Haskell.Liquid.GHC.Play where
 
@@ -9,7 +10,12 @@ import Prelude hiding (error)
 import GHC
 import CoreSyn
 import Var
+
+#if __GLASGOW_HASKELL__ < 800
 import TypeRep
+#else
+import TyCoRep hiding (substTysWith)
+#endif
 
 import Coercion
 
@@ -81,8 +87,14 @@ instance Subable Type where
 
 substTysWith :: M.HashMap Var Type -> Type -> Type
 substTysWith s tv@(TyVarTy v)  = M.lookupDefault tv v s
+#if __GLASGOW_HASKELL__ < 800
+    -- This ctor removed in GHC 8
 substTysWith s (FunTy t1 t2)   = FunTy (substTysWith s t1) (substTysWith s t2)
 substTysWith s (ForAllTy v t)  = ForAllTy v (substTysWith (M.delete v s) t)
+#else
+substTysWith s (ForAllTy (Named v f) t) = ForAllTy (Named v f) (substTysWith (M.delete v s) t)
+substTysWith _ (ForAllTy _ _) = todo Nothing "What should happen with anon ForAllTy's?"
+#endif
 substTysWith s (TyConApp c ts) = TyConApp c (map (substTysWith s) ts)
 substTysWith s (AppTy t1 t2)   = AppTy (substTysWith s t1) (substTysWith s t2)
 substTysWith _ (LitTy t)       = LitTy t

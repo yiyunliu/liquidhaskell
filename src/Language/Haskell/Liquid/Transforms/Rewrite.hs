@@ -25,7 +25,11 @@ module Language.Haskell.Liquid.Transforms.Rewrite
 
 import           CoreSyn
 import           Type
-import           TypeRep
+#if __GLASGOW_HASKELL__ < 800
+import TypeRep
+#else
+import TyCoRep hiding (substTysWith)
+#endif
 import           TyCon
 import qualified CoreSubst
 import qualified Outputable
@@ -164,10 +168,16 @@ rewriteWith tx           = go
 _safeSimplifyPatTuple :: RewriteRule
 _safeSimplifyPatTuple e
   | Just e' <- simplifyPatTuple e
-  , CoreUtils.exprType e' == CoreUtils.exprType e
+  , CoreUtils.exprType e' `isEqual` CoreUtils.exprType e
   = Just e'
   | otherwise
   = Nothing
+    where
+#if __GLASGOW_HASKELL__ < 800
+       isEqual = (==) -- This used to magically work
+#else
+       isEqual = eqType
+#endif
 
 --------------------------------------------------------------------------------
 simplifyPatTuple :: RewriteRule

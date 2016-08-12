@@ -5,6 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
+{-# LANGUAGE CPP                       #-}
 
 module Language.Haskell.Liquid.Transforms.Rec (
      transformRecExpr, transformScope
@@ -32,7 +33,11 @@ import           Outputable                           (SDoc)
 import           Prelude                              hiding (error)
 import           SrcLoc
 import           Type                                 (mkForAllTys, splitForAllTys)
-import           TypeRep
+#if __GLASGOW_HASKELL__ < 800
+import TypeRep
+#else
+import TyCoRep hiding (substTysWith)
+#endif
 import           Unique                               hiding (deriveUnique)
 import           Var
 
@@ -219,11 +224,16 @@ mkFreshIds :: [TyVar]
            -> State TrEnv ([Var], Id)
 mkFreshIds tvs ids x
   = do ids'  <- mapM fresh ids
-       let t  = mkForAllTys tvs $ mkType (reverse ids') $ varType x
+       let t  = mkForAllTys tvs' $ mkType (reverse ids') $ varType x
        let x' = setVarType x t
        return (ids', x')
   where
-    mkType ids ty = foldl (\t x -> FunTy (varType x) t) ty ids
+#if __GLASGOW_HASKELL__ < 800
+    tvs' = tvs
+#else
+    tvs' = fmap (\v -> Named v Specified) tvs -- TODO: probably shouldn't always be Specified
+#endif
+    mkType ids ty = foldl (\t x -> mkFunTy (varType x) t) ty ids
 
 class Freshable a where
   fresh :: a -> TE a

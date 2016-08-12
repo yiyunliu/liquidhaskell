@@ -30,7 +30,9 @@ import qualified CoreSyn                                    as Core
 import           CostCentre
 import           GHC                                        hiding (L)
 import           HscTypes                                   (Dependencies, ImportedMods, ModGuts(..), HscEnv(..), FindResult(..))
-import           Kind                                       (superKind)
+#if __GLASGOW_HASKELL__ < 800
+
+#endif
 import           NameSet                                    (NameSet)
 import           SrcLoc                                     hiding (L)
 import           Bag
@@ -51,8 +53,18 @@ import           TcRnDriver
 
 
 import           RdrName
-import           Type                                       (liftedTypeKind)
+
+#if __GLASGOW_HASKELL__ < 800
 import           TypeRep
+import           Type                                       (liftedTypeKind)
+import           Kind                                       (superKind)
+#else
+import           Type                                       (liftedTypeKind, mkTyConApp)
+import           TyCoRep
+import           TysWiredIn
+import           THNames                                    (kindTyConName)
+#endif
+
 import           Var
 import           IdInfo
 import qualified TyCon                                      as TC
@@ -76,6 +88,10 @@ import           Language.Haskell.Liquid.Desugar.HscMain
 import           Control.DeepSeq
 import           Language.Haskell.Liquid.Types.Errors
 
+#if __GLASGOW_HASKELL__ >= 800
+superKind = mkTyConApp starKindTyCon []
+#endif
+
 --------------------------------------------------------------------------------
 -- | Datatype For Holding GHC ModGuts ------------------------------------------
 --------------------------------------------------------------------------------
@@ -83,7 +99,7 @@ data MGIModGuts = MI {
     mgi_binds     :: !CoreProgram
   , mgi_module    :: !Module
   , mgi_deps      :: !Dependencies
-  , mgi_dir_imps  :: !ImportedMods
+ -- , mgi_dir_imps  :: !ImportedMods -- TODO: this type exists in ghc 8, but where does it come from?
   , mgi_rdr_env   :: !GlobalRdrEnv
   , mgi_tcs       :: ![TyCon]
   , mgi_fam_insts :: ![FamInst]
@@ -96,7 +112,7 @@ miModGuts cls mg  = MI {
     mgi_binds     = mg_binds mg
   , mgi_module    = mg_module mg
   , mgi_deps      = mg_deps mg
-  , mgi_dir_imps  = mg_dir_imps mg
+--  , mgi_dir_imps  = mg_dir_imps mg
   , mgi_rdr_env   = mg_rdr_env mg
   , mgi_tcs       = mg_tcs mg
   , mgi_fam_insts = mg_fam_insts mg
@@ -140,8 +156,13 @@ stringTyCon = stringTyConWithKind superKind
 
 -- FIXME: reusing uniques like this is really dangerous
 stringTyConWithKind :: Kind -> Char -> Int -> String -> TyCon
-stringTyConWithKind k c n s = TC.mkKindTyCon name k
+stringTyConWithKind k c n s = mkKindTyCon' name k
   where
+#if __GLASGOW_HASKELL__ < 800
+    mkKindTyCon'  = TC.mkKindTyCon
+#else
+    mkKindTyCon' n k = TC.mkKindTyCon n [] k [] kindTyConName
+#endif
     name          = mkInternalName (mkUnique c n) occ noSrcSpan
     occ           = mkTcOcc s
 
@@ -154,7 +175,10 @@ isBaseType (ForAllTy _ t)  = isBaseType t
 isBaseType (TyVarTy _)     = True
 isBaseType (TyConApp _ ts) = all isBaseType ts
 isBaseType (AppTy t1 t2)   = isBaseType t1 && isBaseType t2
+#if __GLASGOW_HASKELL__ < 800
+    -- This ctor removed in GHC 8
 isBaseType (FunTy _ _)     = False -- isBaseType t1 && isBaseType t2
+#endif
 isBaseType _               = False
 
 validTyVar :: String -> Bool
@@ -323,6 +347,20 @@ collectArguments n e = if length xs > n then take n xs else xs
     vs               = fst $ collectValBinders $ ignoreLetBinds e'
     xs               = vs' ++ vs
 
+#if __GLASGOW_HASKELL__ >= 800
+-- For whatever reason, these are no longer exported by GHC 8, even though they
+-- are defined...
+collectTyBinders expr = go [] expr
+   where
+      go tvs (Lam b e) | isTyVar b = go (b:tvs) e
+      go tvs e                     = (reverse tvs, e)
+
+collectValBinders expr = go [] expr
+   where
+      go ids (Lam b e) | isId b = go (b:ids) e
+      go ids body               = (reverse ids, body)
+#endif
+
 collectValBinders' :: Core.Expr Var -> ([Var], Core.Expr Var)
 collectValBinders' = go []
   where
@@ -368,8 +406,10 @@ realTcArity
   = kindArity . TC.tyConKind
 
 kindArity :: Kind -> Arity
+#if __GLASGOW_HASKELL__ < 800
 kindArity (FunTy _ res)
   = 1 + kindArity res
+#endif
 kindArity (ForAllTy _ res)
   = 1 + kindArity res
 kindArity _
@@ -392,7 +432,11 @@ lookupRdrName hsc_env mod_name rdr_name = do
                     -- Try and find the required name in the exports
                     let decl_spec = ImpDeclSpec { is_mod = mod_name, is_as = mod_name
                                                 , is_qual = False, is_dloc = noSrcSpan }
+#if __GLASGOW_HASKELL__ < 800
                         provenance = Imported [ImpSpec decl_spec ImpAll]
+#else
+                        provenance = Just (ImpSpec decl_spec ImpAll)
+#endif
                         env = case mi_globals iface of
                                 Nothing -> mkGlobalRdrEnv (gresFromAvails provenance (mi_exports iface))
                                 Just e -> e
@@ -458,7 +502,10 @@ fastStringText = T.decodeUtf8 . fastStringToByteString
 
 tyConTyVarsDef :: TyCon -> [TyVar]
 tyConTyVarsDef c | TC.isPrimTyCon c || isFunTyCon c = []
+#if __GLASGOW_HASKELL__ < 800
+    -- Promoted tycons removed in GHC 8
 tyConTyVarsDef c | TC.isPromotedTyCon   c = []
+#endif
 tyConTyVarsDef c | TC.isPromotedDataCon c = []
 tyConTyVarsDef c = TC.tyConTyVars c
 
@@ -606,7 +653,13 @@ desugarModule tcm = do
 type Prec = TyPrec
 
 lintCoreBindings :: [Var] -> CoreProgram -> (Bag MsgDoc, Bag MsgDoc)
+#if __GLASGOW_HASKELL__ < 800
 lintCoreBindings = CoreLint.lintCoreBindings CoreDoNothing
+#else
+lintCoreBindings = CoreLint.lintCoreBindings dummy CoreDoNothing
+   where
+      dummy = DynFlags {} -- TODO: This is probably bad
+#endif
 
 synTyConRhs_maybe :: TyCon -> Maybe Type
 synTyConRhs_maybe = TC.synTyConRhs_maybe

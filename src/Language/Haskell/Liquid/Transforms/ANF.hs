@@ -8,6 +8,7 @@
 {-# LANGUAGE TypeSynonymInstances       #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE CPP                        #-}
 
 
 module Language.Haskell.Liquid.Transforms.ANF (anormalize) where
@@ -25,8 +26,14 @@ import           Literal
 import           MkCore                           (mkCoreLets)
 import           Outputable                       (trace)
 import           Var                              (varType, setVarType)
+#if __GLASGOW_HASKELL__ < 800
 import           TypeRep
 import           Type                             (mkForAllTys, substTy, mkForAllTys, mkTopTvSubst, isTyVar)
+#else
+import           TyCoRep                   hiding (substTysWith)
+import           Type                             (mkForAllTys, substTy, mkForAllTys, isTyVar)
+#endif
+
 import           TyCon                            (tyConDataCons_maybe)
 import           DataCon                          (dataConInstArgTys)
 import           FamInstEnv                       (emptyFamInstEnv)
@@ -50,7 +57,9 @@ import qualified Language.Haskell.Liquid.GHC.Resugar   as Rs
 import           Data.Maybe                       (fromMaybe)
 import           Data.List                        (sortBy, (\\))
 
+#if __GLASGOW_HASKELL__ >= 800
 
+#endif
 
 --------------------------------------------------------------------------------
 -- | A-Normalize a module ------------------------------------------------------
