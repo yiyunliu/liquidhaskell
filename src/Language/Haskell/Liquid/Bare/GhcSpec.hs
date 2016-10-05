@@ -272,16 +272,15 @@ makeGhcSpec1 vars _defVars embs tyi exports name sigs asms cs' ms' cms' su sp
   = do tySigs      <- makePluggedSigs name embs tyi exports $ tx sigs
        asmSigs     <- makePluggedAsmSigs embs tyi $ tx asms
        ctors       <- makePluggedAsmSigs embs tyi $ tx cs'
-       return $ sp { gsTySigs   = filter (\(v,_) -> v `elem` vs) tySigs
-                   , gsAsmSigs  = filter (\(v,_) -> v `elem` vs) asmSigs
-                   , gsCtors    = filter (\(v,_) -> v `elem` vs) ctors
+       return $ sp { gsTySigs   = tySigs
+                   , gsAsmSigs  = asmSigs
+                   , gsCtors    = ctors
                    , gsMeas     = measSyms
                    , gsLits     = measSyms -- RJ: we will be adding *more* things to `meas` but not `lits`
                    }
     where
       tx       = fmap . mapSnd . subst $ su
       tx'      = fmap (mapSnd $ fmap uRType)
-      vs       = vars ++ defVars
       measSyms = tx' $ tx $ ms' ++ varMeasures vars ++ cms'
 
 makeGhcSpec2 :: Monad m
