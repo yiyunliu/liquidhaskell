@@ -28,7 +28,7 @@ import           Language.Haskell.Liquid.Types.PrettyPrint ()
 import           Language.Haskell.Liquid.GHC.Misc          (dropModuleNames)
 import           Language.Haskell.Liquid.Types
 import           Language.Haskell.Liquid.Types.RefType ()
-import           Language.Haskell.Liquid.Misc              (mapFst)
+import           Language.Fixpoint.Misc                (mapFst)
 
 import qualified Data.HashMap.Strict                       as M
 
@@ -37,10 +37,11 @@ makeDictionaries = DEnv . M.fromList . map makeDictionary
 
 
 makeDictionary :: RInstance SpecType -> (Symbol, M.HashMap Symbol SpecType)
-makeDictionary (RI c ts xts) = (makeDictionaryName c ts, M.fromList (mapFst val <$> xts))
+makeDictionary (RI c ts xts) = (makeDictionaryName (btc_tc c) ts, M.fromList (mapFst val <$> xts))
 
 makeDictionaryName :: Located Symbol -> [SpecType] -> Symbol
-
+makeDictionaryName t ts         
+  = symbol ("$f" ++ symbolString (val t) ++ concatMap makeDicTypeName ts)
 
 
 makeDicTypeName :: SpecType -> String 
@@ -53,8 +54,6 @@ makeDicTypeName (RVar a _)
 makeDicTypeName t 
   = panic Nothing ("makeDicTypeName: called with invalid type " ++ show t)
 
-makeDictionaryName t ts         
-  = symbol ("$f" ++ symbolString (val t) ++ concatMap makeDicTypeName ts)
 
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------

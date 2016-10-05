@@ -1,6 +1,13 @@
 ![LiquidHaskell](/resources/logo.png)
 
+
 [![Hackage](https://img.shields.io/hackage/v/liquidhaskell.svg)](https://hackage.haskell.org/package/liquidhaskell) [![Hackage-Deps](https://img.shields.io/hackage-deps/v/liquidhaskell.svg)](http://packdeps.haskellers.com/feed?needle=liquidhaskell) [![Build Status](https://img.shields.io/circleci/project/ucsd-progsys/liquidhaskell/master.svg)](https://circleci.com/gh/ucsd-progsys/liquidhaskell)
+
+
+Contributing Guide
+------------------
+
+Please see the [contributing guide](CONTRIBUTING.md)
 
 Requirements
 ------------
@@ -53,38 +60,38 @@ How to Profile
 --------------
 
 1. Build with profiling on
-   
+
     ```
     $ make pdeps && make prof
     ```
 
 2. Run with profiling
-   
+
     ```
     $ time liquid range.hs +RTS -hc -p
     $ time liquid range.hs +RTS -hy -p
     ```
-   
+
     Followed by this which shows the stats file
-   
+
     ```
     $ more liquid.prof
     ```
-   
+
     or by this to see the graph
-   
+
     ```
     $ hp2ps -e8in -c liquid.hp
     $ gv liquid.ps
     ```
-    
+
     etc.
 
 How to Get Stack Traces On Exceptions
 -------------------------------------
 
 1. Build with profiling on
-    
+
     ```
     $ make pdeps && make prof
     ```
@@ -337,7 +344,7 @@ the user can specify that the ADT follows the expected decreasing measure by
 
 Then, LiquidHaskell will define an instance of the function `autosize` for `L` that decreases by 1 at each recursive call and use `autosize` at functions that recurse on `L`.
 
-For example, `autosize L` will refine the data constroctors of `L a` with the `autosize :: a -> Int` information, such that
+For example, `autosize L` will refine the data constructors of `L a` with the `autosize :: a -> Int` information, such that
 
     Nil  :: {v:L a | autosize v = 0}
     Cons :: x:a -> xs:L a -> {v:L a | autosize v = 1 + autosize xs}
@@ -406,6 +413,17 @@ pair of arguments. This can be encoded with the lexicographic
 termination annotation `{-@ Decrease even 1 2 @-}` (see
 [tests/pos/mutrec.hs](tests/pos/mutrec.hs) for the full example).
 
+
+
+Total Haskell
+--------------
+
+LiquidHaskell provides a total Haskell flag that checks both totallity and termination of the program, 
+overriding a potential no-termination flag. 
+
+    liquid --total-Haskel test.hs
+
+
 Lazy Variables
 --------------
 
@@ -424,11 +442,25 @@ it is used. For example, with the above annotation the following code is SAFE:
 By default, all the variables starting with `fail` are marked as LAZY, to defer
 failing checks at the point where these variables are used.
 
+No measure fields
+------------------
+
+When a data type is refined, Liquid Haskell automatically turns the data constructor fields into measures. 
+For example, 
+
+   {-@ data L a = N | C {hd :: a, tl :: L a} @-}
+
+will automatically create two measures `hd` and `td`. 
+To deactivate this automatic measure definition, and speed up verification, you can use the `no-measure-fields` flag. 
+   
+  liquid --no-measure-fields test.hs
+
+
 Prune Unsorted Predicates
 -------------------------
 
 By default unsorted predicates are pruned away (yielding `true`
-for the corresponding refinement.) To disable this behaviour
+for the corresponding refinement.) To disable this behavior
 use the `no-prune-unsorted` flag.
 
     liquid --no-prune-unsorted test.hs
@@ -437,16 +469,16 @@ use the `no-prune-unsorted` flag.
 Case Expansion
 -------------------------
 
-By default LiquidHaskell expands all data constructors to the case statements. 
-For example, 
-if `F = A1 | A2 | .. | A10`, 
-then liquidHAskell will expand the code 
-`case f of {A1 -> True; _ -> False}` 
-to `case f of {A1 -> True; A2 -> False; ...; A10 -> False}`. 
+By default LiquidHaskell expands all data constructors to the case statements.
+For example,
+if `F = A1 | A2 | .. | A10`,
+then LiquidHaskell will expand the code
+`case f of {A1 -> True; _ -> False}`
+to `case f of {A1 -> True; A2 -> False; ...; A10 -> False}`.
 This expansion can lead to more precise code analysis
-but it can get really expensive due to code explosion. 
+but it can get really expensive due to code explosion.
 The `no-case-expand` flag prevents this expansion and keeps the user
-provided cases for the case expression. 
+provided cases for the case expression.
 
     liquid --no-case-expand test.hs
 
@@ -458,9 +490,9 @@ The flag `--higherorder` allows reasoning about higher order functions.
 
 Restriction to Linear Arithmetic
 ---------------------------------
-When using `z3` as the solver, LiquidHaskell allows for non-linear arithmetic: 
-division and multiplication on integers are interpreted by `z3`. To treat division 
-and multiplication as unintepreted functions use the `linear` flag
+When using `z3` as the solver, LiquidHaskell allows for non-linear arithmetic:
+division and multiplication on integers are interpreted by `z3`. To treat division
+and multiplication as uninterpreted functions use the `linear` flag
 
     liquid --linear test.hs
 
@@ -507,12 +539,12 @@ Writing Specifications
 Modules WITHOUT code
 --------------------
 
-When checking a file `target.hs`, you can specify an _include_ directory by 
+When checking a file `target.hs`, you can specify an _include_ directory by
 
     liquid -i /path/to/include/  target.hs
-    
-Now, to write specifications for some module `Foo.Bar.Baz` for which
-you _do not_ have the code, you can create a `.spec` file at:
+
+Now, to write specifications for some **external module** `Foo.Bar.Baz` for which
+you **do not have the code**, you can create a `.spec` file at:
 
     /path/to/include/Foo/Bar/Baz.spec
 
@@ -521,8 +553,14 @@ See, for example, the contents of
 + [include/Prelude.spec](https://github.com/ucsd-progsys/liquidhaskell/blob/master/include/Prelude.spec)
 + [include/Data/List.spec](https://github.com/ucsd-progsys/liquidhaskell/blob/master/include/Data/List.spec)
 + [include/Data/Vector.spec](https://github.com/ucsd-progsys/liquidhaskell/blob/master/include/Data/Vector.spec)
-    
-(**Note**: The above directories are part of the LH prelude, and included by default when running `liquid`.)
+
+**Note**:
+
++ The above directories are part of the LH prelude, and included by
+  default when running `liquid`.
++ The `.spec` mechanism is *only for external modules** without code,
+  see below for standalone specifications for **internal** or **home** modules.
+
 
 Modules WITH code: Data
 -----------------------
@@ -570,7 +608,7 @@ above the function definition. [For example](tests/pos/spec0.hs)
     incr x = x + 1
 
 Modules WITH code: Type Classes
----------------------------------------
+-------------------------------
 
 Write the specification directly into the .hs or .lhs file,
 above the type class definition. [For example](tests/pos/Class.hs)
@@ -604,6 +642,103 @@ the refined type `Odd -> Odd -> Odd`.
 Note that currently liquidHaskell does not allow refining instances of
 refined classes.
 
+Modules WITH code: QuasiQuotation
+---------------------------------
+
+Instead of writing both a Haskell type signature *and* a
+LiquidHaskell specification for a function, the `lq`
+quasiquoter in the `LiquidHaskell` module can be used
+to generate both from just the LiquidHaskell specification.
+
+```haskell
+module Nats (nats) where
+
+{-@ nats :: [{v:Int | 0 <= v}] @-}
+nats :: [Int]
+nats = [1,2,3]
+```
+
+can be written as
+
+```haskell
+{-# LANGUAGE QuasiQuotes #-}
+module Nats (nats) where
+
+import LiquidHaskell
+
+[lq| nats :: [{v:Int | 0 <= v}] |]
+nats = [1,2,3]
+```
+
+and the `lq` quasiquoter will generate the plain `nats :: [Int]` when GHC
+compiles the module.
+
+Refined type aliases (see the next section) can also be written inside `lq`; for
+example:
+
+```haskell
+{-# LANGUAGE QuasiQuoters #-}
+module Nats (Nat, nats) where
+
+[lq| type Nat = {v:Int | 0 <= v} |]
+
+[lq| nats :: [Nat] |]
+nats = [1,2,3]
+```
+
+Here, the `lq` quasiquoter will generate a plain Haskell
+type synonym for `Nat` as well as the refined one.
+
+Note that this is still an experimental feature, and
+currently requires that one depend on LiquidHaskell
+as a build dependency for your project; the quasiquoter
+will be split out eventually into an independent,
+dependency-light package. Also, at this time, writing
+a type inside `lq` which refers to a refined type alias
+for which there is not a plain Haskell type synonym of the
+same name will result in a "not in scope" error from GHC.
+
+Standalone Specifications for Internal Modules
+----------------------------------------------
+
+Recall that the `.spec` mechanism is only for modules whose
+code is absent; if code is present then there can be multiple,
+possibly conflicting specifications. Nevertheless, you may want,
+for one reason or another, to write (assumed) specifications
+outside the file implementing the module.
+
+You can do this as follows.
+
+`Lib.hs`
+
+```haskell
+module Lib (foo) where
+
+foo a = a
+```
+
+now, instead of a `.spec` file, just use a haskell module, e.g. `LibSpec.hs`
+
+```haskell
+module LibSpec ( module Lib ) where
+
+import Lib
+
+-- Don't forget to qualify the name!
+
+{-@ Lib.foo :: {v:a | false} -> a @-}
+```
+
+and then here's `Client.hs`
+
+```haskell
+module Client where
+
+import Lib      -- use this if you DON'T want the spec  
+import LibSpec  -- use this if you DO want the spec, in addition to OR instead of the previous import.
+
+bar = foo 1     -- if you `import LibSpec` then this call is rejected by LH
+```
 Refinement Type Aliases
 -----------------------
 
@@ -723,6 +858,10 @@ Generic measures: [tests/pos/Class.hs](tests/pos/Class.hs)
         size (Node x l r) = 1 + (size l) + (size r)
     @-}
 
+**Note:** Measure names **do not** have to be the same as 
+field name, e.g. we could call the measure `sz` in the above
+as shown in [tests/pos/Class2.hs](tests/pos/Class2.hs).
+
 
 Haskell Functions as Measures (beta): [tests/pos/HaskellMeasure.hs](tests/pos/HaskellMeasure.hs)
 
@@ -733,13 +872,13 @@ Inductive Haskell Functions from Data Types to some type can be lifted to logic
     llen []     = 0
     llen (x:xs) = 1 + llen xs
 
-The above definition 
-  - refines list's data constructors types with the llen information, and 
-  - specifies a singleton type for the haskell function 
+The above definition
+  - refines list's data constructors types with the llen information, and
+  - specifies a singleton type for the haskell function
         `llen :: xs:[a] -> {v:Int | v == llen xs}`
-    If the user specifies another type for llen, say 
+    If the user specifies another type for llen, say
         `llen :: xs:[a] -> {v:Int | llen xs >= 0}`
-    then the auto generated singleton type is overwriten.
+    then the auto generated singleton type is overwritten.
 
 Self-Invariants
 ===============
@@ -773,14 +912,23 @@ levels (or rather, to *reify* the connections between the two levels.) See
 [this test](tests/pos/maybe4.hs) for a simple example and `hedgeUnion` and
 [Data.Map.Base](benchmarks/esop2013-submission/Base.hs) for a complex one.
 
-Bounds
-======
-The bounds correspond to Horn
-implications between abstract refinements, which, as in the classical
-setting, correspond to subtyping constraints that must be satisfied by the concrete refinements used at any call-site.
+Abstract and Bounded Refinements
+================================
 
-See `benchmarks/icfp15/pos/Overview.lhs` for exaples on how to use bounds.
+This is probably the best example of the abstract refinement syntax:
 
++ [Abstract Refinements](tests/pos/Map.hs)
++ [Bounded Refinements](benchmarks/icfp15/pos/Overview.lhs)
+
+Unfortunately, the best documentation for these two advanced features
+is the relevant papers at 
+
++ [ESOP 2013](https://ranjitjhala.github.io/static/abstract_refinement_types.pdf)  
++ [ICFP 2015](https://arxiv.org/abs/1507.00385)
+
+The bounds correspond to Horn implications between abstract refinements, 
+which, as in the classical setting, correspond to subtyping constraints
+that must be satisfied by the concrete refinements used at any call-site.
 
 Invariants
 ==========
@@ -795,7 +943,7 @@ example,  the length of a list cannot be negative
     {-@ invariant {v:[a] | (len v >= 0)} @-}
 
 LiquidHaskell can prove that this invariant holds, by proving that all List's
-constractos (ie., `:` and `[]`) satisfy it.(TODO!)
+constructors (ie., `:` and `[]`) satisfy it.(TODO!)
 Then, LiquidHaskell assumes that each list element that is created satisfies
 this invariant.
 
@@ -808,8 +956,7 @@ list is treated as a Stream. To establish this local invariant one can use the
 
 denoting that each list is not empty.
 Then, LiquidHaskell will prove that this invariant holds, by proving that *all
-calls* to List's
-constractos (ie., `:` and `[]`) satisfy it, and
+calls* to List's constructors (ie., `:` and `[]`) satisfy it, and
 will assume that each list element that is created satisfies
 this invariant.
 
@@ -839,7 +986,7 @@ Formal Grammar of Refinement Predicates
        | c                      -- constant
        | (e + e)                -- addition
        | (e - e)                -- subtraction
-       | (c * e)                -- cmultiplication by constant
+       | (c * e)                -- multiplication by constant
        | (v e1 e2 ... en)       -- uninterpreted function application
        | (if p then e else e)   -- if-then-else
 
@@ -971,7 +1118,7 @@ Generating Performance Reports
 
 We have set up infrastructure to generate performance reports using [Gipeda](https://github.com/nomeata/gipeda).
 
-Gipeda will generate a static webpage that tracks the peformance improvements
+Gipeda will generate a static webpage that tracks the performance improvements
 and regressions between commits. To generate the site, first ensure you have the
 following dependencies available:
 
@@ -1002,7 +1149,7 @@ all logs.
 
 You should expect this process to take a very long time. `generate-site.bash`
 will compile each commit, then run the entire test suite and benchmark suite
-for each commit. It is suggested to provide a managable range to `generate-site.bash`:
+for each commit. It is suggested to provide a manageable range to `generate-site.bash`:
 
     ./generate-site.bash -s [starting hash] -e [ending hash]
 
@@ -1020,6 +1167,7 @@ Finally, to remove the Gipeda infrastructure from your computer, you may execute
 
 ...which will remove any files created by `deploy-gipeda.bash` and `generate-site.bash`
 from your computer.
+
 
 Configuration Management
 ------------------------

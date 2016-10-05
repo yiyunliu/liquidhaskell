@@ -26,7 +26,7 @@ import           HscTypes                         (SourceError)
 import           GHC (HscEnv)
 import           System.Console.CmdArgs.Verbosity (whenLoud, whenNormal)
 import           System.Console.CmdArgs.Default
-
+import           Control.Monad (when)
 import qualified Control.Exception as Ex
 import qualified Language.Fixpoint.Types.Config as FC
 import qualified Language.Haskell.Liquid.UX.DiffCheck as DC
@@ -39,7 +39,7 @@ import           Language.Haskell.Liquid.Types.RefType (applySolution)
 import           Language.Haskell.Liquid.UX.Errors
 import           Language.Haskell.Liquid.UX.CmdLine
 import           Language.Haskell.Liquid.UX.Tidy
-import           Language.Haskell.Liquid.GHC.Misc (showPpr)
+import           Language.Haskell.Liquid.GHC.Misc (showCBs) -- howPpr)
 import           Language.Haskell.Liquid.GHC.Interface
 import           Language.Haskell.Liquid.Constraint.Generate
 import           Language.Haskell.Liquid.Constraint.ToFixpoint
@@ -108,16 +108,18 @@ liquidOne :: GhcInfo -> IO (Output Doc)
 ------------------------------------------------------------------------------
 liquidOne info = do
   whenNormal $ donePhase Loud "Extracted Core using GHC"
-  let cfg   = config $ spec info
+  let cfg   = getConfig info
   let tgt   = target info
   -- whenLoud  $ do putStrLn $ showpp info
                  -- putStrLn "*************** Original CoreBinds ***************************"
                  -- putStrLn $ render $ pprintCBs (cbs info)
   let cbs' = transformScope (cbs info)
+  whenNormal $ donePhase Loud "Transformed Core"
   whenLoud  $ do donePhase Loud "transformRecExpr"
                  putStrLn "*************** Transform Rec Expr CoreBinds *****************"
-                 --  putStrLn $ render $ pprintCBs cbs'
-                 putStrLn $ showPpr cbs'
+                 putStrLn $ showCBs (untidyCore cfg) cbs'
+                 -- putStrLn $ render $ pprintCBs cbs'
+                 -- putStrLn $ showPpr cbs'
   edcs <- newPrune      cfg cbs' tgt info
   out' <- liquidQueries cfg      tgt info edcs
   DC.saveResult       tgt  out'
@@ -130,7 +132,7 @@ newPrune cfg cbs tgt info
   | diffcheck cfg = maybeEither cbs <$> DC.slice tgt cbs sp
   | otherwise     = return  (Left cbs)
   where
-    vs            = tgtVars sp
+    vs            = gsTgtVars sp
     sp            = spec    info
 
 -- topLevelBinders :: GhcSpec -> [Var]
@@ -148,9 +150,11 @@ liquidQueries cfg tgt info (Right dcs)
 
 liquidQuery   :: Config -> FilePath -> GhcInfo -> Either [CoreBind] DC.DiffCheck -> IO (Output Doc)
 liquidQuery cfg tgt info edc = do
-  whenLoud (dumpCs cgi)
+  when False (dumpCs cgi)
+  -- whenLoud $ mapM_ putStrLn [ "****************** CGInfo ********************"
+                            -- , render (pprint cgi)                            ]
   out   <- timedAction names $ solveCs cfg tgt cgi info' names
-  return $ mconcat [oldOut, out]
+  return $  mconcat [oldOut, out]
   where
     cgi    = {-# SCC "generateConstraints" #-} generateConstraints $! info' {cbs = cbs''}
     cbs''  = either id              DC.newBinds                        edc
@@ -173,32 +177,40 @@ pprintMany xs = vcat [ F.pprint x $+$ text " " | x <- xs ]
 
 
 solveCs :: Config -> FilePath -> CGInfo -> GhcInfo -> Maybe [String] -> IO (Output Doc)
-solveCs cfg tgt cgi info names
-  = do finfo          <- cgInfoFInfo info cgi tgt
-       F.Result r sol <- solve fx finfo
-       let warns = logErrors cgi
-       let annm  = annotMap cgi
-       let res_err = fmap (applySolution sol . cinfoError . snd) r
-       res_model  <- fmap (fmap pprint . tidyError sol)
-                      <$> getModels info cfg res_err
-       let out0  = mkOutput cfg res_model sol annm
-       return    $ out0 { o_vars    = names             }
-                        { o_errors  = e2u sol <$> warns }
-                        { o_result  = res_model         }
-    where
-       fx        = def { FC.solver      = fromJust (smtsolver cfg)
-                       , FC.linear      = linear      cfg
-                       , FC.newcheck    = newcheck    cfg
-                       , FC.eliminate   = eliminate   cfg
-                       , FC.save        = saveQuery   cfg
-                       , FC.srcFile     = tgt
-                       , FC.cores       = cores       cfg
-                       , FC.minPartSize = minPartSize cfg
-                       , FC.maxPartSize = maxPartSize cfg
-                       , FC.elimStats   = elimStats   cfg
-                       , FC.elimBound   = elimBound   cfg
-                       }
+solveCs cfg tgt cgi info names = do
+  finfo          <- cgInfoFInfo info cgi tgt
+  F.Result r sol <- solve (fixConfig tgt cfg) finfo
+  let resErr      = applySolution sol . cinfoError . snd <$> r
+  resModel_      <- fmap (e2u sol) <$> getModels info cfg resErr
+  let resModel    = resModel_  `addErrors` (e2u sol <$> logErrors cgi)
+  let out0        = mkOutput cfg resModel sol (annotMap cgi)
+  return          $ out0 { o_vars    = names    }
+                         { o_result  = resModel }
 
+fixConfig :: FilePath -> Config -> FC.Config
+fixConfig tgt cfg = def
+  { FC.solver      = fromJust (smtsolver cfg)
+  , FC.linear      = linear            cfg
+  , FC.eliminate   = not $ noEliminate cfg
+  --, FC.oldElim     = True -- oldEliminate      cfg
+  --, FC.pack        = packKVars cfg
+  , FC.nonLinCuts  = True -- nonLinCuts        cfg
+  , FC.save        = saveQuery         cfg
+  , FC.srcFile     = tgt
+  , FC.cores       = cores             cfg
+  , FC.minPartSize = minPartSize       cfg
+  , FC.maxPartSize = maxPartSize       cfg
+  , FC.elimStats   = elimStats         cfg
+  , FC.elimBound   = elimBound         cfg
+  , FC.allowHO     = higherOrderFlag   cfg
+  , FC.allowHOqs   = higherorderqs     cfg
+
+  , FC.extensionality   = extensionality   cfg
+  , FC.alphaEquivalence = alphaEquivalence cfg
+  , FC.betaEquivalence  = betaEquivalence  cfg
+  , FC.normalForm       = normalForm       cfg
+  , FC.stringTheory     = stringTheory     cfg 
+  }
 
 e2u :: F.FixSolution -> Error -> UserError
 e2u s = fmap F.pprint . tidyError s

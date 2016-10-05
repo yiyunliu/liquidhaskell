@@ -21,6 +21,7 @@ import           PrelNames                                  (fractionalClassKeys
 
 import           Debug.Trace
 
+import           DataCon                                    (isTupleDataCon)
 import           Prelude                                    hiding (error)
 import           Avail                                      (availsToNameSet)
 import           BasicTypes                                 (Arity)
@@ -56,10 +57,11 @@ import           Var
 import           IdInfo
 import qualified TyCon                                      as TC
 import           Data.Char                                  (isLower, isSpace)
-import           Data.Maybe                                 (fromMaybe)
+import           Data.Maybe                                 (isJust, fromMaybe)
 import           Data.Hashable
 import qualified Data.HashSet                               as S
 
+import qualified Data.Text.Encoding.Error                   as TE
 import qualified Data.Text.Encoding                         as T
 import qualified Data.Text                                  as T
 import           Control.Arrow                              (second)
@@ -71,14 +73,13 @@ import qualified Text.PrettyPrint.HughesPJ                  as PJ
 import           Language.Fixpoint.Types                    hiding (L, Loc (..), SrcSpan, Constant, SESearch (..))
 import qualified Language.Fixpoint.Types                    as F
 import           Language.Fixpoint.Misc                     (safeHead, safeLast, safeInit)
-import           Language.Haskell.Liquid.Desugar710.HscMain
+import           Language.Haskell.Liquid.Desugar.HscMain
 import           Control.DeepSeq
 import           Language.Haskell.Liquid.Types.Errors
 
 --------------------------------------------------------------------------------
 -- | Datatype For Holding GHC ModGuts ------------------------------------------
 --------------------------------------------------------------------------------
-
 data MGIModGuts = MI {
     mgi_binds     :: !CoreProgram
   , mgi_module    :: !Module
@@ -341,11 +342,17 @@ ignoreLetBinds e
 -- | Predicates on CoreExpr and DataCons ---------------------------------------
 --------------------------------------------------------------------------------
 
+isTupleId :: Id -> Bool
+isTupleId = maybe False isTupleDataCon . idDataConM
+
+idDataConM :: Id -> Maybe DataCon
+idDataConM x = case idDetails x of
+  DataConWorkId d -> Just d
+  DataConWrapId d -> Just d
+  _               -> Nothing
+
 isDataConId :: Id -> Bool
-isDataConId x = case idDetails x of
-                  DataConWorkId _ -> True
-                  DataConWrapId _ -> True
-                  _               -> False
+isDataConId = isJust . idDataConM
 
 getDataConVarUnique :: Var -> Unique
 getDataConVarUnique v
@@ -365,7 +372,7 @@ kindArity :: Kind -> Arity
 kindArity (FunTy _ res)
   = 1 + kindArity res
 kindArity (ForAllTy _ res)
-  = kindArity res
+  = 1 + kindArity res
 kindArity _
   = 0
 
@@ -448,12 +455,12 @@ instance Symbolic FastString where
   symbol = symbol . fastStringText
 
 fastStringText :: FastString -> T.Text
-fastStringText = T.decodeUtf8 . fastStringToByteString
+fastStringText = T.decodeUtf8With TE.lenientDecode . fastStringToByteString
 
 tyConTyVarsDef :: TyCon -> [TyVar]
 tyConTyVarsDef c | TC.isPrimTyCon c || isFunTyCon c = []
-tyConTyVarsDef c | TC.isPromotedTyCon   c = panic Nothing ("TyVars on " ++ show c) -- tyConTyVarsDef $ TC.ty_con c
-tyConTyVarsDef c | TC.isPromotedDataCon c = panic Nothing ("TyVars on " ++ show c) -- DC.dataConUnivTyVars $ TC.datacon c
+tyConTyVarsDef c | TC.isPromotedTyCon   c = []
+tyConTyVarsDef c | TC.isPromotedDataCon c = []
 tyConTyVarsDef c = TC.tyConTyVars c
 
 --------------------------------------------------------------------------------
@@ -607,3 +614,8 @@ synTyConRhs_maybe = TC.synTyConRhs_maybe
 
 tcRnLookupRdrName :: HscEnv -> GHC.Located RdrName -> IO (Messages, Maybe [Name])
 tcRnLookupRdrName = TcRnDriver.tcRnLookupRdrName
+
+showCBs :: Bool -> [CoreBind] -> String
+showCBs untidy
+  | untidy    = Out.showSDocDebug unsafeGlobalDynFlags . ppr . tidyCBs
+  | otherwise = showPpr

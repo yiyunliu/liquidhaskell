@@ -74,11 +74,14 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
       let n' = n + 1
       xs <- decodeArgs f vs (map snd xts)
       whenVerbose $ io $ print xs
-      -- FIXME: need to guard the `check` phase with `try . evaluate` too..
-      -- exception could be lurking underneath the constructor, eg non-exhaustive pattern
-      -- in recursive call
-      er <- io $ try $ evaluate (apply f xs)
-      -- whenVerbose $ io $ print er
+      er <- try $ do
+        let r = apply f xs
+        real <- gets realized
+        modify $ \s@(TargetState {..}) -> s { realized = [] }
+        let su = mkSubst $ mkExprs f (map fst xts) xs
+        (sat, _) <- check r (subst su to)
+        return (sat, real)
+        -- whenVerbose $ io $ print r
       case er of
         Left (e :: SomeException)
           -- DON'T catch AsyncExceptions since they are used by @timeout@
@@ -94,11 +97,7 @@ process f ctx vs xts to = go 0 =<< io (command ctx CheckSat)
                           $ build "(assert (not (and {})))"
                      $ Only $ smt2many model
               mbKeepGoing xs n'
-        Right r -> do
-          real <- gets realized
-          modify $ \s@(TargetState {..}) -> s { realized = [] }
-          let su = mkSubst $ mkExprs f (map fst xts) xs
-          (sat, _) <- check r (subst su to)
+        Right (sat, real) -> do
 
           -- refute model *after* checking output in case we have HOFs, which
           -- need to query the solver. if this is the last set of inputs, e.g.

@@ -25,6 +25,7 @@ module Language.Haskell.Liquid.UX.CmdLine (
 
    -- * Exit Function
    , exitWithResult
+   , addErrors
 
    -- * Diff check mode
    , diffcheck
@@ -53,8 +54,11 @@ import System.FilePath                     (dropFileName, isAbsolute,
                                             takeDirectory, (</>))
 
 import Language.Fixpoint.Types.Config      hiding (Config, linear, elimBound, elimStats,
-                                              getOpts, cores, minPartSize,
-                                              maxPartSize, newcheck, eliminate)
+                                                   nonLinCuts, getOpts, cores, minPartSize,
+                                                   maxPartSize, eliminate, defConfig,
+                                                   stringTheory,
+                                                   withPragmas,
+                                                   extensionality, alphaEquivalence, betaEquivalence, normalForm)
 -- import Language.Fixpoint.Utils.Files
 import Language.Fixpoint.Misc
 import Language.Fixpoint.Types.Names
@@ -64,7 +68,7 @@ import Language.Haskell.Liquid.UX.Annotate
 import Language.Haskell.Liquid.GHC.Misc
 import Language.Haskell.Liquid.Misc
 import Language.Haskell.Liquid.Types.PrettyPrint
-import Language.Haskell.Liquid.Types       hiding (config, name, typ)
+import Language.Haskell.Liquid.Types       hiding (name, typ)
 import qualified Language.Haskell.Liquid.UX.ACSS as ACSS
 
 
@@ -106,9 +110,33 @@ config = cmdArgsMode $ Config {
     = def
           &= help "Allow higher order binders into the logic"
 
+ , extensionality
+    = def
+          &= help "Allow function extentionality axioms"
+
+ , alphaEquivalence
+    = def
+          &= help "Allow lambda alpha-equivalence axioms"
+
+ , betaEquivalence
+    = def
+          &= help "Allow lambda beta-equivalence axioms"
+
+ , normalForm
+    = def
+          &= help "Allow lambda normalization-equivalence axioms"
+
+ , higherorderqs
+    = def
+          &= help "Allow higher order qualifiers to get automatically instantiated"
+
  , linear
     = def
           &= help "Use uninterpreted integer multiplication and division"
+
+ , stringTheory
+    = def
+          &= help "Interpretation of Strings by z3"
 
  , saveQuery
     = def &= help "Save fixpoint query to file (slow)"
@@ -117,13 +145,17 @@ config = cmdArgsMode $ Config {
     = def &= help "Check a specific (top-level) binder"
           &= name "check-var"
 
- , noPrune
+ , pruneUnsorted
     = def &= help "Disable prunning unsorted Predicates"
-          &= name "no-prune-unsorted"
+          &= name "prune-unsorted"
 
  , notermination
     = def &= help "Disable Termination Check"
           &= name "no-termination-check"
+
+ , totalHaskell
+    = def &= help "Check for termination and totality, Overrides no-termination flags"
+          &= name "total-Haskell"
 
  , autoproofs
     = def &= help "Automatically construct proofs from axioms"
@@ -133,9 +165,13 @@ config = cmdArgsMode $ Config {
     = def &= help "Don't display warnings, only show errors"
           &= name "no-warnings"
 
- , trustinternals
-    = def &= help "Trust all ghc auto generated code"
-          &= name "trust-internals"
+ , noannotations
+    = def &= help "Don't create intermediate annotation files"
+          &= name "no-annotations"
+
+ , trustInternals
+    = False &= help "Trust GHC generated code"
+            &= name "trust-internals"
 
  , nocaseexpand
     = def &= help "Don't expand the default case in a case-expression"
@@ -163,9 +199,6 @@ config = cmdArgsMode $ Config {
 
  , smtsolver
     = def &= help "Name of SMT-Solver"
-
- , newcheck
-    = True &= help "New fixpoint check"
 
  , noCheckUnknown
     = def &= explicit
@@ -197,10 +230,6 @@ config = cmdArgsMode $ Config {
           &= typ "OPTION"
           &= help "Tell GHC to compile and link against these files"
 
- , eliminate
-    = def &= name "eliminate"
-          &= help "Use experimental 'eliminate' feature"
-
  , port
      = defaultPort
           &= name "port"
@@ -210,9 +239,18 @@ config = cmdArgsMode $ Config {
     = def &= help "Exact Type for Data Constructors"
           &= name "exact-data-cons"
 
+ , noMeasureFields
+    = def &= help "Do not automatically lift data constructor fields into measures"
+          &= name "no-measure-fields"
+
  , scrapeImports
     = False &= help "Scrape qualifiers from imported specifications"
             &= name "scrape-imports"
+            &= explicit
+
+ , scrapeInternals
+    = False &= help "Scrape qualifiers from auto generated specifications"
+            &= name "scrape-internals"
             &= explicit
 
  , scrapeUsedImports
@@ -241,9 +279,33 @@ config = cmdArgsMode $ Config {
     = False &= name "time-binds"
             &= help "Solve each (top-level) asserted type signature separately & time solving."
 
- , patternInline
-    = False &= name "pattern-inline"
-            &= help "Inline applications of `>>=` and `return` during constraint generation."
+  , untidyCore
+    = False &= name "untidy-core"
+            &= help "Print fully qualified identifier names in verbose mode"
+
+  , noEliminate
+    = False &= name "no-eliminate"
+            &= help "Don't use KVar elimination during solving"
+
+  --, oldEliminate
+  --  = False &= name "old-eliminate"
+  --          &= help "Use old eliminate algorithm (temp. for benchmarking)"
+
+  , noPatternInline
+    = False &= name "no-pattern-inline"
+            &= help "Don't inline special patterns (e.g. `>>=` and `return`) during constraint generation."
+
+  , noSimplifyCore
+    = False &= name "no-simplify-core"
+            &= help "Don't simplify GHC core before constraint generation"
+
+  --, packKVars
+  --  = False &= name "pack-kvars"
+  --          &= help "Use kvar packing during elimination"
+
+  , nonLinCuts
+    = True  &= name "non-linear-cuts"
+            &= help "(TRUE) Treat non-linear kvars as cuts"
 
  } &= verbosity
    &= program "liquid"
@@ -321,13 +383,14 @@ fixDiffCheck :: Config -> Config
 fixDiffCheck cfg = cfg { diffcheck = diffcheck cfg && not (fullcheck cfg) }
 
 envCfg :: IO Config
-envCfg = do so <- lookupEnv "LIQUIDHASKELL_OPTS"
-            case so of
-              Nothing -> return defConfig
-              Just s  -> parsePragma $ envLoc s
-         where
-            envLoc  = Loc l l
-            l       = newPos "ENVIRONMENT" 0 0
+envCfg = do
+  so <- lookupEnv "LIQUIDHASKELL_OPTS"
+  case so of
+    Nothing -> return defConfig
+    Just s  -> parsePragma $ envLoc s
+  where
+    envLoc  = Loc l l
+    l       = newPos "ENVIRONMENT" 0 0
 
 copyright :: String
 copyright = "LiquidHaskell Copyright 2009-15 Regents of the University of California. All Rights Reserved.\n"
@@ -364,24 +427,33 @@ parsePragma = withPragma defConfig
 defConfig :: Config
 defConfig = Config { files             = def
                    , idirs             = def
-                   , newcheck          = True
+                   --, newcheck          = True
                    , fullcheck         = def
                    , linear            = def
+                   , stringTheory      = def 
                    , higherorder       = def
+                   , extensionality    = def
+                   , alphaEquivalence  = def
+                   , betaEquivalence   = def
+                   , normalForm        = def
+                   , higherorderqs     = def
                    , diffcheck         = def
                    , saveQuery         = def
                    , checks            = def
                    , noCheckUnknown    = def
                    , notermination     = def
+                   , totalHaskell      = def 
                    , autoproofs        = def
                    , nowarnings        = def
-                   , trustinternals    = def
+                   , noannotations     = def
+                   , trustInternals    = False
                    , nocaseexpand      = def
                    , strata            = def
                    , notruetypes       = def
                    , totality          = def
-                   , noPrune           = def
+                   , pruneUnsorted     = def
                    , exactDC           = def
+                   , noMeasureFields   = def 
                    , cores             = def
                    , minPartSize       = defaultMinPartSize
                    , maxPartSize       = defaultMaxPartSize
@@ -392,8 +464,8 @@ defConfig = Config { files             = def
                    , cabalDir          = def
                    , ghcOptions        = def
                    , cFiles            = def
-                   , eliminate         = def
                    , port              = defaultPort
+                   , scrapeInternals   = False
                    , scrapeImports     = False
                    , scrapeUsedImports = False
                    , elimStats         = False
@@ -401,7 +473,13 @@ defConfig = Config { files             = def
                    , json              = False
                    , counterExamples   = False
                    , timeBinds         = False
-                   , patternInline     = False
+                   , untidyCore        = False
+                   , noEliminate       = False
+                   --, oldEliminate      = False
+                   , noPatternInline   = False
+                   , noSimplifyCore    = False
+                   --, packKVars         = False
+                   , nonLinCuts        = True
                    }
 
 ------------------------------------------------------------------------
@@ -414,30 +492,32 @@ exitWithResult :: Config -> [FilePath] -> Output Doc -> IO (Output Doc)
 exitWithResult cfg targets out = do
   annm <- {-# SCC "annotate" #-} annotate cfg targets out
   whenNormal $ donePhase Loud "annotate"
-  let r = o_result out `addErrors` o_errors out
-  consoleResult cfg out r annm
-  return $ out { o_result = r }
+  -- let r = o_result out -- `addErrors` o_errors out
+  consoleResult cfg out annm
+  return out -- { o_result = r }
 
-consoleResult :: Config -> Output a -> ErrorResult -> ACSS.AnnMap -> IO ()
+consoleResult :: Config -> Output a -> ACSS.AnnMap -> IO ()
 consoleResult cfg
   | json cfg  = consoleResultJson cfg
   | otherwise = consoleResultFull cfg
 
-consoleResultFull :: Config -> Output a -> ErrorResult -> t -> IO ()
-consoleResultFull cfg out r _ = do
+consoleResultFull :: Config -> Output a -> t -> IO ()
+consoleResultFull cfg out _ = do
+   let r = o_result out
    writeCheckVars $ o_vars out
    cr <- resultWithContext r
    writeResult cfg (colorResult r) cr
-   -- writeFile   (extFileName Result target) (showFix cr)
 
-consoleResultJson :: t -> t1 -> t2 -> ACSS.AnnMap -> IO ()
-consoleResultJson _ _ _ annm = do
+consoleResultJson :: t -> t1 -> ACSS.AnnMap -> IO ()
+consoleResultJson _ _ annm = do
   putStrLn "RESULT"
   B.putStrLn . encode . ACSS.errors $ annm
 
 resultWithContext :: FixResult UserError -> IO (FixResult CError)
 resultWithContext = mapM errorWithContext
 
+instance Show (CtxError Doc) where
+  show = showpp
 
 writeCheckVars :: Symbolic a => Maybe [a] -> IO ()
 writeCheckVars Nothing     = return ()
@@ -471,8 +551,7 @@ errToFCrash ce = ce { ctErr    = tx $ ctErr ce}
    TODO: Never used, do I need to exist?
 reportUrl = text "Please submit a bug report at: https://github.com/ucsd-progsys/liquidhaskell" -}
 
-
-addErrors :: FixResult t -> [t] -> FixResult t
+addErrors :: FixResult a -> [a] -> FixResult a
 addErrors r []             = r
 addErrors Safe errs        = Unsafe errs
 addErrors (Unsafe xs) errs = Unsafe (xs ++ errs)

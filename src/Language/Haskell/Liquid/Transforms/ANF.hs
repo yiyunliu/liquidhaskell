@@ -19,8 +19,8 @@ import qualified DsMonad
 import           DsMonad                          (initDs)
 import           GHC                              hiding (exprType)
 import           HscTypes
-import           OccName                          (mkVarOccFS)
-import           Id                               (mkUserLocalM)
+import           OccName                          (OccName, mkVarOccFS)
+import           Id                               (mkUserLocal)
 import           Literal
 import           MkCore                           (mkCoreLets)
 import           Outputable                       (trace)
@@ -31,22 +31,25 @@ import           TyCon                            (tyConDataCons_maybe)
 import           DataCon                          (dataConInstArgTys)
 import           FamInstEnv                       (emptyFamInstEnv)
 import           VarEnv                           (VarEnv, emptyVarEnv, extendVarEnv, lookupWithDefaultVarEnv)
-import           UniqSupply                       (MonadUnique)
-
+import           UniqSupply                       (MonadUnique, getUniqueM)
+import           Unique                           (getKey)
 import           Control.Monad.State.Lazy
 import           System.Console.CmdArgs.Verbosity (whenLoud)
 import           Language.Fixpoint.Misc             (fst3)
-import           Language.Fixpoint.Types            (anfPrefix)
+import           Language.Fixpoint.Types            (intSymbol, anfPrefix)
 
-import           Language.Haskell.Liquid.UX.Config  (Config, nocaseexpand, patternInline)
+import           Language.Haskell.Liquid.UX.Config  (Config, untidyCore, nocaseexpand, noPatternInline)
 import           Language.Haskell.Liquid.Misc       (concatMapM)
-import           Language.Haskell.Liquid.GHC.Misc   (MGIModGuts(..), showPpr, symbolFastString)
+import           Language.Haskell.Liquid.GHC.Misc   (MGIModGuts(..), showCBs, showPpr, symbolFastString)
 import           Language.Haskell.Liquid.Transforms.Rec
+import           Language.Haskell.Liquid.Transforms.Rewrite
 import           Language.Haskell.Liquid.Types.Errors
+
 import qualified Language.Haskell.Liquid.GHC.SpanStack as Sp
 import qualified Language.Haskell.Liquid.GHC.Resugar   as Rs
 import           Data.Maybe                       (fromMaybe)
 import           Data.List                        (sortBy, (\\))
+
 
 
 --------------------------------------------------------------------------------
@@ -56,13 +59,18 @@ anormalize :: Config -> HscEnv -> MGIModGuts -> IO [CoreBind]
 --------------------------------------------------------------------------------
 anormalize cfg hscEnv modGuts
   = do whenLoud $ do putStrLn "***************************** GHC CoreBinds ***************************"
-                     putStrLn $ showPpr orig_cbs
+                     putStrLn $ showCBs (untidyCore cfg) (mgi_binds modGuts)
+                     putStrLn "***************************** REC CoreBinds ***************************"
+                     putStrLn $ showCBs (untidyCore cfg) orig_cbs
+                     putStrLn "***************************** RWR CoreBinds ***************************"
+                     putStrLn $ showCBs (untidyCore cfg) rwr_cbs
        (fromMaybe err . snd) <$> initDs hscEnv m grEnv tEnv emptyFamInstEnv act
     where
       m        = mgi_module modGuts
       grEnv    = mgi_rdr_env modGuts
       tEnv     = modGutsTypeEnv modGuts
-      act      = concatMapM (normalizeTopBind γ0) orig_cbs
+      act      = concatMapM (normalizeTopBind γ0) rwr_cbs
+      rwr_cbs  = rewriteBinds cfg orig_cbs
       orig_cbs = transformRecExpr $ mgi_binds modGuts
       err      = panic Nothing "Oops, cannot A-Normalize GHC Core!"
       γ0       = emptyAnfEnv cfg
@@ -71,7 +79,7 @@ expandFlag :: AnfEnv -> Bool
 expandFlag = not . nocaseexpand . aeCfg
 
 patternFlag :: AnfEnv -> Bool
-patternFlag = patternInline . aeCfg
+patternFlag = not . noPatternInline . aeCfg
 
 modGutsTypeEnv :: MGIModGuts -> TypeEnv
 modGutsTypeEnv mg  = typeEnvFromEntities ids tcs fis
@@ -271,6 +279,9 @@ normalizePattern γ p@(Rs.PatReturn {}) = do
   e'    <- normalize γ (Rs.patE p)
   return $ Rs.lower p { Rs.patE = e' }
 
+normalizePattern _ p@(Rs.PatProject {}) =
+  return (Rs.lower p)
+
 --------------------------------------------------------------------------------
 expandDefaultCase :: AnfEnv
                   -> Type
@@ -319,10 +330,14 @@ sortCases = sortBy (\x y -> cmpAltCon (fst3 x) (fst3 y))
 -- freshNormalVar = mkSysLocalM (symbolFastString anfPrefix)
 
 freshNormalVar :: AnfEnv -> Type -> DsM Id
-freshNormalVar γ t = mkUserLocalM anfOcc t sp
-  where
-    anfOcc         = mkVarOccFS $ symbolFastString anfPrefix
-    sp             = Sp.srcSpan (aeSrcSpan γ)
+freshNormalVar γ t = do
+  u     <- getUniqueM
+  let i  = getKey u
+  let sp = Sp.srcSpan (aeSrcSpan γ)
+  return (mkUserLocal (anfOcc i) u t sp)
+
+anfOcc :: Int -> OccName
+anfOcc = mkVarOccFS . symbolFastString . intSymbol anfPrefix
 
 data AnfEnv = AnfEnv
   { aeVarEnv  :: VarEnv Id

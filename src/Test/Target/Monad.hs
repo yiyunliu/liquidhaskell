@@ -41,7 +41,8 @@ import           Data.List                        hiding (sort)
 import qualified Data.Text                        as ST
 import qualified Data.Text.Lazy                   as T
 import qualified Data.Text.Lazy.Builder           as Builder
-import           Language.Haskell.TH.Lift
+import qualified Language.Haskell.TH              as TH
+import qualified Language.Haskell.TH.Syntax       as TH
 import           System.IO.Unsafe
 -- import           Text.Printf
 
@@ -149,7 +150,7 @@ initState fp sp ctx = TargetState
   , dconEnv      = dcons
   , ctorEnv      = cts
   , measEnv      = meas
-  , embEnv       = tcEmbeds sp
+  , embEnv       = gsTcEmbeds sp
   , tyconInfo    = tyi
   , freesyms     = free
   , constructors = []
@@ -163,16 +164,16 @@ initState fp sp ctx = TargetState
   }
   where
     -- FIXME: can we NOT tidy???
-    dcons = tidyF $ map (first symbol) (dconsP sp)
+    dcons = tidyF $ map (first symbol) (gsDconsP sp)
 
     -- NOTE: we want to tidy all occurrences of nullary datacons in the signatures
-    cts   = subst su $ tidyF $ map (symbol *** val) (ctors sp)
-    sigs  = subst su $ tidyF $ map (symbol *** val) $ tySigs sp
+    cts   = subst su $ tidyF $ map (symbol *** val) (gsCtors sp)
+    sigs  = subst su $ tidyF $ map (symbol *** val) $ gsTySigs sp
 
-    tyi   = makeTyConInfo (tconsP sp)
+    tyi   = makeTyConInfo (gsTconsP sp)
     free  = tidyS $ map (second symbol)
-          $ freeSyms sp ++ map (\(c,_) -> (symbol c, c)) (ctors sp)
-    meas  = measures sp
+          $ gsFreeSyms sp ++ map (\(c,_) -> (symbol c, c)) (gsCtors sp)
+    meas  = gsMeasures sp
     tidyF = map (first tidySymbol)
     tidyS = map (second tidySymbol)
     su = mkSubst (map (second eVar) free)
@@ -196,8 +197,7 @@ addConstraint p = modify $ \s@(TargetState {..}) -> s { constraints = p:constrai
 
 addConstructor :: Variable -> Target ()
 addConstructor c
-  = do -- modify $ \s@(TargetState {..}) -> s { constructors = S.insert c constructors }
-       modify $ \s@(TargetState {..}) -> s { constructors = nub $ c:constructors }
+  = modify $ \s@(TargetState {..}) -> s { constructors = nub $ c:constructors }
 
 inModule :: Symbol -> Target a -> Target a
 inModule m act
@@ -223,8 +223,7 @@ lookupCtor c (toType -> t)
   = do mt <- find (\(c', _) -> symbolText c == symbolText c')
                <$> gets ctorEnv
        case mt of
-         Just (_, t) -> do
-           return t
+         Just (_, t) -> return t
          Nothing -> do
            -- m  <- gets filePath
            -- o  <- asks ghcOpts
@@ -307,9 +306,22 @@ getValue v = do
   return (snd x)
 
 
+instance TH.Lift TargetOpts where
+  lift (TargetOpts {..}) = do
+    TH.appsE
+      [ TH.conE 'TargetOpts
+      , TH.lift depth
+      , TH.lift solver
+      , TH.lift verbose
+      , TH.lift logging
+      , TH.lift keepGoing
+      , TH.lift maxSuccess
+      , TH.lift scDepth
+      , TH.lift ghcOpts
+      ]
 
-----------------------------------------------------------------------
--- Template Haskell nonsense, MUST be at the bottom of the file
-----------------------------------------------------------------------
-
-deriveLiftMany [''SMTSolver, ''TargetOpts]
+instance TH.Lift SMTSolver where
+  lift smt = case smt of
+    Z3 -> TH.conE 'Z3
+    Cvc4 -> TH.conE 'Cvc4
+    Mathsat -> TH.conE 'Mathsat

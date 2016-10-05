@@ -10,13 +10,13 @@ module Language.Haskell.Liquid.Bare.RefToLogic (
 import Prelude hiding (error)
 
 import Language.Haskell.Liquid.Types
-import Language.Haskell.Liquid.Misc (mapSnd)
+import Language.Fixpoint.Misc (mapSnd)
 import Language.Haskell.Liquid.Bare.Env
 
 import Language.Fixpoint.Types hiding (R)
 
 
-import Language.Haskell.Liquid.GHC.Misc (dropModuleUnique)
+import Language.Haskell.Liquid.GHC.Misc (dropModuleUnique, dropModuleNames)
 
 
 
@@ -75,6 +75,8 @@ txQuant xss s m p
   | s `elem` (fst <$> xss) = impossible Nothing "Transformable.tx on Pred"
   | otherwise              = tx s m p
 
+instance Transformable a => Transformable (Located a)  where
+  tx s m x = x {val = tx s m (val x)} 
 
 instance Transformable Expr where
   tx s m (EVar s')
@@ -121,7 +123,7 @@ instance Transformable Body where
 
 mexpr :: Symbol -> Either LMap TInline -> Expr
 mexpr _ (Left  (LMap _ [] e)) = e
-mexpr s (Left  (LMap _ _  _)) = EVar s
+mexpr _ (Left  (LMap s _  _)) = EVar s
 mexpr _ (Right (TI _ e)) = e
 -- mexpr s s' = panic Nothing ("mexpr on " ++ show s ++ "\t" ++ show s')
 
@@ -158,8 +160,9 @@ txPApp (s, m) f es = txEApp (s, m) f es
 
 cmpSymbol :: Symbol -> Symbol -> Bool
 cmpSymbol s1 {- symbol in Core -} s2 {- logical Symbol-}
-  = dropModuleNamesAndUnique s1 == dropModuleNamesAndUnique s2
+  =  (dropModuleUnique s1) == (dropModuleNamesAndUnique s2)
+  || (dropModuleUnique s1) == (dropModuleUnique s2)
 
 
 dropModuleNamesAndUnique :: Symbol -> Symbol
-dropModuleNamesAndUnique = dropModuleUnique {- . dropModuleNames -}
+dropModuleNamesAndUnique = dropModuleUnique . dropModuleNames

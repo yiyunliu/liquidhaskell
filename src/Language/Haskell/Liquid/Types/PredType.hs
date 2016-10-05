@@ -61,7 +61,8 @@ mkRTyCon tc (TyConP αs' ps _ tyvariance predvariance size) = RTyCon tc pvs' (mk
         pvs' = subts (zip αs' τs) <$> ps
 
 dataConPSpecType :: DataCon -> DataConP -> SpecType
-dataConPSpecType dc (DataConP _ vs ps ls cs yts rt _) = mkArrow vs ps ls ts' rt'
+dataConPSpecType dc (DataConP _ vs ps ls cs yts rt _) 
+  = mkArrow makeVars ps ls ts' rt'
   where
     (xs, ts) = unzip $ reverse yts
     -- mkDSym   = (`mappend` symbol dc) . (`mappend` "_") . symbol
@@ -75,6 +76,9 @@ dataConPSpecType dc (DataConP _ vs ps ls cs yts rt _) = mkArrow vs ps ls ts' rt'
     ts'      = map ("" , , mempty) cs ++ yts'
     su       = F.mkSubst [(x, F.EVar y) | (x, y) <- zip xs ys]
     rt'      = subst su rt
+
+
+    makeVars = zipWith (\v a -> RTVar v (rTVarInfo a :: RTVInfo RSort)) vs (fst $ splitForAllTys $ dataConRepType dc)
 
 instance PPrint TyConP where
   pprintTidy k (TyConP vs ps ls _ _ _)
@@ -105,7 +109,7 @@ dataConTy m (TyVarTy v)
 dataConTy m (FunTy t1 t2)
   = rFun dummySymbol (dataConTy m t1) (dataConTy m t2)
 dataConTy m (ForAllTy α t)
-  = RAllT (rTyVar α) (dataConTy m t)
+  = RAllT (makeRTVar $ RTV α) (dataConTy m t)
 dataConTy m (TyConApp c ts)
   = rApp c (dataConTy m <$> ts) [] mempty
 dataConTy _ _
@@ -234,7 +238,9 @@ substRCon
       SubsTy tv (RType RTyCon tv ()) r,
       SubsTy tv (RType RTyCon tv ()) (RType RTyCon tv ()),
       SubsTy tv (RType RTyCon tv ()) RTyCon,
+      SubsTy tv (RType RTyCon tv ()) tv,
       Reftable (RType RTyCon tv r),
+      SubsTy tv (RType RTyCon tv ()) (RTVar tv (RType RTyCon tv ())),
       FreeVar RTyCon tv)
   => [Char]
   -> (t, Ref RSort (RType RTyCon tv r))

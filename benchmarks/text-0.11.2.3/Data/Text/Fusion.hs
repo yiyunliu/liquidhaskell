@@ -77,18 +77,26 @@ q_ltplus = undefined
 q_lteplus :: Int -> Int -> Int
 q_lteplus = undefined
 
-{-@ qualif Ord(v:int, x:Char)
-        : ((((ord x) <  65536) => (v = 0))
-        && (((ord x) >= 65536) => (v = 1)))
+{-@ qualOrd1 :: x:Char -> {v:Int | 
+         ((((ord x) <  65536) => (v = 0))
+        && (((ord x) >= 65536) => (v = 1))) } -> ()
   @-}
-{-@ qualif Ord(v:int, i:int, x:Char)
-        : ((((ord x) <  65536) => (v = i))
-        && (((ord x) >= 65536) => (v = (i + 1))))
+qualOrd1 :: Char -> Int -> ()
+qualOrd1 _ _ = ()
+
+{-@ qualOrd2 :: x:Char -> i:Int -> {v:Int | 
+          ((((ord x) <  65536) => (v = i))
+        && (((ord x) >= 65536) => (v = (i + 1))))} -> ()
   @-}
-{-@ qualif Ord(v:int, x:Char)
-        : ((((ord x) <  65536) => (v >= 0))
-        && (((ord x) >= 65536) => (v >= 1)))
+qualOrd2 :: Char -> Int -> Int -> ()
+qualOrd2 _ _ _ = ()
+
+{-@ qualOrd3 :: x:Char -> {v:Int | 
+          ((((ord x) <  65536) => (v >= 0))
+        && (((ord x) >= 65536) => (v >= 1))) } -> ()
   @-}
+qualOrd3 :: Char -> Int -> ()
+qualOrd3 _ _ = ()
 
 {-@ qualif MALenLE(v:int, a:A.MArray s): v <= (malen a) @-}
 {-@ qualif ALenLE(v:int, a:A.Array): v <= (alen a) @-}
@@ -215,7 +223,11 @@ reverse (Stream next s len0)
     upper k (Max   n) = max k n
     upper k _         = k
     len0' = upper 4 len0 --LIQUID INLINE upperBound 4 (larger len0 4)
-    (arr, (off', len')) = A.run2 (A.new len0' >>= loop s (len0'-1) len0')
+    -- (arr, (off', len'))
+    arr  = fst bloink
+    off' = fst (snd bloink)
+    len' = snd (snd bloink)
+    bloink = A.run2 (A.new len0' >>= loop s (len0'-1) len0')
     loop !s0 !i !len marr =
         case next s0 of
           Done -> return (marr, (j, len-j))
@@ -298,6 +310,14 @@ countChar = S.countCharI
 -- function to each element of a 'Text', passing an accumulating
 -- parameter from left to right, and returns a final 'Text'.
 
+{-@ fst :: (a, b) -> a @-}
+fst :: (a, b) -> a
+fst = undefined
+
+{-@ snd :: (a, b) -> b @-}
+snd :: (a, b) -> b
+snd = undefined
+
 {-@ assume mapAccumL
       :: (a -> GHC.Types.Char -> (a,GHC.Types.Char))
       -> a
@@ -307,14 +327,17 @@ countChar = S.countCharI
 
 {-@ Lazy mapAccumL @-}
 mapAccumL :: (a -> Char -> (a,Char)) -> a -> Stream Char -> (a, Text)
-mapAccumL f z0 (Stream next0 s0 len) =
-    (nz, I.textP na 0 nl)
+mapAccumL f z0 (Stream next0 s0 len) = (nz, I.textP na 0 nl)
   where
+    mlen = upperBound 4 len
     --LIQUID INLINE (na,(nz,nl)) = A.run2 (A.new mlen >>= \arr -> outer arr mlen z0 s0 0)
-    (na,(nz,nl)) = runST $ do (marr,x) <- (A.new mlen >>= \arr -> outer arr mlen z0 s0 0)
+    (na, (nz, nl))
+                 = runST $ do arr0 <- A.new mlen
+                              (marr,x) <- outer arr0 mlen z0 s0 0
                               arr <- A.unsafeFreeze marr
                               return (arr,x)
-      where mlen = upperBound 4 len
+
+      -- where mlen = upperBound 4 len
     outer arr top = loop
       where
         loop !z !s !i =
@@ -336,7 +359,10 @@ mapAccumL f z0 (Stream next0 s0 len) =
                 --LIQUID that takes 2 slots in the array. see LIQUID.txt for details
                 | otherwise -> do d <- unsafeWrite arr i c
                                   loop z' s' (i+d)
-                where (z',c) = f z x
+                where z'    = fst blob1
+                      c     = snd blob1
+                      blob1 = f z x
                       j | ord c < 0x10000 = i
                         | otherwise       = i + 1
+
 {-# INLINE [0] mapAccumL #-}

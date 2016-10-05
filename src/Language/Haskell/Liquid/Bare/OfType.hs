@@ -13,6 +13,7 @@ module Language.Haskell.Liquid.Bare.OfType (
 import Prelude hiding (error)
 import BasicTypes
 import Name
+import Kind (isKindVar)
 import TyCon hiding (synTyConRhs_maybe)
 import Type (expandTypeSynonyms)
 import TysWiredIn
@@ -26,11 +27,15 @@ import Data.Traversable (forM)
 import Text.Parsec.Pos
 import Text.Printf
 
+import Text.PrettyPrint.HughesPJ
+
 import qualified Control.Exception as Ex
 import qualified Data.HashMap.Strict as M
 
+-- import Language.Fixpoint.Misc (traceShow)
 import Language.Fixpoint.Types (atLoc, Expr(..), Reftable, Symbol, meet, mkSubst,
-                                subst, symbol, mkEApp)
+                                subst, symbol, symbolString, mkEApp)
+
 
 import Language.Haskell.Liquid.GHC.Misc
 import Language.Haskell.Liquid.Misc (secondM)
@@ -104,7 +109,7 @@ rtypePredBinds = map uPVar . ty_preds . toRTypeRep
 
 --------------------------------------------------------------------------------
 
-ofBRType :: (PPrint r, UReftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r, SubsTy Symbol (RType (Located Symbol) Symbol ()) r)
+ofBRType :: (PPrint r, UReftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r, SubsTy BTyVar BSort r)
          => (SourcePos -> RTAlias RTyVar SpecType -> [BRType r] -> r -> BareM (RRType r))
          -> (r -> BareM r)
          -> BRType r
@@ -121,9 +126,9 @@ ofBRType appRTAlias resolveReft
       =  do env <- get
             goRFun (bounds env) x t1 t2 r
     go (RVar a r)
-      = RVar (symbolRTyVar a) <$> resolveReft r
+      = RVar (bareRTyVar a) <$> resolveReft r
     go (RAllT a t)
-      = RAllT (symbolRTyVar a) <$> go t
+      = RAllT (dropTyVarInfo $ mapTyVarValue bareRTyVar a) <$> go t
     go (RAllP a t)
       = RAllP <$> ofBPVar a <*> go t
     go (RAllS x t)
@@ -148,17 +153,21 @@ ofBRType appRTAlias resolveReft
     go_syms
       = secondM ofBSort
 
-    goRFun bounds _ (RApp c ps' _ _) t _ | Just bnd <- M.lookup c bounds
+    goRFun bounds _ (RApp c ps' _ _) t _
+      | Just bnd <- M.lookup (btc_tc c) bounds
       = do let (ts', ps) = splitAt (length $ tyvars bnd) ps'
            ts <- mapM go ts'
-           makeBound bnd ts [x | RVar x _ <- ps] <$> go t
+           makeBound bnd ts [x | RVar (BTV x) _ <- ps] <$> go t
     goRFun _ x t1 t2 r
       = RFun x <$> go t1 <*> go t2 <*> resolveReft r
 
-    goRApp aliases (RApp (Loc l _ c) ts _ r) | Just rta <- M.lookup c aliases
+    goRApp aliases (RApp tc ts _ r)
+      | Loc l _ c <- btc_tc tc
+      , Just rta <- M.lookup c aliases
       = appRTAlias l rta ts =<< resolveReft r
-    goRApp _ (RApp lc ts rs r)
-      =  do let l = loc lc
+    goRApp _ (RApp tc ts rs r)
+      =  do let lc = btc_tc tc
+            let l = loc lc
             r'  <- resolveReft r
             lc' <- Loc l l <$> matchTyCon lc (length ts)
             rs' <- mapM go_ref rs
@@ -188,19 +197,51 @@ failRTAliasApp l rta _ _
 
 expandRTAliasApp :: SourcePos -> RTAlias RTyVar SpecType -> [BareType] -> RReft -> BareM SpecType
 expandRTAliasApp l rta args r
-  | length args == length αs + length εs
-    = do ts <- mapM (ofBareType l)                   $ take (length αs) args
-         es <- mapM (resolve l . exprArg (show err)) $ drop (length αs) args
+  | Just errmsg <- isOK
+    = Ex.throw errmsg  
+  | otherwise
+    = do ts <- mapM (ofBareType l) $ take (length αs) args
+         es <- mapM (resolve l . exprArg (symbolString $ rtName rta)) $ drop (length αs) args
          let tsu = zipWith (\α t -> (α, toRSort t, t)) αs ts
          let esu = mkSubst $ zip (symbol <$> εs) es
          return $ subst esu . (`strengthen` r) . subsTyVars_meet tsu $ rtBody rta
-  | otherwise
-    = Ex.throw err
+
   where
     αs        = rtTArgs rta
     εs        = rtVArgs rta
-    err       :: Error
-    err       = ErrAliasApp (sourcePosSrcSpan l) (length args) (pprint $ rtName rta) (sourcePosSrcSpan $ rtPos rta) (length αs + length εs)
+    err       :: Doc -> Error
+    err       = ErrAliasApp (sourcePosSrcSpan l) 
+                            (pprint $ rtName rta) 
+                            (sourcePosSrcSpan $ rtPos rta) 
+
+
+    isOK :: Maybe Error
+    isOK
+      | length args /= length targs + length eargs
+      = Just $ err (text "Expects" <+> (pprint $ length αs) <+> text "type arguments and then" <+> (pprint $ length εs) <+> text "expression arguments, but is given" <+> (pprint $ length args))
+      | length args /= length αs + length εs
+      = Just $ err (text "Expects" <+> (pprint $ length αs) <+> text "type arguments and " <+> (pprint $ length εs) <+> text "expression arguments, but is given" <+> (pprint $ length args))
+      | length αs /= length targs, not (null eargs)
+      = Just $ err (text "Expects" <+> (pprint $ length αs) <+> text "type arguments before expression arguments")
+--  Many expression arguments are parsed like type arguments
+{- 
+      | length αs /= length targs      
+      = Just $ err (text "Expects" <+> (pprint $ length αs) <+> text "type arguments but is given" <+> (pprint $ length targs))
+      | length εs /= length eargs
+      = Just $ err (text "Expects" <+> (pprint $ length εs) <+> text "expression arguments but is given" <+> (pprint $ length eargs))
+-} 
+      | otherwise
+      = Nothing
+
+    notIsRExprArg (RExprArg _) = False 
+    notIsRExprArg _            = True
+
+    targs = takeWhile notIsRExprArg args
+    eargs = dropWhile notIsRExprArg args
+
+
+
+
 
 -- | exprArg converts a tyVar to an exprVar because parser cannot tell
 -- HORRIBLE HACK To allow treating upperCase X as value variables X
@@ -214,11 +255,12 @@ exprArg _   (RVar x _)
 exprArg _   (RApp x [] [] _)
   = EVar (symbol x)
 exprArg msg (RApp f ts [] _)
-  = mkEApp (symbol <$> f) (exprArg msg <$> ts)
+  = mkEApp (symbol <$> btc_tc f) (exprArg msg <$> ts)
 exprArg msg (RAppTy (RVar f _) t _)
   = mkEApp (dummyLoc $ symbol f) [exprArg msg t]
 exprArg msg z
   = panic Nothing $ printf "Unexpected expression parameter: %s in %s" (show z) msg
+    -- FIXME: Handle this error much better!
 
 --------------------------------------------------------------------------------
 
@@ -232,16 +274,17 @@ bareTCApp r (Loc l _ c) rs ts | Just rhs <- synTyConRhs_maybe c
   = do when (realTcArity c < length ts) (Ex.throw err)
        return $ tyApp (subsTyVars_meet su $ ofType rhs) (drop nts ts) rs r
     where
-       tvs = tyConTyVarsDef c
+       tvs = filter (not . isKindVar) $ tyConTyVarsDef c
        su  = zipWith (\a t -> (rTyVar a, toRSort t, t)) tvs ts
        nts = length tvs
 
        err :: Error
-       err = ErrAliasApp (sourcePosSrcSpan l) (length ts) (pprint c) (getSrcSpan c) (realTcArity c)
+       err = ErrAliasApp (sourcePosSrcSpan l) (pprint c) (getSrcSpan c) 
+                         (text "Expects " <+> (pprint $ realTcArity c) <+> text "arguments, but is given" <+> (pprint $ length ts))
 
 -- TODO expandTypeSynonyms here to
 bareTCApp r (Loc _ _ c) rs ts | isFamilyTyCon c && isTrivial t
-  = return $ expandRTypeSynonyms $ t `strengthen` r
+  = return (expandRTypeSynonyms $ t `strengthen` r)
   where t = rApp c ts rs mempty
 
 bareTCApp r (Loc _ _ c) rs ts
