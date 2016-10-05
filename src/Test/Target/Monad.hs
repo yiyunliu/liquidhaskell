@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE ViewPatterns               #-}
 module Test.Target.Monad
   ( whenVerbose
@@ -40,6 +41,8 @@ import           Data.List                        hiding (sort)
 import qualified Data.Text                        as ST
 import qualified Data.Text.Lazy                   as T
 import qualified Data.Text.Lazy.Builder           as Builder
+import qualified Language.Haskell.TH              as TH
+import qualified Language.Haskell.TH.Syntax       as TH
 import           System.IO.Unsafe
 -- import           Text.Printf
 
@@ -301,3 +304,24 @@ getValue v = do
   Values [x] <- io $ ensureValues $ command ctx (GetValue [v])
   noteUsed x
   return (snd x)
+
+
+instance TH.Lift TargetOpts where
+  lift (TargetOpts {..}) = do
+    TH.appsE
+      [ TH.conE 'TargetOpts
+      , TH.lift depth
+      , TH.lift solver
+      , TH.lift verbose
+      , TH.lift logging
+      , TH.lift keepGoing
+      , TH.lift maxSuccess
+      , TH.lift scDepth
+      , TH.lift ghcOpts
+      ]
+
+instance TH.Lift SMTSolver where
+  lift smt = case smt of
+    Z3 -> TH.conE 'Z3
+    Cvc4 -> TH.conE 'Cvc4
+    Mathsat -> TH.conE 'Mathsat
