@@ -30,7 +30,7 @@ targetFInfo info cgi fn = F.fi cs ws bs ls consts ks {- packs -} qs bi fn aHO aH
     consts              = cgConsts cgi
     ks                  = kuts     cgi
     qs                  = targetQuals info cgi
-    bi                  = (`Ci` Nothing) <$> bindSpans cgi
+    bi                  = (\x -> Ci x Nothing Nothing) <$> bindSpans cgi
     aHO                 = allowHO cgi
     aHOqs               = higherOrderFlag info
 
