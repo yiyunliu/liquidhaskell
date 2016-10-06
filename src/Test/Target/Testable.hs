@@ -16,7 +16,6 @@ module Test.Target.Testable (test, Testable, setup) where
 
 import Prelude hiding (error, undefined)
 
-import           Control.Exception               (evaluate)
 import           Control.Monad
 import           Control.Monad.Catch
 import           Control.Monad.Reader

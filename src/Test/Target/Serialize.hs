@@ -83,8 +83,8 @@ instance SMTLIB2 Expr where
   smt2 (PNot p)         = build "(not {})"   (Only $ smt2  p)
   smt2 (PImp p q)       = build "(=> {} {})" (smt2 p, smt2 q)
   smt2 (PIff p q)       = build "(= {} {})"  (smt2 p, smt2 q)
-  smt2 (PExist bs p)    = build "(exists ({}) {})"  (smt2s bs, smt2 p)
-  smt2 (PAll   bs p)    = build "(forall ({}) {})"  (smt2s bs, smt2 p)
+  smt2 (PExist vs p)    = build "(exists ({}) {})"  (smt2s vs, smt2 p)
+  smt2 (PAll   vs p)    = build "(forall ({}) {})"  (smt2s vs, smt2 p)
 
   smt2 (PAtom r e1 e2)  = mkRel r e1 e2
   smt2 PGrad            = "true"

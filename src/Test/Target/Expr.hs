@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-} -- for Num Expr
 module Test.Target.Expr where
 
 import Language.Fixpoint.Types
