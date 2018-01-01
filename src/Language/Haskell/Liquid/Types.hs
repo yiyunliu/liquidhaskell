@@ -686,7 +686,7 @@ defaultTyConInfo = TyConInfo [] [] Nothing Nothing
 tyConSort :: RTyCon -> F.Sort 
 tyConSort rtc = fromMaybe dsort msort
   where
-    dsort = F.FTC . F.symbolFTycon . F.dummyLoc . F.symbol $ rtc_tc rtc
+    dsort = F.FTC . F.symbolFTycon . F.dummyLoc . tyConSymbol $ rtc_tc rtc
     msort = tyConSortMaybe $ rtc_info rtc
 
 instance Default TyConInfo where
@@ -1233,14 +1233,6 @@ instance Show DataName where
 instance F.PPrint SizeFun where
   pprintTidy _ (IdSizeFun)    = "[id]"
   pprintTidy _ (SymSizeFun x) = brackets (F.pprint (F.val x))
-
--- RJ: why not make this the Symbolic instance?
-instance F.Symbolic TyCon where
-  symbol c
-    | listTyCon == c       = F.listConName
-    | TyCon.isTupleTyCon c = F.tupConName
-    | otherwise            = F.symbol c
-
 
 instance F.Symbolic DataName where
   symbol = F.val . dataNameSymbol

@@ -146,7 +146,7 @@ makeNumericInfoOne m is
   | otherwise
   = m
   where
-    ftc c f1 f2 = F.FTC (F.symbolNumInfoFTyCon (dummyLoc $ F.symbol c) f1 f2)
+    ftc c f1 f2 = F.FTC (F.symbolNumInfoFTyCon (dummyLoc $ GM.tyConSymbol c) f1 f2)
 
 mappendSortFTC :: F.Sort -> F.Sort -> F.Sort
 mappendSortFTC (F.FTC x) (F.FTC y) = F.FTC (F.mappendFTC x y)

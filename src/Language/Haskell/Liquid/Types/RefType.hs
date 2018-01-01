@@ -120,7 +120,7 @@ import Language.Haskell.Liquid.Types.Variance
 import Language.Haskell.Liquid.Misc
 import Language.Haskell.Liquid.Types.Names
 import Language.Fixpoint.Misc
-import Language.Haskell.Liquid.GHC.Misc (locNamedThing, typeUniqueString, showPpr, stringTyVar, tyConTyVarsDef)
+import Language.Haskell.Liquid.GHC.Misc (locNamedThing, typeUniqueString, showPpr, stringTyVar, tyConTyVarsDef, tyConSymbol)
 import Language.Haskell.Liquid.GHC.Play (mapType, stringClassArg) -- , dataConImplicitIds)
 
 import Data.List (sort, foldl')
@@ -525,7 +525,7 @@ bApp :: TyCon -> [BRType r] -> [BRProp r] -> r -> BRType r
 bApp c = RApp (tyConBTyCon c)
 
 tyConBTyCon :: TyCon -> BTyCon
-tyConBTyCon = mkBTyCon . fmap symbol . locNamedThing
+tyConBTyCon = mkBTyCon . fmap tyConSymbol . locNamedThing
 -- tyConBTyCon = mkBTyCon . fmap symbol . locNamedThing
 
 --- NV TODO : remove this code!!!
@@ -795,7 +795,7 @@ isNumeric :: TCEmb TyCon -> RTyCon -> Bool
 isNumeric tce c = mySort == FTC F.intFTyCon || mySort == F.FInt
   where
     mySort      = M.lookupDefault def rc tce
-    def         = FTC . symbolFTycon . dummyLoc . symbol $ rc
+    def         = FTC . symbolFTycon . dummyLoc . tyConSymbol $ rc
     rc          = rtc_tc c
 
 addNumSizeFun :: RTyCon -> RTyCon
@@ -1392,7 +1392,7 @@ tyConFTyCon tce c = {- tracepp _msg $ -} M.lookupDefault def c tce
   where
     _msg           = "tyConFTyCon c = " ++ show c
     def           = fTyconSort niTc
-    niTc          = symbolNumInfoFTyCon (dummyLoc $ symbol c) (isNumCls c) (isFracCls c)
+    niTc          = symbolNumInfoFTyCon (dummyLoc $ tyConSymbol c) (isNumCls c) (isFracCls c)
 
 typeUniqueSymbol :: Type -> Symbol
 typeUniqueSymbol = symbol . typeUniqueString

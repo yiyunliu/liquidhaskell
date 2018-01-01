@@ -79,7 +79,7 @@ import           Control.DeepSeq
 import           Language.Haskell.Liquid.Types.Errors
 import           Language.Haskell.Liquid.Desugar.HscMain
 import           Id                                         (isExportedId, idOccInfo, setIdInfo)
-
+import           TysWiredIn (listTyCon)
 
 isAnonBinder :: TC.TyConBinder -> Bool
 isAnonBinder (TvBndr _ TC.AnonTCB) = True
@@ -537,8 +537,14 @@ noTyVars c =  (TC.isPrimTyCon c || isFunTyCon c || TC.isPromotedDataCon c)
 -- | Symbol Instances
 --------------------------------------------------------------------------------
 
--- instance Symbolic TyCon where
---   symbol = symbol . getName
+instance Symbolic TyCon where
+  symbol = symbol . getName
+
+tyConSymbol :: TyCon -> Symbol
+tyConSymbol c
+    | listTyCon == c = listConName
+    | TC.isTupleTyCon c = tupConName
+    | otherwise         = symbol c
 
 instance Symbolic Class where
   symbol = symbol . getName
