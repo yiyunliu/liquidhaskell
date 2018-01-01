@@ -49,7 +49,7 @@ module Language.Haskell.Liquid.Types (
 
   -- * Refined Type Constructors
   , RTyCon (RTyCon, rtc_tc, rtc_info)
-  , TyConInfo(..), defaultTyConInfo
+  , TyConInfo(..), defaultTyConInfo, tyConSort
   , rTyConPVs
   , rTyConPropVs
   , isClassRTyCon, isClassType, isEqType, isRVar, isBool
@@ -680,7 +680,14 @@ isProp _          = False
 
 
 defaultTyConInfo :: TyConInfo
-defaultTyConInfo = TyConInfo [] [] Nothing
+defaultTyConInfo = TyConInfo [] [] Nothing Nothing 
+
+
+tyConSort :: RTyCon -> F.Sort 
+tyConSort rtc = fromMaybe dsort msort
+  where
+    dsort = F.FTC . F.symbolFTycon . F.dummyLoc . F.symbol $ rtc_tc rtc
+    msort = tyConSortMaybe $ rtc_info rtc
 
 instance Default TyConInfo where
   def = defaultTyConInfo
@@ -706,12 +713,13 @@ data TyConInfo = TyConInfo
   { varianceTyArgs  :: !VarianceInfo      -- ^ variance info for type variables
   , variancePsArgs  :: !VarianceInfo      -- ^ variance info for predicate variables
   , sizeFunction    :: !(Maybe SizeFun)   -- ^ logical UNARY function that computes the size of the structure
+  , tyConSortMaybe  :: !(Maybe F.Sort)    -- ^ sort representation of TyCon
   } deriving (Generic, Data, Typeable)
 
 instance NFData TyConInfo
 
 instance Show TyConInfo where
-  show (TyConInfo x y _) = show x ++ "\n" ++ show y
+  show (TyConInfo x y _ _) = show x ++ "\n" ++ show y
 
 --------------------------------------------------------------------
 ---- Unified Representation of Refinement Types --------------------
@@ -1225,6 +1233,14 @@ instance Show DataName where
 instance F.PPrint SizeFun where
   pprintTidy _ (IdSizeFun)    = "[id]"
   pprintTidy _ (SymSizeFun x) = brackets (F.pprint (F.val x))
+
+-- RJ: why not make this the Symbolic instance?
+instance F.Symbolic TyCon where
+  symbol c
+    | listTyCon == c       = F.listConName
+    | TyCon.isTupleTyCon c = F.tupConName
+    | otherwise            = F.symbol c
+
 
 instance F.Symbolic DataName where
   symbol = F.val . dataNameSymbol

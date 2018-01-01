@@ -537,8 +537,8 @@ noTyVars c =  (TC.isPrimTyCon c || isFunTyCon c || TC.isPromotedDataCon c)
 -- | Symbol Instances
 --------------------------------------------------------------------------------
 
-instance Symbolic TyCon where
-  symbol = symbol . getName
+-- instance Symbolic TyCon where
+--   symbol = symbol . getName
 
 instance Symbolic Class where
   symbol = symbol . getName

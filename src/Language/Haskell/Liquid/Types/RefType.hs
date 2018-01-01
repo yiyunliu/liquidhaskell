@@ -33,7 +33,7 @@ module Language.Haskell.Liquid.Types.RefType (
   -- * Functions for manipulating `Predicate`s
   , pdVar
   , findPVar
-  , FreeVar, freeTyVars, tyClasses, tyConName
+  , FreeVar, freeTyVars, tyClasses
 
   -- * Quantifying RTypes
   , quantifyRTy
@@ -525,7 +525,7 @@ bApp :: TyCon -> [BRType r] -> [BRProp r] -> r -> BRType r
 bApp c = RApp (tyConBTyCon c)
 
 tyConBTyCon :: TyCon -> BTyCon
-tyConBTyCon = mkBTyCon . fmap tyConName . locNamedThing
+tyConBTyCon = mkBTyCon . fmap symbol . locNamedThing
 -- tyConBTyCon = mkBTyCon . fmap symbol . locNamedThing
 
 --- NV TODO : remove this code!!!
@@ -699,7 +699,16 @@ addTyConInfo :: (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r,
              -> RRType r
              -> RRType r
 -------------------------------------------------------------------------
-addTyConInfo tce tyi = mapBot (expandRApp tce tyi)
+addTyConInfo tce tyi = mapBot (embedTCEmb tce . expandRApp tce tyi)
+
+
+embedTCEmb :: TCEmb TyCon -> RRType r -> RRType r
+embedTCEmb tce (RApp rc ts rs r) 
+  = RApp rc{rtc_info = go (rtc_info rc)} ts rs r
+  where
+    go i = i{tyConSortMaybe = M.lookup (rtc_tc rc) tce}
+embedTCEmb _ t 
+  = t 
 
 -------------------------------------------------------------------------
 expandRApp :: (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r, Reftable (RTProp RTyCon RTyVar r))
@@ -786,7 +795,7 @@ isNumeric :: TCEmb TyCon -> RTyCon -> Bool
 isNumeric tce c = mySort == FTC F.intFTyCon || mySort == F.FInt
   where
     mySort      = M.lookupDefault def rc tce
-    def         = FTC . symbolFTycon . dummyLoc . tyConName $ rc
+    def         = FTC . symbolFTycon . dummyLoc . symbol $ rc
     rc          = rtc_tc c
 
 addNumSizeFun :: RTyCon -> RTyCon
@@ -1383,7 +1392,7 @@ tyConFTyCon tce c = {- tracepp _msg $ -} M.lookupDefault def c tce
   where
     _msg           = "tyConFTyCon c = " ++ show c
     def           = fTyconSort niTc
-    niTc          = symbolNumInfoFTyCon (dummyLoc $ tyConName c) (isNumCls c) (isFracCls c)
+    niTc          = symbolNumInfoFTyCon (dummyLoc $ symbol c) (isNumCls c) (isFracCls c)
 
 typeUniqueSymbol :: Type -> Symbol
 typeUniqueSymbol = symbol . typeUniqueString
@@ -1399,13 +1408,6 @@ typeSortForAll tce τ
         su                  = M.fromList $ zip sas (FVar <$>  [0..])
         sas                 = tyVarUniqueSymbol <$> as
         n                   = length as
-
--- RJ: why not make this the Symbolic instance?
-tyConName :: TyCon -> Symbol
-tyConName c
-  | listTyCon == c    = listConName
-  | TC.isTupleTyCon c = tupConName
-  | otherwise         = symbol c
 
 typeSortFun :: TCEmb TyCon -> Type -> Sort
 typeSortFun tce t -- τ1 τ2
@@ -1565,7 +1567,7 @@ makeLexReft _ _ _ _
 
 --------------------------------------------------------------------------------
 mkTyConInfo :: TyCon -> VarianceInfo -> VarianceInfo -> Maybe SizeFun -> TyConInfo
-mkTyConInfo c userTv userPv f = TyConInfo tcTv userPv f
+mkTyConInfo c userTv userPv f = TyConInfo tcTv userPv f Nothing 
   where
     tcTv                      = if null userTv then defTv else userTv
     defTv                     = makeTyConVariance c
