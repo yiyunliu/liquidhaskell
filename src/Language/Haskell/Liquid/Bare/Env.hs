@@ -16,7 +16,7 @@ module Language.Haskell.Liquid.Bare.Env (
 
   , setRTAlias
   , setREAlias
-  -- , setEmbeds
+  , setEmbeds
   , setDataDecls
 
   , execBare
@@ -105,8 +105,8 @@ instance HasConfig BareEnv where
 setDataDecls :: [F.DataDecl] -> BareM ()
 setDataDecls adts = modify $ \be -> be { dcEnv = dataConMap adts }
 
-_setEmbeds :: TCEmb TyCon -> BareM ()
-_setEmbeds emb = modify $ \be -> be {embeds = emb}
+setEmbeds :: TCEmb TyCon -> BareM ()
+setEmbeds emb = modify $ \be -> be {embeds = emb}
 
 insertLogicEnv :: String -> LocSymbol -> [F.Symbol] -> Expr -> BareM ()
 insertLogicEnv _msg x ys e = modify $ \be -> be {logicEnv = (logicEnv be) {lmSymDefs = M.insert (val x) (LMap x ys e) $ lmSymDefs $ logicEnv be}}

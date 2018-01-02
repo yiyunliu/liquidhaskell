@@ -53,6 +53,7 @@ module Language.Haskell.Liquid.Types.RefType (
 
   -- * Destructors
   , addTyConInfo
+  , addTCEmb
   , appRTyCon
   , typeUniqueSymbol
   , classBinds
@@ -124,6 +125,8 @@ import Language.Haskell.Liquid.GHC.Misc (locNamedThing, typeUniqueString, showPp
 import Language.Haskell.Liquid.GHC.Play (mapType, stringClassArg) -- , dataConImplicitIds)
 
 import Data.List (sort, foldl')
+
+import Control.Monad.State.Lazy
 
 strengthenDataConType :: Symbolic t
                       => (t, RType c tv (UReft Reft)) -> (t, RType c tv (UReft Reft))
@@ -692,6 +695,17 @@ quantifyFreeRTy :: Eq tv => RType c tv r -> RType c tv r
 quantifyFreeRTy ty = quantifyRTy (freeTyVars ty) ty
 
 
+
+-------------------------------------------------------------------------
+addTCEmb     :: (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r, Reftable (RTProp RTyCon RTyVar r))
+             => TCEmb TyCon
+             -> RRType r
+             -> RRType r
+-------------------------------------------------------------------------
+addTCEmb tce = mapBot (embedTCEmb tce)
+
+
+
 -------------------------------------------------------------------------
 addTyConInfo :: (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r, Reftable (RTProp RTyCon RTyVar r))
              => TCEmb TyCon
@@ -699,16 +713,24 @@ addTyConInfo :: (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r,
              -> RRType r
              -> RRType r
 -------------------------------------------------------------------------
-addTyConInfo tce tyi = mapBot (embedTCEmb tce . expandRApp tce tyi)
+addTyConInfo tce tyi = mapBot (expandRApp tce tyi)
+
+traceShowTy :: (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r, Reftable (RTProp RTyCon RTyVar r))
+            => String -> RRType r -> RRType r
+traceShowTy str r = traceShow (str ++ go r) r 
+  where
+    go (RFun _ t1 t2 _) = go t1 ++ " -> " ++ go t2 
+    go (RApp c _ _ _)   = show c ++ "with sort" ++ show (tyConSortMaybe $ rtc_info c)
+    go t                = show t 
 
 
-embedTCEmb :: TCEmb TyCon -> RRType r -> RRType r
+embedTCEmb :: (PPrint r, Reftable r, Reftable (RTProp RTyCon RTyVar r)) => TCEmb TyCon -> RRType r -> RRType r
 embedTCEmb tce (RApp rc ts rs r) 
   = RApp rc{rtc_info = go (rtc_info rc)} ts rs r
   where
-    go i = i{tyConSortMaybe = M.lookup (rtc_tc rc) tce}
+    go i = i{tyConSortMaybe = traceShow "looked up" $ M.lookup (rtc_tc rc) tce}
 embedTCEmb _ t 
-  = t 
+  = traceShow "FINAL = " t 
 
 -------------------------------------------------------------------------
 expandRApp :: (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r, Reftable (RTProp RTyCon RTyVar r))
@@ -1322,9 +1344,6 @@ rTypeSortedReft ::  (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()
                 => TCEmb TyCon -> RRType r -> SortedReft
 rTypeSortedReft emb t = RR (rTypeSort emb t) (rTypeReft t)
 
-rTypeSort     ::  (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r, Reftable (RTProp RTyCon RTyVar r))
-              => TCEmb TyCon -> RRType r -> Sort
-rTypeSort tce = typeSort tce . toType
 
 --------------------------------------------------------------------------------
 applySolution :: (Functor f) => FixSolution -> f SpecType -> f SpecType
@@ -1387,6 +1406,34 @@ typeSort tce = go
     go (CastTy t _)     = go t
     go τ                = FObj $ typeUniqueSymbol τ
 
+
+rTypeSort     ::  (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r, Reftable (RTProp RTyCon RTyVar r))
+              => TCEmb TyCon -> RRType r -> Sort
+rTypeSort tce s 
+  = if old == sort then sort else traceShow ("Wrong Sort init " ++ show s ++ "\n\n" ++ show (traceShowTy "HAHA" s) ++ "\n" ++ show old ++ "\nVS.\n" ++ show sort) sort    
+  where 
+    old  = typeSort tce $ toType s
+    sort = evalState (go s) 0
+    go (RVar a _)       = return $ FObj (rtyVarUniqueSymbol a)
+    go (RFun _ t1 t2 _) | isClassType t1 
+                        = go t2 
+                        | otherwise
+                        = FFunc <$> (go t1) <*> (go t2)
+    go (RAllT a t)      = do x <- get 
+                             put (x+1)
+                             let su = M.singleton (rtyVarUniqueSymbol $ ty_var_value a) (FVar x)
+                             FAbs x . sortSubst su <$> go t
+    go (RApp c ts _ _)  = fApp (tyConSort c) <$> (mapM go ts) 
+    go (RAppTy t1 t2 _) = fApp <$> go t1 <*> ((:[]) <$> go t2) 
+    go (RAllP _ t)      = go t 
+    go (RAllS _ t)      = go t 
+    go (RAllE _ _ t)    = go t 
+    go (REx _ _ t)      = go t 
+    go (RRTy _ _ _ t)   = go t
+    go t = impossible Nothing $ "RefType.toType cannot handle: " ++ show t
+
+
+
 tyConFTyCon :: M.HashMap TyCon Sort -> TyCon -> Sort
 tyConFTyCon tce c = {- tracepp _msg $ -} M.lookupDefault def c tce
   where
@@ -1399,6 +1446,7 @@ typeUniqueSymbol = symbol . typeUniqueString
 
 tyVarSort :: TyVar -> Sort
 tyVarSort = FObj . tyVarUniqueSymbol
+
 
 typeSortForAll :: TCEmb TyCon -> Type -> Sort
 typeSortForAll tce τ

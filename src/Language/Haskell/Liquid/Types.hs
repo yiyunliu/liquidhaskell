@@ -684,7 +684,7 @@ defaultTyConInfo = TyConInfo [] [] Nothing Nothing
 
 
 tyConSort :: RTyCon -> F.Sort 
-tyConSort rtc = fromMaybe dsort msort
+tyConSort rtc = traceShow ("SORT:: msort = " ++ show msort) $ fromMaybe dsort msort
   where
     dsort = F.FTC . F.symbolFTycon . F.dummyLoc . tyConSymbol $ rtc_tc rtc
     msort = tyConSortMaybe $ rtc_info rtc

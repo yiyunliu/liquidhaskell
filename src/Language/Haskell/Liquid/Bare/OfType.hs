@@ -114,7 +114,7 @@ ofBRType :: (PPrint r, UReftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r, Su
          -> BRType r
          -> BareM (RRType r)
 ofBRType appRTAlias resolveReft !t
-  = go t
+  = addTCEmb <$> (embeds <$> get) <*> go t
   where
     go t@(RApp _ _ _ _)
       = do aliases <- (typeAliases . rtEnv) <$> get

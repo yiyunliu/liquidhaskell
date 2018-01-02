@@ -387,6 +387,7 @@ makeGhcSpec' cfg file cbs tcs instenv vars defVars exports specs0 = do
   let mySpec      = fromMaybe mempty (lookup name specs0)
 
   embs           <- addClassEmbeds instenv tcs <$> (mconcat <$> mapM makeTyConEmbeds specs0)
+  setEmbeds embs
 
   lSpec0         <- makeLiftedSpec0 cfg embs cbs tcs mySpec
   let fullSpec    = mySpec `mappend` lSpec0
