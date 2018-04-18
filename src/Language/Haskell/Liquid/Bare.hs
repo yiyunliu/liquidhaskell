@@ -802,16 +802,11 @@ measureTypeToInv (x, (v, t)) = (Just v, t {val = mtype})
       | isBool $ ty_res trep
       = uError $ ErrHMeas (GM.sourcePosSrcSpan $ loc t) (pprint x)
                           (text "Specification of boolean measures is not allowed")
-{-
-      | [tx] <- ts, not (isTauto tx)
-      = uError $ ErrHMeas (sourcePosSrcSpan $ loc t) (pprint x)
-                          (text "Measures' types cannot have preconditions")
--}
       | [tx] <- ts
       = mkInvariant (head $ ty_binds trep) tx $ ty_res trep
       | otherwise
       = uError $ ErrHMeas (GM.sourcePosSrcSpan $ loc t) (pprint x)
-                          (text "Measures has more than one arguments")
+                          (text "Measure has more than one arguments")
 
 
     mkInvariant :: Symbol -> SpecType -> SpecType -> SpecType
