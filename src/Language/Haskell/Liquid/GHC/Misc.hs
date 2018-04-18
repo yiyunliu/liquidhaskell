@@ -16,6 +16,7 @@
 
 module Language.Haskell.Liquid.GHC.Misc where
 
+import           Annotations 
 import           Class                                      (classKey)
 import           Data.String
 import           PrelNames                                  (fractionalClassKeys)
@@ -39,7 +40,7 @@ import           SrcLoc                                     hiding (L)
 import           Bag
 import           ErrUtils
 import           CoreLint
-import           CoreMonad
+import qualified CoreMonad
 
 import           Text.Parsec.Pos                            (incSourceColumn, sourceName, sourceLine, sourceColumn, newPos)
 
@@ -109,22 +110,25 @@ data MGIModGuts = MI {
   , mgi_fam_insts :: ![FamInst]
   , mgi_exports   :: !NameSet
   , mgi_cls_inst  :: !(Maybe [ClsInst])
+  , mgi_anns      :: ![Annotation]            -- ^ list of 'ANN module' strings
   }
 
 miModGuts :: Maybe [ClsInst] -> ModGuts -> MGIModGuts
 miModGuts cls mg  = MI {
-    mgi_binds     = mg_binds mg
-  , mgi_module    = mg_module mg
-  , mgi_deps      = mg_deps mg
-  , mgi_dir_imps  = mg_dir_imps mg
-  , mgi_rdr_env   = mg_rdr_env mg
-  , mgi_tcs       = mg_tcs mg
+    mgi_binds     = mg_binds     mg
+  , mgi_module    = mg_module    mg
+  , mgi_deps      = mg_deps      mg
+  , mgi_dir_imps  = mg_dir_imps  mg
+  , mgi_rdr_env   = mg_rdr_env   mg
+  , mgi_tcs       = mg_tcs       mg
   , mgi_fam_insts = mg_fam_insts mg
-  , mgi_exports   = availsToNameSet $ mg_exports mg
+  , mgi_exports   = availsToNameSet (mg_exports mg)
   , mgi_cls_inst  = cls
+  , mgi_anns      = mg_anns mg 
   }
-  where _z        = showPpr (zing <$> mg_fam_insts mg)
-        zing fi   = (fi_fam fi, fi_tcs fi, fi_tvs fi, fi_rhs fi)
+  where 
+    _z        = showPpr (zing <$> mg_fam_insts mg)
+    zing fi   = (fi_fam fi, fi_tcs fi, fi_tvs fi, fi_rhs fi)
 
 mg_dir_imps :: ModGuts -> [ModuleName]
 mg_dir_imps m = fst <$> (dep_mods $ mg_deps m)
@@ -691,7 +695,7 @@ desugarModule tcm = do
   let (tcg, _) = tm_internals_ tcm
   hsc_env <- getSession
   let hsc_env_tmp = hsc_env { hsc_dflags = ms_hspp_opts ms }
-  guts <- liftIO $ hscDesugarWithLoc hsc_env_tmp ms tcg
+  guts <- CoreMonad.liftIO $ hscDesugarWithLoc hsc_env_tmp ms tcg
   return DesugaredModule { dm_typechecked_module = tcm, dm_core_module = guts }
 
 --------------------------------------------------------------------------------
@@ -707,7 +711,7 @@ symbolFastString = mkFastStringByteString . T.encodeUtf8 . symbolText
 type Prec = TyPrec
 
 lintCoreBindings :: [Var] -> CoreProgram -> (Bag MsgDoc, Bag MsgDoc)
-lintCoreBindings = CoreLint.lintCoreBindings (defaultDynFlags undefined) CoreDoNothing
+lintCoreBindings = CoreLint.lintCoreBindings (defaultDynFlags undefined) CoreMonad.CoreDoNothing
 
 synTyConRhs_maybe :: TyCon -> Maybe Type
 synTyConRhs_maybe = TC.synTyConRhs_maybe

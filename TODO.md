@@ -1,4 +1,17 @@
-### CallStack/Error
+# TODO
+
+## Annotations
+
+hscEPS :: HscEnv -> IO ExternalPackageState 
+
+eps_ann_env :: !PackageAnnEnv
+
+type PackageIfaceTable = ModuleEnv ModIface
+
+data ModIface
+    mi_anns :: [IfaceAnnotation]
+
+## CallStack/Error
 
 The use of `Prelude.error` gives a crazy performance hit
 apparently even without cutvars being generated, this is
@@ -15,7 +28,8 @@ computations, which make a top-level signature no longer top-level.
 
 Not clear
 Does all that `PatSelfBind` stuff help at all with these benchmarks?
-- NO.
+
+- No.
 - Or do we need to really use a different `error`?
 - If not, REMOVE IT.
 
@@ -26,16 +40,11 @@ Does all that `PatSelfBind` stuff help at all with these benchmarks?
 - [ ] NV: bound `icfp/pos/FindRec.hs`
 - [ ] NV: HACK IO TyCon lookup, it appears as a data con (in Lookup)
 
-TODO
-====
+## Prune Unsorted Refs
 
-
-Prune Unsorted Refs
--------------------
-
-* mergeDataConTypes
-* makeMeasureSpec'
-* meetDataConSpec
+- mergeDataConTypes
+- makeMeasureSpec'
+- meetDataConSpec
 
 The below gives a nice SORT error
 

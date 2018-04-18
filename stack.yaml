@@ -5,6 +5,7 @@ resolver: lts-10.0
 packages:
 - liquid-fixpoint/
 - '.'
+- tests/packages/silly/ 
 
 extra-deps:
 - csv-table-0.1.0.1

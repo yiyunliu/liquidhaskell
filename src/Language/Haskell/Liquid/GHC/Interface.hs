@@ -29,7 +29,7 @@ import GHC.Paths (libdir)
 
 import Annotations
 import Class
-import CoreMonad
+import CoreMonad (liftIO)
 import CoreSyn
 import DataCon
 import Digraph
@@ -105,7 +105,7 @@ getGhcInfos hscEnv cfg tgtFiles' = do
 checkFilePresent :: FilePath -> IO ()
 checkFilePresent f = do
   b <- doesFileExist f
-  when (not b) $ panic Nothing ("Cannot find file: " ++ f)
+  unless b $ panic Nothing ("Cannot find file: " ++ f)
 
 getGhcInfos' :: Config -> Either Error LogicMap
             -> [FilePath]
@@ -180,6 +180,7 @@ configureGhcTargets tgtFiles = do
                      -- we'll get
                      --   [Bar.hs, Foo.hs]
                      -- wich is backwards..
+  _               <- liftIO $ print (showPpr . ms_location <$> moduleGraph)
   let homeModules  = filter (not . isBootSummary) $
                      flattenSCCs $ topSortModuleGraph False moduleGraph Nothing
   let homeNames    = moduleName . ms_mod <$> homeModules
@@ -382,7 +383,9 @@ processTargetModule cfg0 logicMap depGraph specEnv file typechecked bareSpec = d
   let impSpecs       = specSpecs ++ homeSpecs
   (spc, imps, incs) <- toGhcSpec cfg file coreBinds (impVs ++ defVs) letVs modName modGuts bareSpec logicMap impSpecs
   _                 <- liftIO $ whenLoud $ putStrLn $ "Module Imports: " ++ show imps
+  _                 <- liftIO $ dumpAnnotations modGuts 
   hqualsFiles       <- moduleHquals modGuts paths file imps incs
+  _                 <- liftIO $ printEpsAnns hscEnv
   return GI { target    = file
             , targetMod = moduleName mod
             , env       = hscEnv
@@ -396,6 +399,23 @@ processTargetModule cfg0 logicMap depGraph specEnv file typechecked bareSpec = d
             , includes  = incs
             , spec      = spc
             }
+
+printEpsAnns :: HscEnv -> IO () 
+printEpsAnns hscEnv = do 
+  eps <- moduleEnvToList . eps_PIT <$> hscEPS hscEnv 
+  putStrLn $ showPpr [ (m, mi_anns mi) | (m, mi) <- eps
+                                       , showPpr m == "Silly"]
+  where 
+
+dumpAnnotations :: MGIModGuts -> IO ()
+dumpAnnotations mg = putStrLn (unlines msg) 
+  where 
+    msg            = "Module Annotations" : (("  " ++) <$> annS) 
+    annS           = mapMaybe annotationString (mgi_anns mg)
+
+annotationString :: Annotation -> Maybe String 
+annotationString = fromSerialized deserializeWithData . ann_value
+
 
 toGhcSpec :: GhcMonad m
           => Config
