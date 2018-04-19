@@ -59,9 +59,10 @@ import Data.Maybe
 
 import Data.Generics.Aliases (mkT)
 import Data.Generics.Schemes (everywhere)
-
-import qualified Data.HashSet as S
-import qualified Data.Map as M
+-- import qualified Data.ByteString       as B
+-- import qualified Data.ByteString.Char8 as Char8
+import qualified Data.HashSet          as S
+import qualified Data.Map              as M
 
 import System.Console.CmdArgs.Verbosity hiding (Loud)
 import System.Directory
@@ -383,9 +384,9 @@ processTargetModule cfg0 logicMap depGraph specEnv file typechecked bareSpec = d
   let impSpecs       = specSpecs ++ homeSpecs
   (spc, imps, incs) <- toGhcSpec cfg file coreBinds (impVs ++ defVs) letVs modName modGuts bareSpec logicMap impSpecs
   _                 <- liftIO $ whenLoud $ putStrLn $ "Module Imports: " ++ show imps
-  _                 <- liftIO $ dumpAnnotations modGuts 
   hqualsFiles       <- moduleHquals modGuts paths file imps incs
   _                 <- liftIO $ printEpsAnns hscEnv
+  _                 <- liftIO $ dumpAnnotations modGuts 
   return GI { target    = file
             , targetMod = moduleName mod
             , env       = hscEnv
@@ -402,10 +403,15 @@ processTargetModule cfg0 logicMap depGraph specEnv file typechecked bareSpec = d
 
 printEpsAnns :: HscEnv -> IO () 
 printEpsAnns hscEnv = do 
-  eps <- moduleEnvToList . eps_PIT <$> hscEPS hscEnv 
-  putStrLn $ showPpr [ (m, mi_anns mi) | (m, mi) <- eps
-                                       , showPpr m == "Silly"]
-  where 
+  eps      <- hscEPS hscEnv
+  let ms    = moduleEnvKeys (eps_PIT eps) 
+      annM  = eps_ann_env eps
+  forM_ ms  $ \m -> do 
+    let anns = getModuleAnn annM m 
+    unless (null anns) $ print (showPpr m, anns) 
+
+getModuleAnn :: AnnEnv -> Module -> [String] 
+getModuleAnn annM m = findAnns deserializeWithData annM (ModuleTarget m) 
 
 dumpAnnotations :: MGIModGuts -> IO ()
 dumpAnnotations mg = putStrLn (unlines msg) 
