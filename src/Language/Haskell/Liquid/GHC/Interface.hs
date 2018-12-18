@@ -21,6 +21,8 @@ module Language.Haskell.Liquid.GHC.Interface (
   -- , exportedVars
   ) where
 
+import Debug.Trace
+
 import Prelude hiding (error)
 
 import qualified Outputable as O
@@ -117,8 +119,11 @@ getGhcInfos' :: Config -> LogicMap -> [FilePath] -> Ghc ([GhcInfo], HscEnv)
 getGhcInfos' cfg logicMap tgtFiles = do
   _           <- compileCFiles cfg
   homeModules <- configureGhcTargets tgtFiles
+  liftIO $ traceIO "Building dep graph"
   depGraph    <- buildDepGraph homeModules
+  liftIO $ traceIO "Process modules"
   ghcInfos    <- processModules cfg logicMap tgtFiles depGraph homeModules
+  liftIO $ traceIO "Gettings session"
   hscEnv      <- getSession
   return (ghcInfos, hscEnv)
 
@@ -320,20 +325,27 @@ processModule cfg logicMap tgtFiles depGraph specEnv modSummary = do
   -- DO-NOT-DELETE _                <- liftIO $ whenLoud $ putStrLn $ "Process Module: " ++ showPpr (moduleName mod)
   file                <- liftIO $ canonicalizePath $ modSummaryHsFile modSummary
   let isTarget         = file `S.member` tgtFiles
+  liftIO $ traceIO "processModule: Loading dependencies"
   _                   <- loadDependenciesOf $ moduleName mod
+  liftIO $ traceIO "processModule: Parsing module"
   parsed              <- parseModule $ keepRawTokenStream modSummary
   let specComments     = extractSpecComments parsed
+  liftIO $ traceIO "processModule: typechecking module"
   typechecked         <- typecheckModule $ ignoreInline parsed
   let specQuotes       = extractSpecQuotes typechecked
+  liftIO $ traceIO "processModule: Loading module"
   _                   <- loadModule' typechecked
   (modName, commSpec) <- either throw return $ hsSpecificationP (moduleName mod) specComments specQuotes
   liftedSpec          <- liftIO $ if isTarget || null specComments then return Nothing else loadLiftedSpec cfg file 
   let bareSpec         = updLiftedSpec commSpec liftedSpec
   _                   <- checkFilePragmas $ Ms.pragmas bareSpec
   let specEnv'         = extendModuleEnv specEnv mod (modName, noTerm bareSpec)
-  (specEnv', ) <$> if isTarget
-                     then Just <$> processTargetModule cfg logicMap depGraph specEnv file typechecked bareSpec
+  liftIO $ traceIO "processModule: processTargetModule"
+  r <- (specEnv', ) <$> if isTarget
+                     then Just <$> processTargetModule cfg logicMap depGraph specEnv file typechecked (traceShow commSpec bareSpec)
                      else return Nothing
+  liftIO $ traceIO "processModule: DONE processTargetModule"
+  return r
 
 updLiftedSpec :: Ms.BareSpec -> Maybe Ms.BareSpec -> Ms.BareSpec 
 updLiftedSpec s1 Nothing   = s1 
@@ -352,7 +364,9 @@ loadDependenciesOf modName = do
    "Failed to load dependencies of module " ++ showPpr modName
 
 loadModule' :: TypecheckedModule -> Ghc TypecheckedModule
-loadModule' tm = loadModule tm'
+loadModule' tm = do
+    x <- loadModule tm'
+    return x -- $ traceShow x x
   where
     pm   = tm_parsed_module tm
     ms   = pm_mod_summary pm
@@ -368,10 +382,15 @@ processTargetModule :: Config -> LogicMap -> DepGraph -> SpecEnv -> FilePath -> 
 processTargetModule cfg0 logicMap depGraph specEnv file typechecked bareSpec = do
   cfg        <- liftIO $ withPragmas cfg0 file (Ms.pragmas bareSpec)
   let modSum  = pm_mod_summary (tm_parsed_module typechecked)
+  liftIO $ traceIO "processTargetModule: makeGhcSrc"
   ghcSrc     <- makeGhcSrc    cfg file     typechecked modSum
+  liftIO $ traceIO "processTargetModule: makeBareSpecs"
   bareSpecs  <- makeBareSpecs cfg depGraph specEnv     modSum bareSpec
+  liftIO $ traceIO "processTargetModule: makeGhcSpec"
   let ghcSpec = makeGhcSpec   cfg ghcSrc   logicMap           bareSpecs  
+  liftIO $ traceIO "processTargetModule: saveLiftedSpec"
   _          <- liftIO $ saveLiftedSpec ghcSrc ghcSpec 
+  liftIO $ traceIO "processTargetModule: DONE saveLiftedSpec"
   return      $ GI ghcSrc ghcSpec
 
 ---------------------------------------------------------------------------------------
@@ -380,20 +399,26 @@ processTargetModule cfg0 logicMap depGraph specEnv file typechecked bareSpec = d
 
 makeGhcSrc :: Config -> FilePath -> TypecheckedModule -> ModSummary -> Ghc GhcSrc 
 makeGhcSrc cfg file typechecked modSum = do
+  liftIO $ traceIO "Desugar"
   desugared         <- desugarModule  typechecked
   let modGuts        = makeMGIModGuts desugared   
   let modGuts'       = dm_core_module desugared
+  liftIO $ traceIO "Get session"
   hscEnv            <- getSession
   -- _                 <- liftIO $ whenLoud $ dumpRdrEnv hscEnv modGuts
   -- _                 <- liftIO $ whenLoud $ dumpTypeEnv typechecked 
+  liftIO $ traceIO "Anormalize"
   coreBinds         <- liftIO $ anormalize cfg hscEnv modGuts'
   _                 <- liftIO $ whenNormal $ Misc.donePhase Misc.Loud "A-Normalization"
   let dataCons       = concatMap (map dataConWorkId . tyConDataCons) (mgi_tcs modGuts)
   -- let defVs          = definedVars coreBinds
+  liftIO $ traceIO "Make fam inst"
   (fiTcs, fiDcs)    <- liftIO $ makeFamInstEnv hscEnv 
+  liftIO $ traceIO "lookup ty things"
   things            <- lookupTyThings hscEnv typechecked modGuts 
   -- _                 <- liftIO $ print (showpp things)
   let impVars        = importVars coreBinds ++ classCons (mgi_cls_inst modGuts)
+  liftIO $ traceIO "get include dir"
   incDir            <- liftIO $ Misc.getIncludeDir
   return $ Src 
     { giIncDir    = incDir 

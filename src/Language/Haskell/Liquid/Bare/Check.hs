@@ -50,6 +50,7 @@ import qualified Language.Haskell.Liquid.Measure           as Ms
 import qualified Language.Haskell.Liquid.Bare.Types        as Bare 
 import qualified Language.Haskell.Liquid.Bare.Resolve      as Bare 
 import           Debug.Trace (trace)
+import qualified Debug.Trace as DT
 
 ----------------------------------------------------------------------------------------------
 -- | Checking BareSpec ------------------------------------------------------------------------
@@ -120,20 +121,26 @@ checkGhcSpec :: [(ModName, Ms.BareSpec)]
 checkGhcSpec specs env cbs sp = Misc.applyNonNull (Right sp) Left errors
   where
     errors           =  mapMaybe (checkBind allowHO "measure"      emb tcEnv env) (gsMeas       (gsData sp))
-                     ++ condNull noPrune 
-                        (mapMaybe (checkBind allowHO "constructor"  emb tcEnv env) (txCtors $ gsCtors      (gsData sp)))
-                     ++ mapMaybe (checkBind allowHO "assume"       emb tcEnv env) (gsAsmSigs    (gsSig sp))
-                     ++ checkTySigs         allowHO cbs            emb tcEnv env                (gsSig sp)
-                     -- ++ mapMaybe (checkTerminationExpr             emb       env) (gsTexprs     (gsSig  sp)) 
-                     ++ mapMaybe (checkBind allowHO "class method" emb tcEnv env) (clsSigs      (gsSig sp))
-                     ++ mapMaybe (checkInv allowHO emb tcEnv env)                 (gsInvariants (gsData sp))
+                     --
+                     --
+                     --
+                     -- ++ condNull noPrune 
+                     --    (mapMaybe (checkBind allowHO "constructor"  emb tcEnv env) (txCtors $ gsCtors      (gsData sp)))
+                     -- ++ mapMaybe (checkBind allowHO "assume"       emb tcEnv env) (gsAsmSigs    (gsSig sp))
+                     -- ++ checkTySigs         allowHO cbs            emb tcEnv env                (gsSig sp)
+                     -- -- ++ mapMaybe (checkTerminationExpr             emb       env) (gsTexprs     (gsSig  sp)) 
+                     ++ mapMaybe (checkBind allowHO "class method" emb (DT.traceShow tcEnv tcEnv) env) (clsSigs      (gsSig sp))
+                     -- ++ mapMaybe (checkInv allowHO emb tcEnv env)                 (gsInvariants (gsData sp))
+                     --
+                     --
+                     --
                      ++ checkIAl allowHO emb tcEnv env                            (gsIaliases   (gsData sp))
                      ++ checkMeasures emb env ms
                      ++ checkClassMeasures                                        (gsMeasures (gsData sp))
-                     ++ mapMaybe checkMismatch                     sigs
+                     ++ mapMaybe checkMismatch                     (trace "checkMismatch" sigs)
                      ++ checkDuplicate                                            (gsTySigs     (gsSig sp))
                      -- TODO-REBARE ++ checkQualifiers env                                       (gsQualifiers (gsQual sp))
-                     ++ checkDuplicate                                            (gsAsmSigs    (gsSig sp))
+                     ++ checkDuplicate                                            (gsAsmSigs    (gsSig (trace "checkDuplicate" sp)))
                      ++ checkDupIntersect                                         (gsTySigs (gsSig sp)) (gsAsmSigs (gsSig sp))
                      ++ checkRTAliases "Type Alias" env            tAliases
                      ++ checkRTAliases "Pred Alias" env            eAliases
@@ -529,7 +536,7 @@ checkReft sp env emb (Just t) _ = (\z -> dr $+$ z) <$> checkSortedReftFull sp en
 ---------------------------------------------------------------------------------------------------
 checkMeasures :: F.TCEmb TyCon -> F.SEnv F.SortedReft -> [Measure SpecType DataCon] -> [Error]
 ---------------------------------------------------------------------------------------------------
-checkMeasures emb env = concatMap (checkMeasure emb env)
+checkMeasures emb env = concatMap (checkMeasure emb (trace "checkMeasures" env))
 
 checkMeasure :: F.TCEmb TyCon -> F.SEnv F.SortedReft -> Measure SpecType DataCon -> [Error]
 checkMeasure emb γ (M name@(Loc src _ n) sort body _ _)
@@ -587,7 +594,7 @@ dropNArgs i t = fromRTypeRep $ trep {ty_binds = xs, ty_args = ts, ty_refts = rs}
 
 
 checkClassMeasures :: [Measure SpecType DataCon] -> [Error]
-checkClassMeasures ms = mapMaybe checkOne byTyCon
+checkClassMeasures ms = mapMaybe checkOne (trace "checkClassMeasures" byTyCon)
   where
   byName = L.groupBy ((==) `on` (val . msName)) ms
 

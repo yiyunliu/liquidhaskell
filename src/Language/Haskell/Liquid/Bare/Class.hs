@@ -12,6 +12,8 @@ module Language.Haskell.Liquid.Bare.Class
   ) 
   where
 
+import Debug.Trace
+
 import           Data.Bifunctor 
 import qualified Data.Maybe                                 as Mb
 import qualified Data.HashMap.Strict                        as M
@@ -37,9 +39,9 @@ makeClasses :: Bare.Env -> Bare.SigEnv -> ModName -> Bare.ModSpecs
 -------------------------------------------------------------------------------
 makeClasses env sigEnv myName specs = 
   second mconcat . unzip 
-  $ [ cls | (name, spec) <- M.toList specs
-          , cls          <- Ms.classes spec
-          , tc           <- Mb.maybeToList (classTc cls) 
+  $ [ cls | (name, spec) <- M.toList specs -- (ModName, BareSpec)
+          , cls          <- Ms.classes spec -- [RClass LocBareType]. Refined classes in module
+          , tc           <- Mb.maybeToList (classTc cls) -- [Ghc.TyCon]. Bare type constructor
           , cls          <- Mb.maybeToList (mkClass env sigEnv myName name cls tc)
     ]
   where
@@ -59,7 +61,7 @@ mkClassE env sigEnv _myName name (RClass cc ss as ms) tc = do
     let vts = [ (m, v, t) | (m, kv, t) <- meths, v <- Mb.maybeToList (plugSrc kv) ]
     let sts = [(val s, unClass $ val t) | (s, _) <- ms | (_, _, t) <- meths]
     let dcp = DataConP l dc αs [] [] (val <$> ss') (reverse sts) t False (F.symbol name) l'
-    return  $ F.notracepp msg (dcp, vts)
+    return  $ traceShow vts $ F.notracepp msg (dcp, vts)
   where
     c      = btc_tc cc
     l      = loc  c

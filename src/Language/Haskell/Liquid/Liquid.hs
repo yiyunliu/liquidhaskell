@@ -18,6 +18,8 @@ module Language.Haskell.Liquid.Liquid (
   , liquidConstraints
   ) where
 
+import Debug.Trace
+
 import           Prelude hiding (error)
 import           Data.Bifunctor
 import qualified Data.HashSet as S 
@@ -78,14 +80,17 @@ liquidConstraints cfg = do
 runLiquid :: MbEnv -> Config -> IO (ExitCode, MbEnv)
 --------------------------------------------------------------------------------
 runLiquid mE cfg = do
+  traceIO "Get GHC Info"
   z <- actOrDie $ second Just <$> getGhcInfos mE cfg (files cfg)
   case z of
     Left e -> do
+      traceIO "Error"
       exitWithResult cfg (files cfg) $ mempty { o_result = e }
       return (resultExit e, mE)
     Right (gs, mE') -> do
 -- //       | compileSpec cfg -> return (ExitSuccess, mE')
 -- //       | otherwise       
+      traceIO "checking infos"
       d <- checkMany cfg mempty gs
       return (ec d, mE')
   where

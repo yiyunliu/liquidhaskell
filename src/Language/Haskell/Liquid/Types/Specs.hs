@@ -190,7 +190,7 @@ data Spec ty bndr  = Spec
   , defs       :: !(M.HashMap F.LocSymbol F.Symbol)    -- ^ Temporary (?) hack to deal with dictionaries in specifications
                                                        --   see tests/pos/NatClass.hs
   , axeqs      :: ![F.Equation]                        -- ^ Equalities used for Proof-By-Evaluation
-  } deriving (Generic)
+  } deriving (Generic, Show)
 
 isExportedVar :: GhcSrc -> Var -> Bool
 isExportedVar info v = n `elemNameSet` ns

@@ -16,14 +16,21 @@ x *** QED = ()
 
 
 class Semigroup a where
-    {-@ reflect mappend @-}
+    {- reflect mappend @-}
+    {- mappend :: a -> a -> a @-}
     mappend :: a -> a -> a
 
-    {-@ lawAssociative 
+    {- lawAssociative 
      :: x : a
      -> y : a
      -> z : a
      -> {mappend (mappend x y) z = mappend x (mappend y z)}
+     @-}
+    {-@ lawAssociative 
+     :: x : a
+     -> y : a
+     -> z : {a | false}
+     -> ()
      @-}
     lawAssociative :: a -> a -> a -> ()
 

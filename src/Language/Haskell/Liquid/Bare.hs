@@ -54,6 +54,8 @@ import qualified Language.Haskell.Liquid.Bare.Class         as Bare
 import qualified Language.Haskell.Liquid.Bare.Check         as Bare 
 import qualified Language.Haskell.Liquid.Transforms.CoreToLogic as CoreToLogic 
 
+-- import qualified Debug.Trace as DT
+
 --------------------------------------------------------------------------------
 -- | De/Serializing Spec files -------------------------------------------------
 --------------------------------------------------------------------------------
@@ -152,7 +154,7 @@ makeGhcSpec0 cfg src lmap mspecs = SP
     sig      = makeSpecSig name specs env sigEnv   tycEnv measEnv 
     measEnv  = makeMeasEnv      env tycEnv sigEnv       specs 
     -- build up environments
-    specs    = M.insert name mySpec iSpecs2
+    specs    = M.insert name mySpec iSpecs2 -- (DT.traceShow mySpec0 mySpec) iSpecs2
     mySpec   = mySpec2 <> lSpec1 
     lSpec1   = lSpec0 <> makeLiftedSpec1 cfg src tycEnv lmap mySpec1 
     sigEnv   = makeSigEnv  embs tyi (gsExports src) rtEnv 
