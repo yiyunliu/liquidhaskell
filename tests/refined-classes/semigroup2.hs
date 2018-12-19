@@ -14,6 +14,11 @@ data QED = QED
 infixl 2 ***
 x *** QED = ()
 
+-- {-@ measure mappend :: Semigroup a => a -> a -> a @-}
+-- {-@ class measure mappend :: Semigroup a => a -> a -> a @-}
+-- {-@ class measure lawAssociative :: Semigroup a => x : a -> y : a -> z : a -> {mappend (mappend x y) z = mappend x (mappend y z)} @-}
+-- {-@ reflect mappend @-}
+
 {-@
 class Semigroup a where
     mappend :: a -> a -> a

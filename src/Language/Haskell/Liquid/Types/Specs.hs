@@ -79,9 +79,11 @@ data GhcSpec = SP
   , gsVars   :: !GhcSpecVars 
   , gsTerm   :: !GhcSpecTerm 
   , gsRefl   :: !GhcSpecRefl                  
+  -- , gsClasses :: !GhcSpecClasses
   , gsConfig :: !Config                       
   , gsLSpec  :: !BareSpec               -- ^ Lifted specification for the target module
   }
+  deriving (Show)
 
 instance HasConfig GhcSpec where
   getConfig = gsConfig
@@ -94,12 +96,14 @@ data GhcSpecVars = SpVar
   , gsIgnoreVars :: !(S.HashSet Var)              -- ^ Top-level Binders To NOT Verify (empty means ALL binders)
   , gsLvars      :: !(S.HashSet Var)              -- ^ Variables that should be checked "lazily" in the environment they are used
   }
+  deriving (Show)
 
 data GhcSpecQual = SpQual 
   { gsQualifiers :: ![F.Qualifier]                -- ^ Qualifiers in Source/Spec files e.g tests/pos/qualTest.hs
   , gsRTAliases  :: ![F.Located SpecRTAlias]      -- ^ Refinement type aliases (only used for qualifiers)
   -- REBARE: , giHqFiles   :: ![FilePath]         -- ^ Imported .hqual files
   }
+  deriving (Show)
 
 data GhcSpecSig = SpSig 
   { gsTySigs   :: ![(Var, LocSpecType)]           -- ^ Asserted Reftypes
@@ -109,6 +113,12 @@ data GhcSpecSig = SpSig
   , gsDicts    :: !(DEnv Var SpecType)            -- ^ Refined Classes 
   , gsTexprs   :: ![(Var, LocSpecType, [F.Located F.Expr])]  -- ^ Lexicographically ordered expressions for termination
   }
+  deriving (Show)
+
+-- data GhcSpecClasses = SpClasses
+--     { gsClasses :: !
+--     }
+--     deriving Show
 
 data GhcSpecData = SpData 
   { gsCtors      :: ![(Var, LocSpecType)]         -- ^ Data Constructor Measure Sigs
@@ -118,6 +128,7 @@ data GhcSpecData = SpData
   , gsMeasures   :: ![Measure SpecType DataCon]   -- ^ Measure definitions
   , gsUnsorted   :: ![UnSortedExpr]
   }
+  deriving (Show)
 
 data GhcSpecNames = SpNames 
   { gsFreeSyms   :: ![(F.Symbol, Var)]            -- ^ List of `Symbol` free in spec and corresponding GHC var, eg. (Cons, Cons#7uz) from tests/pos/ex1.hs
@@ -128,6 +139,7 @@ data GhcSpecNames = SpNames
   , gsADTs       :: ![F.DataDecl]                 -- ^ ADTs extracted from Haskell 'data' definitions
   , gsTyconEnv   :: !(M.HashMap TyCon RTyCon)
   }
+  deriving (Show)
 
 data GhcSpecTerm = SpTerm 
   { gsStTerm     :: !(S.HashSet Var)              -- ^ Binders to CHECK by structural termination
@@ -136,6 +148,7 @@ data GhcSpecTerm = SpTerm
   , gsDecr       :: ![(Var, [Int])]               -- ^ Lexicographic order of decreasing args (DEPRECATED) 
   , gsNonStTerm  :: !(S.HashSet Var)              -- ^ Binders to CHECK using REFINEMENT-TYPES/termination metrics 
   }
+  deriving (Show)
 
 data GhcSpecRefl = SpRefl 
   { gsAutoInst   :: !(M.HashMap Var (Maybe Int))      -- ^ Binders to USE PLE 
@@ -145,6 +158,7 @@ data GhcSpecRefl = SpRefl
   , gsReflects   :: ![Var]                            -- ^ Binders for reflected functions
   , gsLogicMap   :: !LogicMap
   }
+  deriving (Show)
 
 type BareSpec      = Spec    LocBareType F.LocSymbol
 type BareMeasure   = Measure LocBareType F.LocSymbol

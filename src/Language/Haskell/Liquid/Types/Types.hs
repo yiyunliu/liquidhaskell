@@ -274,7 +274,6 @@ import           Language.Haskell.Liquid.Types.Errors
 import           Language.Haskell.Liquid.Misc
 import           Language.Haskell.Liquid.UX.Config
 import           Data.Default
-import qualified Debug.Trace as DT
 -----------------------------------------------------------------------------
 -- | Printer ----------------------------------------------------------------
 -----------------------------------------------------------------------------
@@ -373,6 +372,9 @@ data TyConP = TyConP
   , tcpVariancePs   :: !VarianceInfo
   , tcpSizeFun      :: !(Maybe SizeFun)
   } deriving (Generic, Data, Typeable)
+
+instance Show TyConP where
+    show _ = "TyConP: TODO"
 
 instance F.Loc TyConP where
   srcSpan tc = F.SS (tcpLoc tc) (tcpLoc tc)
@@ -1672,7 +1674,7 @@ efoldReft logicBind cb dty g f fp = go
     go γ z (RAllS _ t)                  = go γ z t
     go γ z (RImpF x t t' r)             = go γ z (RFun x t t' r)
     go γ z me@(RFun _ (RApp c ts _ _) t' r)
-       | isClass c                      = f γ (Just me) r (go (insertsSEnv γ (cb (DT.trace "efoldReft: isClass" c) ts)) (go' γ z ts) t')
+       | isClass c                      = f γ (Just me) r (go (insertsSEnv γ (cb c ts)) (go' γ z ts) t')
     go γ z me@(RFun x t t' r)
        | logicBind x t                  = f γ (Just me) r (go γ' (go γ z t) t')
        | otherwise                      = f γ (Just me) r (go γ  (go γ z t) t')

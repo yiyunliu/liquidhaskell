@@ -16,6 +16,7 @@ module Language.Haskell.Liquid.Bare.Measure
   , makeMeasureSpec'
   , varMeasures
   , makeClassMeasureSpec
+  , makeUnSorted
   -- , makeHaskellBounds
   ) where
 

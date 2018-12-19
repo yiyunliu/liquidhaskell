@@ -167,8 +167,8 @@ instance PPrint TyConP where
       (parens $ hsep (punctuate comma (pprintTidy k <$> ps))) <+>
       (parens $ hsep (punctuate comma (pprintTidy k <$> ls)))
 
-instance Show TyConP where
- show = showpp -- showSDoc . ppr
+-- instance Show TyConP where
+--  show = showpp -- showSDoc . ppr
 
 instance PPrint DataConP where
   pprintTidy k (DataConP _ dc vs ps ls cs yts t isGadt mname _)

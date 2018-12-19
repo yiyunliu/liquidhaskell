@@ -342,7 +342,7 @@ processModule cfg logicMap tgtFiles depGraph specEnv modSummary = do
   let specEnv'         = extendModuleEnv specEnv mod (modName, noTerm bareSpec)
   liftIO $ traceIO "processModule: processTargetModule"
   r <- (specEnv', ) <$> if isTarget
-                     then Just <$> processTargetModule cfg logicMap depGraph specEnv file typechecked (traceShow commSpec bareSpec)
+                     then Just <$> processTargetModule cfg logicMap depGraph specEnv file typechecked bareSpec -- (traceShow commSpec bareSpec)
                      else return Nothing
   liftIO $ traceIO "processModule: DONE processTargetModule"
   return r

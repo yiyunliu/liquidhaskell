@@ -54,7 +54,7 @@ import qualified Language.Haskell.Liquid.Bare.Class         as Bare
 import qualified Language.Haskell.Liquid.Bare.Check         as Bare 
 import qualified Language.Haskell.Liquid.Transforms.CoreToLogic as CoreToLogic 
 
--- import qualified Debug.Trace as DT
+import qualified Debug.Trace as DT
 
 --------------------------------------------------------------------------------
 -- | De/Serializing Spec files -------------------------------------------------
@@ -113,13 +113,14 @@ checkThrow = either Ex.throw id
 ghcSpecEnv :: GhcSpec -> SEnv SortedReft
 ghcSpecEnv sp = fromListSEnv (binds)
   where
-    emb       = gsTcEmbeds (gsName sp)
+    emb       = gsTcEmbeds (gsName sp) -- (DT.traceShow (gsLSpec sp) sp)) -- no classes in sp
     binds     = concat 
                  [ [(x,        rSort t) | (x, Loc _ _ t) <- gsMeas     (gsData sp)]
                  , [(symbol v, rSort t) | (v, Loc _ _ t) <- gsCtors    (gsData sp)]
                  , [(symbol v, vSort v) | v              <- gsReflects (gsRefl sp)]
                  , [(x,        vSort v) | (x, v)         <- gsFreeSyms (gsName sp), Ghc.isConLikeId v ]
                  , [(x, RR s mempty)    | (x, s)         <- wiredSortedSyms       ]
+                 -- TODO: Add class stuff. XXX
                  ]
     vSort     = Bare.varSortedReft emb -- rSort . varRSort
     rSort     = rTypeSortedReft    emb 
@@ -154,9 +155,9 @@ makeGhcSpec0 cfg src lmap mspecs = SP
     sig      = makeSpecSig name specs env sigEnv   tycEnv measEnv 
     measEnv  = makeMeasEnv      env tycEnv sigEnv       specs 
     -- build up environments
-    specs    = M.insert name mySpec iSpecs2 -- (DT.traceShow mySpec0 mySpec) iSpecs2
+    specs    = M.insert name (DT.traceShow mySpec1 mySpec) iSpecs2
     mySpec   = mySpec2 <> lSpec1 
-    lSpec1   = lSpec0 <> makeLiftedSpec1 cfg src tycEnv lmap mySpec1 
+    lSpec1   = lSpec0 <> makeLiftedSpec1 cfg src tycEnv lmap mySpec1 -- lSpec1 DOESNT have classes
     sigEnv   = makeSigEnv  embs tyi (gsExports src) rtEnv 
     tyi      = Bare.tcTyConMap   tycEnv 
     tycEnv   = makeTycEnv   cfg name env embs mySpec2 iSpecs2 
@@ -168,7 +169,7 @@ makeGhcSpec0 cfg src lmap mspecs = SP
     embs     = makeEmbeds          src env ((name, mySpec0) : M.toList iSpecs0)
     -- extract name and specs
     env      = Bare.makeEnv cfg src lmap mspecs  
-    (mySpec0, iSpecs0) = splitSpecs name mspecs 
+    (mySpec0, iSpecs0) = splitSpecs name mspecs  -- mySpec0 HAS classes, 
     -- check barespecs 
     name     = F.notracepp ("ALL-SPECS" ++ zzz) $ giTargetMod  src 
     zzz      = F.showpp (fst <$> mspecs)
@@ -206,7 +207,9 @@ makeTyConEmbeds env (name, spec)
 makeLiftedSpec1 :: Config -> GhcSrc -> Bare.TycEnv -> LogicMap -> Ms.BareSpec 
                 -> Ms.BareSpec
 makeLiftedSpec1 _ src tycEnv lmap mySpec = mempty
-  { Ms.measures  = Bare.makeHaskellMeasures src tycEnv lmap mySpec }
+  { Ms.measures  = Bare.makeHaskellMeasures src tycEnv lmap mySpec 
+  , Ms.cmeasures = Bare.makeClassMeasures src tycEnv lmap mySpec
+  }
 
 --------------------------------------------------------------------------------
 -- | [NOTE]: LIFTING-STAGES 

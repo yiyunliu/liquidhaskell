@@ -9,6 +9,7 @@ module Language.Haskell.Liquid.Bare.Class
   ( makeClasses
   , makeSpecDictionaries
   , makeDefaultMethods
+  , makeClassMeasures
   ) 
   where
 
@@ -32,6 +33,8 @@ import qualified Language.Haskell.Liquid.Measure            as Ms
 import           Language.Haskell.Liquid.Bare.Types         as Bare 
 import           Language.Haskell.Liquid.Bare.Resolve       as Bare
 import           Language.Haskell.Liquid.Bare.Expand        as Bare
+import qualified Language.Haskell.Liquid.Bare.Measure       as Bare 
+import qualified Language.Haskell.Liquid.Bare.ToBare        as Bare 
 
 -------------------------------------------------------------------------------
 makeClasses :: Bare.Env -> Bare.SigEnv -> ModName -> Bare.ModSpecs 
@@ -157,3 +160,21 @@ lookupDefaultVar env name v = Mb.maybeToList
     dmSym                   = F.atLoc v (GM.qualifySymbol mSym dnSym)
     dnSym                   = F.mappendSym "$dm" nSym
     (mSym, nSym)            = GM.splitModuleName (F.symbol v) 
+
+----------------------------------------------------------------------------------
+makeClassMeasures :: GhcSrc -> Bare.TycEnv -> LogicMap -> Ms.BareSpec -> [Measure (Located BareType) ()]
+-- makeClassMeasures :: GhcSrc -> Bare.TycEnv -> LogicMap -> Ms.BareSpec -> [Measure (Located BareType) LocSymbol]
+----------------------------------------------------------------------------------
+-- makeClassMeasures src tycEnv lmap spec = []
+makeClassMeasures src tycEnv lmap spec = concatMap mkC $ Ms.classes spec
+
+    where
+        -- mkC c = (Bare.measureToBare . mkCM) <$> rcMethods c
+        mkC c = mkCM <$> rcMethods c
+
+        mkCM (mLoc, mRef) = Ms.mkM mLoc mRef todo MsClass todo -- (Bare.makeUnSorted (Ghc.varType ( mLoc)))
+        
+        todo = []
+        
+        -- classMethods :: [(LocSymbol, LocBareType)]
+        -- classMethods = concat (rcMethods <$> Ms.classes spec)
