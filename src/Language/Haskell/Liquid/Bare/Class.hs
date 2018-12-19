@@ -172,6 +172,7 @@ makeClassMeasures src tycEnv lmap spec = concatMap mkC $ Ms.classes spec
         -- mkC c = (Bare.measureToBare . mkCM) <$> rcMethods c
         mkC c = mkCM <$> rcMethods c
 
+        -- TODO: Fill in holes for mRef XXX
         mkCM (mLoc, mRef) = Ms.mkM mLoc mRef todo MsClass todo -- (Bare.makeUnSorted (Ghc.varType ( mLoc)))
         
         todo = []

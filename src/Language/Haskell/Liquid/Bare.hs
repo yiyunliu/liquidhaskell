@@ -113,14 +113,16 @@ checkThrow = either Ex.throw id
 ghcSpecEnv :: GhcSpec -> SEnv SortedReft
 ghcSpecEnv sp = fromListSEnv (binds)
   where
-    emb       = gsTcEmbeds (gsName sp) -- (DT.traceShow (gsLSpec sp) sp)) -- no classes in sp
+    emb       = gsTcEmbeds (gsName (DT.traceShow (gsLSpec sp) sp)) -- no classes in sp
     binds     = concat 
                  [ [(x,        rSort t) | (x, Loc _ _ t) <- gsMeas     (gsData sp)]
                  , [(symbol v, rSort t) | (v, Loc _ _ t) <- gsCtors    (gsData sp)]
                  , [(symbol v, vSort v) | v              <- gsReflects (gsRefl sp)]
                  , [(x,        vSort v) | (x, v)         <- gsFreeSyms (gsName sp), Ghc.isConLikeId v ]
                  , [(x, RR s mempty)    | (x, s)         <- wiredSortedSyms       ]
+                 , [(F.val (msName m), rSort (F.val $ msSort m)) | m <- cmeasures (gsLSpec sp)] -- Add class measures to the environment.
                  -- TODO: Add class stuff. XXX
+                 --     F.symbol x, uRType <$>
                  ]
     vSort     = Bare.varSortedReft emb -- rSort . varRSort
     rSort     = rTypeSortedReft    emb 
@@ -155,7 +157,7 @@ makeGhcSpec0 cfg src lmap mspecs = SP
     sig      = makeSpecSig name specs env sigEnv   tycEnv measEnv 
     measEnv  = makeMeasEnv      env tycEnv sigEnv       specs 
     -- build up environments
-    specs    = M.insert name (DT.traceShow mySpec1 mySpec) iSpecs2
+    specs    = M.insert name mySpec iSpecs2 -- (DT.traceShow mySpec1 mySpec) iSpecs2
     mySpec   = mySpec2 <> lSpec1 
     lSpec1   = lSpec0 <> makeLiftedSpec1 cfg src tycEnv lmap mySpec1 -- lSpec1 DOESNT have classes
     sigEnv   = makeSigEnv  embs tyi (gsExports src) rtEnv 
