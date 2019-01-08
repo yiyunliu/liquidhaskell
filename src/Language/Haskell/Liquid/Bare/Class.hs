@@ -38,7 +38,7 @@ import qualified Language.Haskell.Liquid.Bare.ToBare        as Bare
 
 -------------------------------------------------------------------------------
 makeClasses :: Bare.Env -> Bare.SigEnv -> ModName -> Bare.ModSpecs 
-            -> ([DataConP], [(ModName, Ghc.Var, LocSpecType)])
+            -> ([DataConP], [(ModName, Ghc.Var, LocSpecType, LocSymbol)])
 -------------------------------------------------------------------------------
 makeClasses env sigEnv myName specs = 
   second mconcat . unzip 
@@ -51,18 +51,18 @@ makeClasses env sigEnv myName specs =
     classTc = Bare.maybeResolveSym env myName "makeClass" . btc_tc . rcName 
 
 mkClass :: Bare.Env -> Bare.SigEnv -> ModName -> ModName -> RClass LocBareType -> Ghc.TyCon 
-        -> Maybe (DataConP, [(ModName, Ghc.Var, LocSpecType)])
+        -> Maybe (DataConP, [(ModName, Ghc.Var, LocSpecType, LocSymbol)])
 mkClass env sigEnv _myName name (RClass cc ss as ms) 
   = Bare.failMaybe env name 
   . mkClassE env sigEnv _myName name (RClass cc ss as ms) 
 
 mkClassE :: Bare.Env -> Bare.SigEnv -> ModName -> ModName -> RClass LocBareType -> Ghc.TyCon 
-         -> Either UserError (DataConP, [(ModName, Ghc.Var, LocSpecType)])
+         -> Either UserError (DataConP, [(ModName, Ghc.Var, LocSpecType, LocSymbol)])
 mkClassE env sigEnv _myName name (RClass cc ss as ms) tc = do 
     ss'    <- mapM (mkConstr   env sigEnv name) ss 
     meths  <- mapM (makeMethod env sigEnv name) ms'
-    let vts = [ (m, v, t) | (m, kv, t) <- meths, v <- Mb.maybeToList (plugSrc kv) ]
-    let sts = [(val s, unClass $ val t) | (s, _) <- ms | (_, _, t) <- meths]
+    let vts = [ (m, v, t, ls) | (m, kv, t, ls) <- meths, v <- Mb.maybeToList (plugSrc kv) ]
+    let sts = [(val s, unClass $ val t) | (s, _) <- ms | (_, _, t, _) <- meths]
     let dcp = DataConP l dc αs [] [] (val <$> ss') (reverse sts) t False (F.symbol name) l'
     return  $ traceShow vts $ F.notracepp msg (dcp, vts)
   where
@@ -88,8 +88,8 @@ unClass = snd . bkClass . fourth4 . bkUniv
 
 -- formerly, makeSpec
 makeMethod :: Bare.Env -> Bare.SigEnv -> ModName -> (LocSymbol, LocBareType) 
-         -> Either UserError (ModName, PlugTV Ghc.Var, LocSpecType)
-makeMethod env sigEnv name (lx, bt) = (name, mbV,) <$> Bare.cookSpecTypeE env sigEnv name mbV bt
+         -> Either UserError (ModName, PlugTV Ghc.Var, LocSpecType, LocSymbol)
+makeMethod env sigEnv name (lx, bt) = (name, mbV, , lx) <$> Bare.cookSpecTypeE env sigEnv name mbV bt
   where 
     mbV = case Bare.maybeResolveSym env name "makeMethod" lx of 
             Just v  -> Bare.LqTV v 
@@ -173,6 +173,7 @@ makeClassMeasures src tycEnv lmap spec = concatMap mkC $ Ms.classes spec
         mkC c = mkCM <$> rcMethods c
 
         -- TODO: Fill in holes for mRef XXX
+        -- plugHoles???
         mkCM (mLoc, mRef) = Ms.mkM mLoc mRef todo MsClass todo -- (Bare.makeUnSorted (Ghc.varType ( mLoc)))
         
         todo = []

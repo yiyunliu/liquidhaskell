@@ -1,4 +1,4 @@
-module Semigroup where
+module SemigroupMod where
 
 import Prelude hiding (Semigroup(..), mappend)
 
@@ -27,8 +27,12 @@ class Semigroup a where
      :: x : a
      -> y : a
      -> z : a
-     -> {mappend (mappend x y) z = mappend x (mappend y z)}
+     -> {v:() | mappend (mappend x y) z = mappend x (mappend y z)}
 @-}
+--
+--   TODO: Get this working XXX
+--   -> {mappend (mappend x y) z = mappend x (mappend y z)}
+--
 -- {-@ reflect Semigroup @-}
 class Semigroup a where
     -- {- reflect mappend @-}

@@ -120,7 +120,8 @@ ghcSpecEnv sp = fromListSEnv (binds)
                  , [(symbol v, vSort v) | v              <- gsReflects (gsRefl sp)]
                  , [(x,        vSort v) | (x, v)         <- gsFreeSyms (gsName sp), Ghc.isConLikeId v ]
                  , [(x, RR s mempty)    | (x, s)         <- wiredSortedSyms       ]
-                 , [(F.val (msName m), rSort (F.val $ msSort m)) | m <- cmeasures (gsLSpec sp)] -- Add class measures to the environment.
+                 -- JP: Maybe this is the wrong place to add to env? makeMeasEnv instead?
+                 -- , [(F.val (msName m), rSort (F.val $ msSort m)) | m <- cmeasures (gsLSpec sp)] -- Add class measures to the environment.
                  -- TODO: Add class stuff. XXX
                  --     F.symbol x, uRType <$>
                  ]
@@ -842,7 +843,7 @@ makeMeasEnv env tycEnv sigEnv specs = Bare.MeasEnv
   , meMethods     = mts ++ dms 
   }
   where 
-    measures      = mconcat (Ms.mkMSpec' dcSelectors : (Bare.makeMeasureSpec env sigEnv name <$> M.toList specs))
+    measures      = mconcat (Ms.mkMSpec' dcSelectors clsms : (Bare.makeMeasureSpec env sigEnv name <$> M.toList specs))
     (cs, ms)      = Bare.makeMeasureSpec'     measures
     cms           = Bare.makeClassMeasureSpec measures
     cms'          = [ (x, Loc l l' $ cSort t)  | (Loc l l' x, t) <- cms ]
@@ -857,7 +858,12 @@ makeMeasEnv env tycEnv sigEnv specs = Bare.MeasEnv
     embs          = Bare.tcEmbs        tycEnv 
     name          = Bare.tcName        tycEnv
     dms           = Bare.makeDefaultMethods env mts  
-    (cls, mts)    = Bare.makeClasses        env sigEnv name specs
+    (cls, mts')   = Bare.makeClasses        env sigEnv name specs
+    mts           = map (\(a, b, c, _) -> (a, b, c)) mts'
+    clsms         = map (\(_, _, t, l) -> Ms.mkM l (val t) [] MsClass []) mts'
+    -- clsms         = [ cmeasure | spec <- M.toList specs
+    --                            , cmeasure <- cmeasures $ snd spec]
+    -- Bare.makeClassMeasures undefined -- error "JP: TODO XXX"
     -- TODO-REBARE: -- xs'      = fst <$> ms'
 
 -- checkMeasures :: MSpec SpecType Ghc.DataCon  

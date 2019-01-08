@@ -55,11 +55,12 @@ mkM name typ eqns kind u
   | otherwise
   = panic Nothing $ "invalid measure definition for " ++ show name
 
-mkMSpec' :: Symbolic ctor => [Measure ty ctor] -> MSpec ty ctor
-mkMSpec' ms = MSpec cm mm M.empty []
+mkMSpec' :: Symbolic ctor => [Measure ty ctor] -> [Measure ty ()] -> MSpec ty ctor
+mkMSpec' ms cms = MSpec cm mm cmm []
   where
     cm     = groupMap (symbol . ctor) $ concatMap msEqns ms
     mm     = M.fromList [(msName m, m) | m <- ms ]
+    cmm    = M.fromList [(msName m, m) | m <- cms ]
 
 mkMSpec :: [Measure t LocSymbol] -> [Measure t ()] -> [Measure t LocSymbol] -> MSpec t LocSymbol
 mkMSpec ms cms ims = MSpec cm mm cmm ims
