@@ -121,7 +121,7 @@ ghcSpecEnv sp = fromListSEnv (binds)
                  , [(x,        vSort v) | (x, v)         <- gsFreeSyms (gsName sp), Ghc.isConLikeId v ]
                  , [(x, RR s mempty)    | (x, s)         <- wiredSortedSyms       ]
                  -- JP: Maybe this is the wrong place to add to env? makeMeasEnv instead?
-                 -- , [(F.val (msName m), rSort (F.val $ msSort m)) | m <- cmeasures (gsLSpec sp)] -- Add class measures to the environment.
+                 -- , [(F.val (msName m), F.val $ msSort m) | m <- cmeasures (gsLSpec sp)] -- Add class measures to the environment.
                  -- TODO: Add class stuff. XXX
                  --     F.symbol x, uRType <$>
                  ]
@@ -230,7 +230,7 @@ makeLiftedSpec0 :: Config -> GhcSrc -> F.TCEmb Ghc.TyCon -> LogicMap -> Ms.BareS
                 -> Ms.BareSpec
 makeLiftedSpec0 cfg src embs lmap mySpec = mempty
   { Ms.ealiases  = lmapEAlias . snd <$> Bare.makeHaskellInlines src embs lmap mySpec 
-  , Ms.reflects  = Ms.reflects mySpec
+  , Ms.reflects  = F.tracepp "REFLECTS" $  Ms.reflects mySpec
   , Ms.dataDecls = Bare.makeHaskellDataDecls cfg name mySpec tcs  
   }
   where 
@@ -411,14 +411,15 @@ makeSpecRefl src specs env name sig tycEnv = SpRefl
   , gsAutoInst   = makeAutoInst env name mySpec 
   , gsImpAxioms  = concatMap (Ms.axeqs . snd) (M.toList specs)
   , gsMyAxioms   = myAxioms 
-  , gsReflects   = F.notracepp "REFLECTS" $ filter (isReflectVar rflSyms) sigVars
+  , gsReflects   = (filter (isReflectVar rflSyms) sigVars ++ mrflVars )
   , gsHAxioms    = xtes 
   }
   where
+    mrflVars     = Bare.lookupGhcVar env name "Var" <$> getMReflects specs
     mySpec       = M.lookupDefault mempty name specs 
     xtes         = Bare.makeHaskellAxioms src env tycEnv name lmap sig mySpec
     myAxioms     = [ Bare.qualifyTop env name (F.loc lt) (e {eqName = symbol x}) | (x, lt, e) <- xtes]  
-    rflSyms      = S.fromList (getReflects specs)
+    rflSyms      = F.notracepp "REFLECTS" $ S.fromList (getReflects specs)
     sigVars      = F.notracepp "SIGVARS" $ (fst3 <$> xtes)            -- reflects
                                         ++ (fst  <$> gsAsmSigs sig)   -- assumes
                                       -- ++ (fst  <$> gsTySigs  sig)   -- measures 
@@ -429,6 +430,10 @@ isReflectVar :: S.HashSet F.Symbol -> Ghc.Var -> Bool
 isReflectVar reflSyms v = S.member vx reflSyms
   where
     vx                  = GM.dropModuleNames (symbol v)
+
+getMReflects :: Bare.ModSpecs -> [LocSymbol]
+getMReflects  = S.toList . S.unions . fmap (Ms.mreflects . snd) . M.toList
+
 
 getReflects :: Bare.ModSpecs -> [Symbol]
 getReflects  = fmap val . S.toList . S.unions . fmap (names . snd) . M.toList

@@ -112,6 +112,7 @@ instance Semigroup (Spec ty bndr) where
            , lazy       = S.union   (lazy     s1)  (lazy     s2)
         -- , axioms     = S.union   (axioms s1) (axioms s2)
            , reflects   = S.union   (reflects s1)  (reflects s2)
+           , mreflects  = S.union   (mreflects s1)  (mreflects s2)
            , hmeas      = S.union   (hmeas    s1)  (hmeas    s2)
            , hbounds    = S.union   (hbounds  s1)  (hbounds  s2)
            , inlines    = S.union   (inlines  s1)  (inlines  s2)
@@ -147,6 +148,7 @@ instance Monoid (Spec ty bndr) where
            , hmeas      = S.empty
            -- , axioms     = S.empty
            , reflects   = S.empty
+           , mreflects  = S.empty
            , hbounds    = S.empty
            , inlines    = S.empty
            , ignores    = S.empty

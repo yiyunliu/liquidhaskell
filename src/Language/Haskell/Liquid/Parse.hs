@@ -867,6 +867,7 @@ data Pspec ty ctor
   | Insts   (LocSymbol, Maybe Int)                        -- ^ 'auto-inst' or 'ple' annotation; use ple locally on binder 
   | HMeas   LocSymbol                                     -- ^ 'measure' annotation; lift Haskell binder as measure
   | Reflect LocSymbol                                     -- ^ 'reflect' annotation; reflect Haskell binder as function in logic
+  | MReflect LocSymbol                                    -- ^ 'reflect method' annotation; reflect Haskell method as function in logic
   | Inline  LocSymbol                                     -- ^ 'inline' annotation;  inline (non-recursive) binder as an alias
   | Ignore  LocSymbol                                     -- ^ 'ignore' annotation; skip all checks inside this binder
   | ASize   LocSymbol                                     -- ^ 'autosize' annotation; automatically generate size metric for this type
@@ -942,6 +943,8 @@ ppPspec k (HMeas   lx)
   = "measure" <+> pprintTidy k (val lx) 
 ppPspec k (Reflect lx) 
   = "reflect" <+> pprintTidy k (val lx) 
+ppPspec k (MReflect lx) 
+  = "reflect method" <+> pprintTidy k (val lx) 
 ppPspec k (Inline  lx) 
   = "inline" <+> pprintTidy k (val lx) 
 ppPspec k (Ignore  lx) 
@@ -1046,6 +1049,7 @@ mkSpec name xs         = (name,) $ qualifySpec (symbol name) Measure.Spec
   , Measure.lazy       = S.fromList [s | Lazy   s <- xs]
   , Measure.bounds     = M.fromList [(bname i, i) | PBound i <- xs]
   , Measure.reflects   = S.fromList [s | Reflect s <- xs]
+  , Measure.mreflects  = S.fromList [s | MReflect s <- xs]
   , Measure.hmeas      = S.fromList [s | HMeas  s <- xs]
   , Measure.inlines    = S.fromList [s | Inline s <- xs]
   , Measure.ignores    = S.fromList [s | Ignore s <- xs]
@@ -1065,8 +1069,9 @@ specP
 
     -- TODO: These next two are synonyms, kill one
     <|> (fallbackSpecP "axiomatize" (liftM Reflect axiomP   ))
-    <|> (fallbackSpecP "reflect"    (liftM Reflect axiomP   ))
-
+    <|> (reserved "reflect" 
+          >> ((reserved "method"  >> liftM MReflect  axiomP )
+                                 <|> liftM Reflect   axiomP ))
     <|> (fallbackSpecP "measure"    hmeasureP)
 
     <|> (fallbackSpecP "define"     (liftM Define  defineP  ))

@@ -187,6 +187,7 @@ data Spec ty bndr  = Spec
   , lvars      :: !(S.HashSet F.LocSymbol)        -- ^ Variables that should be checked in the environment they are used
   , lazy       :: !(S.HashSet F.LocSymbol)        -- ^ Ignore Termination Check in these Functions
   , reflects   :: !(S.HashSet F.LocSymbol)        -- ^ Binders to reflect
+  , mreflects  :: !(S.HashSet F.LocSymbol)        -- ^ Methods to reflect
   , autois     :: !(M.HashMap F.LocSymbol (Maybe Int))  -- ^ Automatically instantiate axioms in these Functions with maybe specified fuel
   , hmeas      :: !(S.HashSet F.LocSymbol)        -- ^ Binders to turn into measures using haskell definitions
   , hbounds    :: !(S.HashSet F.LocSymbol)        -- ^ Binders to turn into bounds using haskell definitions
