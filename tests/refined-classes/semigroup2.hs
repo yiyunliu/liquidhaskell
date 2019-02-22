@@ -74,3 +74,14 @@ class Semigroup a where
 
 -- test :: Semigroup a => a -> a -> a
 -- test x y = mappend x y
+
+
+{-@ useMappend
+ :: x:a
+ -> y:a
+ -> z:a
+ -> {mappend (mappend x y) z == mappend x (mappend y z)}
+ @-}
+useMappend :: Semigroup a => a -> a -> a -> a
+useMappend x y z = undefined -- mappend x y
+
