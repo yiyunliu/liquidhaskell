@@ -26,7 +26,6 @@ import           Data.String
 import qualified Data.List as L
 import           PrelNames                                  (fractionalClassKeys)
 import           FamInstEnv
-import           Debug.Trace
 -- import qualified ConLike                                    as Ghc
 
 import qualified CoreUtils
@@ -66,8 +65,8 @@ import           TyCoRep
 import           Var
 import           IdInfo
 import qualified TyCon                                      as TC
-import           Data.Char                                  (isLower, isSpace, isUpper)
-import           Data.Maybe                                 (isJust, fromMaybe, fromJust)
+import           Data.Char                                  (isLower, isSpace)
+import           Data.Maybe                                 (isJust, fromMaybe)
 import           Data.Hashable
 import qualified Data.HashSet                               as S
 
@@ -79,17 +78,17 @@ import           Control.Monad                              ((>=>))
 import           Outputable                                 (Outputable (..), ppr)
 import qualified Outputable                                 as Out
 import           DynFlags
-import qualified Text.PrettyPrint.HughesPJ                  as PJ
+-- import qualified Text.PrettyPrint.HughesPJ                  as PJ
 import           Language.Fixpoint.Types                    hiding (L, panic, Loc (..), SrcSpan, Constant, SESearch (..))
 import qualified Language.Fixpoint.Types                    as F
-import           Language.Fixpoint.Misc                     (safeHead) -- , safeLast, safeInit)
+-- import           Language.Fixpoint.Misc                     (safeHead) -- , safeLast, safeInit)
 import           Language.Haskell.Liquid.Misc               (keyDiff)
 import           Language.Haskell.Liquid.GHC.Misc.PrettyPrint
-import           Control.DeepSeq
+-- import           Control.DeepSeq
 import           Language.Haskell.Liquid.Types.Errors
 -- import           Language.Haskell.Liquid.Desugar.HscMain
 import           HscMain
-import           Id                                         (isExportedId, idOccInfo, setIdInfo)
+import           Id                                         (idOccInfo, setIdInfo)
 import           Language.Haskell.Liquid.Types.LHSymbol
 
 
@@ -194,7 +193,8 @@ isBaseType (AppTy t1 t2)   = isBaseType t1 && isBaseType t2
 isBaseType _               = False
 
 isTmpSymbol    :: Symbol LHSymbol -> Bool
-isTmpSymbol x  = any (`isPrefixOfSym` x) [anfPrefix, tempPrefix, "ds_"]
+isTmpSymbol (FS x)  = any (`isPrefixOfSym` x) [anfPrefix, tempPrefix, "ds_"]
+isTmpSymbol _       = False
 
 validTyVar :: String -> Bool
 validTyVar s@(c:_) = isLower c && all (not . isSpace) s
@@ -397,11 +397,6 @@ getDataConVarUnique v
   | isId v && isDataConId v = getUnique (idDataCon v)
   | otherwise               = getUnique v
 
-isDictionaryExpression :: Core.Expr Id -> Maybe Id
-isDictionaryExpression (Tick _ e) = isDictionaryExpression e
-isDictionaryExpression (Var x)    | isDictionary x = Just x
-isDictionaryExpression _          = Nothing
-
 realTcArity :: TyCon -> Arity
 realTcArity = tyConArity
 
@@ -546,6 +541,8 @@ noTyVars c =  (TC.isPrimTyCon c || isFunTyCon c || TC.isPromotedDataCon c)
 -- dropModuleNamesAndUnique :: Symbol -> Symbol
 -- dropModuleNamesAndUnique = dropModuleUnique . dropModuleNames
 
+
+
 -- dropModuleNames  :: Symbol -> Symbol
 -- dropModuleNames = dropModuleNamesCorrect 
 -- {- 
@@ -614,14 +611,14 @@ wrapParens x  = "(" `mappend` x `mappend` ")"
 isParened :: T.Text -> Bool
 isParened xs  = xs /= stripParens xs
 
-isDictionary :: FixSymbolic a => a -> Bool
-isDictionary = isPrefixOfSym "$f" . dropModuleNames . symbol
+-- isDictionary :: FixSymbolic a => a -> Bool
+-- isDictionary = isPrefixOfSym "$f" . dropModuleNames . symbol
 
-isMethod :: FixSymbolic a => a -> Bool
-isMethod = isPrefixOfSym "$c" . dropModuleNames . symbol
+-- isMethod :: FixSymbolic a => a -> Bool
+-- isMethod = isPrefixOfSym "$c" . dropModuleNames . symbol
 
-isInternal :: FixSymbolic a => a -> Bool
-isInternal   = isPrefixOfSym "$"  . dropModuleNames . symbol
+-- isInternal :: FixSymbolic a => a -> Bool
+-- isInternal   = isPrefixOfSym "$"  . dropModuleNames . symbol
 
 isWorker :: FixSymbolic a => a -> Bool 
 isWorker s = notracepp ("isWorkerSym: s = " ++ ss) $ "$W" `L.isInfixOf` ss 
@@ -635,8 +632,8 @@ stripParens t = fromMaybe t (strip t)
   where
     strip = T.stripPrefix "(" >=> T.stripSuffix ")"
 
-stripParensSym :: Symbol LHSymbol -> Symbol LHSymbol
-stripParensSym (symbolText -> t) = symbol (stripParens t)
+-- stripParensSym :: Symbol LHSymbol -> Symbol LHSymbol
+-- stripParensSym (symbolText -> t) = symbol (stripParens t)
 
 desugarModule :: TypecheckedModule -> Ghc DesugaredModule
 desugarModule tcm = do
@@ -655,7 +652,7 @@ desugarModule tcm = do
 gHC_VERSION :: String
 gHC_VERSION = show __GLASGOW_HASKELL__
 
-symbolFastString :: Symbol LHSymbol -> FastString
+symbolFastString :: FixSymbol -> FastString
 symbolFastString = mkFastStringByteString . T.encodeUtf8 . symbolText
 
 lintCoreBindings :: [Var] -> CoreProgram -> (Bag MsgDoc, Bag MsgDoc)
@@ -687,21 +684,24 @@ ignoreCoreBinds vs cbs
 
 findVarDef :: Symbol LHSymbol -> [CoreBind] -> Maybe (Var, CoreExpr)
 -- YL : seems unreliable to look up symbol in this way
-findVarDef x cbs = case xCbs of
+findVarDef (FS _) _ = Nothing
+findVarDef (AS (LHName _)) _ = Nothing
+findVarDef (AS (LHVar x)) cbs = case xCbs of
                      (NonRec v def   : _ ) -> Just (v, def)
                      (Rec [(v, def)] : _ ) -> Just (v, def)
                      _                     -> Nothing
   where
-    xCbs            = [ cb | cb <- concatMap unRec cbs, x `elem` coreBindSymbols cb ]
+    xCbs            = [ cb | cb <- concatMap unRec cbs, x `elem` binders cb]
     unRec (Rec xes) = [NonRec x es | (x,es) <- xes]
     unRec nonRec    = [nonRec]
+
 
 
 -- coreBindSymbols :: CoreBind -> [Symbol LHSymbol]
 -- coreBindSymbols = map (dropModuleNames . simplesymbol) . binders
 
-simplesymbol :: (NamedThing t) => t -> Symbol LHSymbol
-simplesymbol = symbol . getName
+-- simplesymbol :: (NamedThing t) => t -> Symbol LHSymbol
+-- simplesymbol = symbol . getName
 
 binders :: Bind a -> [a]
 binders (NonRec z _) = [z]
