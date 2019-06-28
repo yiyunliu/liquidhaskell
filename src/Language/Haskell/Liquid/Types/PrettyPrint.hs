@@ -9,9 +9,9 @@
 {-# LANGUAGE MonoLocalBinds       #-}
 
 module Language.Haskell.Liquid.Types.PrettyPrint
-  ( -- * Printable RTypes
+  ( module Language.Haskell.Liquid.Types.PrettyPrint.Instances
+  , -- * Printable RTypes
     OkRT
-
     -- * Printers
   , rtypeDoc
 
@@ -32,6 +32,7 @@ import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types          as F 
 import           Language.Haskell.Liquid.GHC.Misc
 import           Language.Haskell.Liquid.Misc
+import           Language.Haskell.Liquid.Types.PrettyPrint.Instances
 import           Language.Haskell.Liquid.Types.Types    
 import           Prelude                          hiding (error)
 import           SrcLoc
@@ -60,28 +61,8 @@ pprintSymbol x = char '‘' <-> pprint x <-> char '’'
 --------------------------------------------------------------------------------
 -- | A whole bunch of PPrint instances follow ----------------------------------
 --------------------------------------------------------------------------------
-instance PPrint ErrMsg where
-  pprintTidy _ = text . show
-
-instance PPrint SourceError where
-  pprintTidy _ = text . show
-
-instance PPrint Var where
-  pprintTidy _ = pprDoc
-
-instance PPrint Name where
-  pprintTidy _ = pprDoc
-
-instance PPrint TyCon where
-  pprintTidy F.Lossy = shortModules . pprDoc
-  pprintTidy F.Full  =                pprDoc
-
-instance PPrint Type where
-  pprintTidy _ = pprDoc -- . tidyType emptyTidyEnv -- WHY WOULD YOU DO THIS???
-
-instance PPrint Class where
-  pprintTidy F.Lossy = shortModules . pprDoc
-  pprintTidy F.Full  =                pprDoc
+-- The instance definitions which do not depend on Liquid.Types are moved to
+-- PrettyPrint/Instances.hs
 
 instance Show Predicate where
   show = showpp

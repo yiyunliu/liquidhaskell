@@ -105,6 +105,8 @@ library
                       Language.Haskell.Liquid.GHC.API
                       Language.Haskell.Liquid.GHC.Interface
                       Language.Haskell.Liquid.GHC.Misc
+                      Language.Haskell.Liquid.GHC.Misc.PrettyPrint
+                      Language.Haskell.Liquid.Types.PrettyPrint.Instances
                       Language.Haskell.Liquid.GHC.Play
                       Language.Haskell.Liquid.GHC.Resugar
                       Language.Haskell.Liquid.GHC.SpanStack
@@ -127,6 +129,7 @@ library
                       Language.Haskell.Liquid.Transforms.Rewrite
                       Language.Haskell.Liquid.Transforms.Simplify
                       Language.Haskell.Liquid.Types
+                      Language.Haskell.Liquid.Types.LHSymbol
                       Language.Haskell.Liquid.Types.Bounds
                       Language.Haskell.Liquid.Types.Dictionaries
                       Language.Haskell.Liquid.Types.Equality

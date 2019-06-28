@@ -7,28 +7,29 @@ module Gradual.Concretize (Gradual(..)) where
 import Gradual.Types 
 import Language.Fixpoint.Types
 import Gradual.Misc
+import Language.Haskell.Liquid.Types.LHSymbol
 
 import qualified Data.HashMap.Strict       as M
 -- import Debug.Trace 
 
 class Gradual a where
-  concretize :: GMap GWInfo -> a -> [(GSub GWInfo, a)]
+  concretize :: GMap (GWInfo LHSymbol) -> a -> [(GSub (GWInfo LHSymbol), a)]
   concretize _ x = [(mempty, x)]
 
-instance Gradual (SInfo a) where
+instance Gradual (SInfo LHSymbol a) where
   concretize i sinfo = (\su -> (su,
      sinfo {bs = gsubst (bs sinfo,su) (bs sinfo), cm = gsubst (bs sinfo,su) (cm sinfo)} 
     )) <$> (M.fromList <$> flatten (M.toList i))
 
 
 class GSubable a where
-  gsubst :: (BindEnv, GSub GWInfo) -> a -> a 
+  gsubst :: (BindEnv LHSymbol, GSub (GWInfo LHSymbol)) -> a -> a 
   gsubst _ x = x 
 
-instance GSubable BindEnv where
+instance GSubable (BindEnv LHSymbol) where
   gsubst i benv = bindEnvFromList (mapThd3 (gsubst i) <$> bindEnvToList benv)
 
-instance GSubable (SimpC a) where
+instance GSubable (SimpC LHSymbol a) where
   gsubst (benv,i) c = c {_crhs = substGrad x i (_crhs c)}
     where
       x = fst $ lookupBindEnv (cbind c) benv
@@ -36,16 +37,16 @@ instance GSubable (SimpC a) where
 instance (GSubable v) => GSubable (M.HashMap SubcId v) where
   gsubst i m = M.map (gsubst i) m
 
-instance GSubable SortedReft where
+instance GSubable (SortedReft LHSymbol) where
   gsubst i (RR s r) = RR s $ gsubst i r 
 
-instance GSubable Reft where
+instance GSubable (Reft LHSymbol) where
   gsubst (_,i) (Reft (x,p)) = Reft . (x,) $ substGrad x i p
 
 -- instance GSubable Expr where
 --   gsubst i p = substGrad dummySymbol i p
 
-substGrad :: Symbol -> GSub GWInfo -> Expr -> Expr
+substGrad :: Symbol LHSymbol -> GSub (GWInfo LHSymbol) -> Expr LHSymbol -> Expr LHSymbol
 substGrad x m (PGrad k su _ e) 
   = case M.lookup k m of 
       Just (i, ek) -> pAnd [subst su $ subst1 ek (gsym i, EVar x), e] 

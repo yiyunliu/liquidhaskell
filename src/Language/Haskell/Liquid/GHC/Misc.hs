@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                       #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE TypeFamilies              #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE RankNTypes                #-}
@@ -14,7 +15,11 @@
 -- accessing GHC module information. It should NEVER depend on
 -- ANY module inside the Language.Haskell.Liquid.* tree.
 
-module Language.Haskell.Liquid.GHC.Misc where
+module Language.Haskell.Liquid.GHC.Misc (
+  module Language.Haskell.Liquid.GHC.Misc, 
+  module Language.Haskell.Liquid.GHC.Misc.PrettyPrint
+  ) where
+
 
 import           Class                                      (classKey)
 import           Data.String
@@ -71,19 +76,21 @@ import qualified Data.Text.Encoding                         as T
 import qualified Data.Text                                  as T
 import           Control.Arrow                              (second)
 import           Control.Monad                              ((>=>))
-import           Outputable                                 (Outputable (..), text, ppr)
+import           Outputable                                 (Outputable (..), ppr)
 import qualified Outputable                                 as Out
 import           DynFlags
 import qualified Text.PrettyPrint.HughesPJ                  as PJ
 import           Language.Fixpoint.Types                    hiding (L, panic, Loc (..), SrcSpan, Constant, SESearch (..))
 import qualified Language.Fixpoint.Types                    as F
 import           Language.Fixpoint.Misc                     (safeHead) -- , safeLast, safeInit)
-import           Language.Haskell.Liquid.Misc               (keyDiff) 
+import           Language.Haskell.Liquid.Misc               (keyDiff)
+import           Language.Haskell.Liquid.GHC.Misc.PrettyPrint
 import           Control.DeepSeq
 import           Language.Haskell.Liquid.Types.Errors
 -- import           Language.Haskell.Liquid.Desugar.HscMain
 import           HscMain
 import           Id                                         (isExportedId, idOccInfo, setIdInfo)
+import           Language.Haskell.Liquid.Types.LHSymbol
 
 
 isAnonBinder :: TC.TyConBinder -> Bool
@@ -186,10 +193,7 @@ isBaseType (TyConApp _ ts) = all isBaseType ts
 isBaseType (AppTy t1 t2)   = isBaseType t1 && isBaseType t2
 isBaseType _               = False
 
-isTmpVar :: Var -> Bool 
-isTmpVar = isTmpSymbol . dropModuleNamesAndUnique . symbol 
-
-isTmpSymbol    :: Symbol -> Bool
+isTmpSymbol    :: Symbol LHSymbol -> Bool
 isTmpSymbol x  = any (`isPrefixOfSym` x) [anfPrefix, tempPrefix, "ds_"]
 
 validTyVar :: String -> Bool
@@ -218,51 +222,6 @@ unTickExpr x                  = x
 
 isFractionalClass :: Class -> Bool
 isFractionalClass clas = classKey clas `elem` fractionalClassKeys
-
---------------------------------------------------------------------------------
--- | Pretty Printers -----------------------------------------------------------
---------------------------------------------------------------------------------
-notracePpr :: Outputable a => String -> a -> a
-notracePpr _ x = x
-
-tracePpr :: Outputable a => String -> a -> a
-tracePpr s x = trace ("\nTrace: [" ++ s ++ "] : " ++ showPpr x) x
-
-pprShow :: Show a => a -> Out.SDoc
-pprShow = text . show
-
-
-toFixSDoc :: Fixpoint a => a -> PJ.Doc
-toFixSDoc = PJ.text . PJ.render . toFix
-
-sDocDoc :: Out.SDoc -> PJ.Doc
-sDocDoc   = PJ.text . showSDoc
-
-pprDoc :: Outputable a => a -> PJ.Doc
-pprDoc    = sDocDoc . ppr
-
--- Overriding Outputable functions because they now require DynFlags!
-showPpr :: Outputable a => a -> String
-showPpr       = showSDoc . ppr
-
--- FIXME: somewhere we depend on this printing out all GHC entities with
--- fully-qualified names...
-showSDoc :: Out.SDoc -> String
-showSDoc sdoc = Out.renderWithStyle unsafeGlobalDynFlags sdoc (Out.mkUserStyle unsafeGlobalDynFlags myQualify {- Out.alwaysQualify -} Out.AllTheWay)
-
-myQualify :: Out.PrintUnqualified
-myQualify = Out.neverQualify { Out.queryQualifyName = Out.alwaysQualifyNames }
--- { Out.queryQualifyName = \_ _ -> Out.NameNotInScope1 }
-
-showSDocDump :: Out.SDoc -> String
-showSDocDump  = Out.showSDocDump unsafeGlobalDynFlags
-
-instance Outputable a => Outputable (S.HashSet a) where
-  ppr = ppr . S.toList
-
-typeUniqueString :: Outputable a => a -> String
-typeUniqueString = {- ("sort_" ++) . -} showSDocDump . ppr
-
 
 --------------------------------------------------------------------------------
 -- | Manipulating Source Spans -------------------------------------------------
@@ -355,6 +314,19 @@ getSourcePos = srcSpanSourcePos  . getSrcSpan
 getSourcePosE :: NamedThing a => a -> SourcePos
 getSourcePosE = srcSpanSourcePosE . getSrcSpan
 
+type family LocVar a where
+  LocVar Var = Var
+  LocVar a   = Name
+
+class NamedLocSymbol a where
+  namedLocSymbol :: a -> F.Located (F.Symbol LHSymbol)
+
+instance NamedLocSymbol Var where
+  namedLocSymbol v = F.AS . LHVar <$> locNamedThing v
+
+instance (NamedThing a, LocVar a ~ Name) => NamedLocSymbol a where
+  namedLocSymbol v = F.AS . LHName . getName <$> locNamedThing v
+
 locNamedThing :: NamedThing a => a -> F.Located a
 locNamedThing x = F.Loc l lE x
   where
@@ -363,9 +335,6 @@ locNamedThing x = F.Loc l lE x
 
 instance F.Loc Var where 
   srcSpan v = SS (getSourcePos v) (getSourcePosE v) 
-
-namedLocSymbol :: (F.Symbolic a, NamedThing a) => a -> F.Located F.Symbol
-namedLocSymbol d = F.symbol <$> locNamedThing d
 
 varLocInfo :: (Type -> a) -> Var -> F.Located a
 varLocInfo f x = f . varType <$> locNamedThing x
@@ -457,9 +426,6 @@ kindArity (ForAllTy _ res)
 kindArity _
   = 0
 
-uniqueHash :: Uniquable a => Int -> a -> Int
-uniqueHash i = hashWithSalt i . getKey . getUnique
-
 -- slightly modified version of DynamicLoading.lookupRdrNameInModule
 lookupRdrName :: HscEnv -> ModuleName -> RdrName -> IO (Maybe Name)
 lookupRdrName hsc_env mod_name rdr_name = do
@@ -505,30 +471,23 @@ ignoreInline x = x {pm_parsed_source = go <$> pm_parsed_source x}
 -- | Symbol Conversions --------------------------------------------------------
 --------------------------------------------------------------------------------
 
-symbolTyConWithKind :: Kind -> Char -> Int -> Symbol -> TyCon
-symbolTyConWithKind k x i n = stringTyConWithKind k x i (symbolString n)
+-- symbolTyConWithKind :: Kind -> Char -> Int -> Symbol LHSymbol -> TyCon
+-- symbolTyConWithKind k x i n = stringTyConWithKind k x i (symbolString n)
 
-symbolTyCon :: Char -> Int -> Symbol -> TyCon
-symbolTyCon x i n = stringTyCon x i (symbolString n)
+-- symbolTyCon :: Char -> Int -> Symbol LHSymbol -> TyCon
+-- symbolTyCon x i n = stringTyCon x i (symbolString n)
 
-symbolTyVar :: Symbol -> TyVar
-symbolTyVar = stringTyVar . symbolString
+-- symbolTyVar :: Symbol LHSymbol -> TyVar
+-- symbolTyVar = stringTyVar . symbolString
 
-localVarSymbol ::  Var -> Symbol
-localVarSymbol v
-  | us `isSuffixOfSym` vs = vs
-  | otherwise             = suffixSymbol vs us
-  where
-    us                    = symbol $ showPpr $ getDataConVarUnique v
-    vs                    = exportedVarSymbol v 
+localVarSymbol ::  Var -> Symbol LHSymbol
+localVarSymbol = AS . LHVar
 
-exportedVarSymbol :: Var -> Symbol
-exportedVarSymbol x = notracepp msg . symbol . getName $ x            
-  where 
-    msg = "exportedVarSymbol: " ++ showPpr x 
+exportedVarSymbol :: Var -> Symbol LHSymbol
+exportedVarSymbol = AS . LHVar
 
-qualifiedNameSymbol :: Name -> Symbol
-qualifiedNameSymbol n = symbol $ concatFS [modFS, occFS, uniqFS]
+qualifiedNameSymbol :: Name -> FastString
+qualifiedNameSymbol n = concatFS [modFS, occFS, uniqFS]
   where
   _msg   = showSDoc (ppr n) -- getOccString n
   modFS = case nameModule_maybe n of
@@ -542,8 +501,8 @@ qualifiedNameSymbol n = symbol $ concatFS [modFS, occFS, uniqFS]
     | otherwise
     = fsLit ""
 
-instance Symbolic FastString where
-  symbol = symbol . fastStringText
+-- instance FixSymbolic FastString where
+--   symbol = symbol . fastStringText
 
 fastStringText :: FastString -> T.Text
 fastStringText = T.decodeUtf8With TE.lenientDecode . fastStringToByteString
@@ -562,14 +521,6 @@ noTyVars c =  (TC.isPrimTyCon c || isFunTyCon c || TC.isPromotedDataCon c)
 -- | Symbol Instances
 --------------------------------------------------------------------------------
 
-instance Symbolic TyCon where
-  symbol = symbol . getName
-
-instance Symbolic Class where
-  symbol = symbol . getName
-
-instance Symbolic Name where
-  symbol = symbol . qualifiedNameSymbol
 
 -- | [NOTE:REFLECT-IMPORTS] we **eschew** the `unique` suffix for exported vars,
 -- to make it possible to lookup names from symbols _across_ modules;
@@ -578,105 +529,60 @@ instance Symbolic Name where
 -- as otherwise there are spurious, but extremely problematic, name collisions
 -- in the fixpoint environment.
 
-instance Symbolic Var where   -- TODO:reflect-datacons varSymbol
-  symbol v
-    | isExportedId v = exportedVarSymbol v
-    | otherwise      = localVarSymbol    v
+-- instance Symbolic Var where   -- TODO:reflect-datacons varSymbol
+--   symbol v
+--     | isExportedId v = exportedVarSymbol v
+--     | otherwise      = localVarSymbol    v
 
 
-instance Hashable Var where
-  hashWithSalt = uniqueHash
-
-instance Hashable TyCon where
-  hashWithSalt = uniqueHash
-
-instance Hashable DataCon where
-  hashWithSalt = uniqueHash
-
-instance Fixpoint Var where
-  toFix = pprDoc
-
-instance Fixpoint Name where
-  toFix = pprDoc
-
-instance Fixpoint Type where
-  toFix = pprDoc
-
-instance Show Name where
-  show = symbolString . symbol
-
-instance Show Var where
-  show = show . getName
-
-instance Show Class where
-  show = show . getName
-
-instance Show TyCon where
-  show = show . getName
-
-instance NFData Class where
-  rnf t = seq t ()
-
-instance NFData TyCon where
-  rnf t = seq t ()
-
-instance NFData Type where
-  rnf t = seq t ()
-
-instance NFData Var where
-  rnf t = seq t ()
 
 --------------------------------------------------------------------------------
 -- | Manipulating Symbols ------------------------------------------------------
 --------------------------------------------------------------------------------
 
-splitModuleName :: Symbol -> (Symbol, Symbol)
-splitModuleName x = (takeModuleNames x, dropModuleNamesAndUnique x)
+-- splitModuleName :: Symbol -> (Symbol, Symbol)
+-- splitModuleName x = (takeModuleNames x, dropModuleNamesAndUnique x)
 
-dropModuleNamesAndUnique :: Symbol -> Symbol
-dropModuleNamesAndUnique = dropModuleUnique . dropModuleNames
+-- dropModuleNamesAndUnique :: Symbol -> Symbol
+-- dropModuleNamesAndUnique = dropModuleUnique . dropModuleNames
 
-dropModuleNames  :: Symbol -> Symbol
-dropModuleNames = dropModuleNamesCorrect 
-{- 
-dropModuleNames = mungeNames lastName sepModNames "dropModuleNames: "
- where
-   lastName msg = symbol . safeLast msg
--}
+-- dropModuleNames  :: Symbol -> Symbol
+-- dropModuleNames = dropModuleNamesCorrect 
+-- {- 
+-- dropModuleNames = mungeNames lastName sepModNames "dropModuleNames: "
+--  where
+--    lastName msg = symbol . safeLast msg
+-- -}
 
-dropModuleNamesCorrect  :: Symbol -> Symbol
-dropModuleNamesCorrect = F.symbol . go . F.symbolText
-  where
-    go s = case T.uncons s of
-             Just (c,tl) -> if isUpper c  && T.any (== '.') tl
-                              then go $ snd $ fromJust $ T.uncons $ T.dropWhile (/= '.') s
-                              else s
-             Nothing -> s
+-- dropModuleNamesCorrect  :: Symbol -> Symbol
+-- dropModuleNamesCorrect = F.symbol . go . F.symbolText
+--   where
+--     go s = case T.uncons s of
+--              Just (c,tl) -> if isUpper c  && T.any (== '.') tl
+--                               then go $ snd $ fromJust $ T.uncons $ T.dropWhile (/= '.') s
+--                               else s
+--              Nothing -> s
 
-takeModuleNames  :: Symbol -> Symbol
-takeModuleNames  = F.symbol . go [] . F.symbolText
-  where
-    go acc s = case T.uncons s of
-                Just (c,tl) -> if isUpper c && T.any (== '.') tl
-                                 then go (getModule s:acc) $ snd $ fromJust $ T.uncons $ T.dropWhile (/= '.') s
-                                 else T.intercalate "." (reverse acc) 
-                Nothing -> T.intercalate "." (reverse acc) 
-    getModule s = T.takeWhile (/= '.') s
+-- takeModuleNames  :: Symbol -> Symbol
+-- takeModuleNames  = F.symbol . go [] . F.symbolText
+--   where
+--     go acc s = case T.uncons s of
+--                 Just (c,tl) -> if isUpper c && T.any (== '.') tl
+--                                  then go (getModule s:acc) $ snd $ fromJust $ T.uncons $ T.dropWhile (/= '.') s
+--                                  else T.intercalate "." (reverse acc) 
+--                 Nothing -> T.intercalate "." (reverse acc) 
+--     getModule s = T.takeWhile (/= '.') s
 
 {- 
 takeModuleNamesOld  = mungeNames initName sepModNames "takeModuleNames: "
   where
     initName msg = symbol . T.intercalate "." . safeInit msg
 -}
-dropModuleUnique :: Symbol -> Symbol
-dropModuleUnique = mungeNames headName sepUnique   "dropModuleUnique: "
-  where
-    headName msg = symbol . safeHead msg
+-- dropModuleUnique :: Symbol LHSymbol -> Symbol LHSymbol
+-- dropModuleUnique = mungeNames headName sepUnique   "dropModuleUnique: "
+--   where
+--     headName msg = symbol . safeHead msg
 
-cmpSymbol :: Symbol -> Symbol -> Bool
-cmpSymbol coreSym logicSym
-  =  (dropModuleUnique coreSym == dropModuleNamesAndUnique logicSym)
-  || (dropModuleUnique coreSym == dropModuleUnique         logicSym)
 
 sepModNames :: T.Text
 sepModNames = "."
@@ -684,20 +590,20 @@ sepModNames = "."
 sepUnique :: T.Text
 sepUnique = "#"
 
-mungeNames :: (String -> [T.Text] -> Symbol) -> T.Text -> String -> Symbol -> Symbol
-mungeNames _ _ _ ""  = ""
-mungeNames f d msg s'@(symbolText -> s)
-  | s' == tupConName = tupConName
-  | otherwise        = f (msg ++ T.unpack s) $ T.splitOn d $ stripParens s
+-- mungeNames :: (String -> [T.Text] -> Symbol LHSymbol) -> T.Text -> String -> Symbol LHSymbol -> Symbol LHSymbol
+-- mungeNames _ _ _ ""  = ""
+-- mungeNames f d msg s'@(symbolText -> s)
+--   | s' == tupConName = tupConName
+--   | otherwise        = f (msg ++ T.unpack s) $ T.splitOn d $ stripParens s
 
-qualifySymbol :: Symbol -> Symbol -> Symbol
-qualifySymbol (symbolText -> m) x'@(symbolText -> x)
-  | isQualified x  = x'
-  | isParened x    = symbol (wrapParens (m `mappend` "." `mappend` stripParens x))
-  | otherwise      = symbol (m `mappend` "." `mappend` x)
+-- qualifySymbol :: Symbol LHSymbol -> Symbol LHSymbol -> Symbol LHSymbol
+-- qualifySymbol (symbolText -> m) x'@(symbolText -> x)
+--   | isQualified x  = x'
+--   | isParened x    = symbol (wrapParens (m `mappend` "." `mappend` stripParens x))
+--   | otherwise      = symbol (m `mappend` "." `mappend` x)
 
-isQualifiedSym :: Symbol -> Bool
-isQualifiedSym (symbolText -> x) = isQualified x 
+-- isQualifiedSym :: Symbol LHSymbol -> Bool
+-- isQualifiedSym (symbolText -> x) = isQualified x 
 
 isQualified :: T.Text -> Bool
 isQualified y = "." `T.isInfixOf` y
@@ -708,16 +614,16 @@ wrapParens x  = "(" `mappend` x `mappend` ")"
 isParened :: T.Text -> Bool
 isParened xs  = xs /= stripParens xs
 
-isDictionary :: Symbolic a => a -> Bool
+isDictionary :: FixSymbolic a => a -> Bool
 isDictionary = isPrefixOfSym "$f" . dropModuleNames . symbol
 
-isMethod :: Symbolic a => a -> Bool
+isMethod :: FixSymbolic a => a -> Bool
 isMethod = isPrefixOfSym "$c" . dropModuleNames . symbol
 
-isInternal :: Symbolic a => a -> Bool
+isInternal :: FixSymbolic a => a -> Bool
 isInternal   = isPrefixOfSym "$"  . dropModuleNames . symbol
 
-isWorker :: Symbolic a => a -> Bool 
+isWorker :: FixSymbolic a => a -> Bool 
 isWorker s = notracepp ("isWorkerSym: s = " ++ ss) $ "$W" `L.isInfixOf` ss 
   where 
     ss     = symbolString (symbol s)
@@ -729,7 +635,7 @@ stripParens t = fromMaybe t (strip t)
   where
     strip = T.stripPrefix "(" >=> T.stripSuffix ")"
 
-stripParensSym :: Symbol -> Symbol
+stripParensSym :: Symbol LHSymbol -> Symbol LHSymbol
 stripParensSym (symbolText -> t) = symbol (stripParens t)
 
 desugarModule :: TypecheckedModule -> Ghc DesugaredModule
@@ -749,7 +655,7 @@ desugarModule tcm = do
 gHC_VERSION :: String
 gHC_VERSION = show __GLASGOW_HASKELL__
 
-symbolFastString :: Symbol -> FastString
+symbolFastString :: Symbol LHSymbol -> FastString
 symbolFastString = mkFastStringByteString . T.encodeUtf8 . symbolText
 
 lintCoreBindings :: [Var] -> CoreProgram -> (Bag MsgDoc, Bag MsgDoc)
@@ -779,7 +685,8 @@ ignoreCoreBinds vs cbs
     go (Rec xes)      = [Rec (filter ((`notElem` vs) . fst) xes)]
 
 
-findVarDef :: Symbol -> [CoreBind] -> Maybe (Var, CoreExpr)
+findVarDef :: Symbol LHSymbol -> [CoreBind] -> Maybe (Var, CoreExpr)
+-- YL : seems unreliable to look up symbol in this way
 findVarDef x cbs = case xCbs of
                      (NonRec v def   : _ ) -> Just (v, def)
                      (Rec [(v, def)] : _ ) -> Just (v, def)
@@ -790,10 +697,10 @@ findVarDef x cbs = case xCbs of
     unRec nonRec    = [nonRec]
 
 
-coreBindSymbols :: CoreBind -> [Symbol]
-coreBindSymbols = map (dropModuleNames . simplesymbol) . binders
+-- coreBindSymbols :: CoreBind -> [Symbol LHSymbol]
+-- coreBindSymbols = map (dropModuleNames . simplesymbol) . binders
 
-simplesymbol :: (NamedThing t) => t -> Symbol
+simplesymbol :: (NamedThing t) => t -> Symbol LHSymbol
 simplesymbol = symbol . getName
 
 binders :: Bind a -> [a]

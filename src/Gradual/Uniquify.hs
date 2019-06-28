@@ -19,7 +19,8 @@ import Language.Fixpoint.Types.PrettyPrint
 import Language.Fixpoint.Types.Environments
 import Language.Fixpoint.Types.Visitor
 import Language.Fixpoint.Types.Spans
-import Language.Fixpoint.Types.Names        (gradIntSymbol)
+import Language.Fixpoint.Types.Names        (gradIntSymbol, Symbol(..))
+import Language.Haskell.Liquid.Types.LHSymbol
 
 import Control.DeepSeq
 
@@ -34,7 +35,7 @@ import Gradual.Types (GSpan)
 -- |  Make each gradual appearence unique -------------------------------------
 -------------------------------------------------------------------------------
 
-uniquify :: (NFData a, Fixpoint a, Loc a) => SInfo a -> (GSpan, SInfo a)
+uniquify :: (NFData a, Fixpoint a, Loc a) => SInfo LHSymbol a -> (GSpan, SInfo LHSymbol a)
 
 uniquify fi = (km', fi{cm = cm', ws = ws', bs = bs'})
   where
@@ -43,9 +44,9 @@ uniquify fi = (km', fi{cm = cm', ws = ws', bs = bs'})
   km'            = M.union km $ M.map (const []) $ M.filter isGradual (ws fi)
 
 uniquifyCS :: (NFData a, Fixpoint a, Loc a)
-           => BindEnv
-           -> M.HashMap SubcId (SimpC a)
-           -> (M.HashMap SubcId (SimpC a), GSpan, BindEnv)
+           => BindEnv LHSymbol
+           -> M.HashMap SubcId (SimpC LHSymbol a)
+           -> (M.HashMap SubcId (SimpC LHSymbol a), GSpan, BindEnv LHSymbol)
 uniquifyCS bs cs = (x, km, benv st)
   where
     (x, st) = runState (uniq cs) (initUniqueST bs)
@@ -57,7 +58,7 @@ class Unique a where
 instance Unique a => Unique (M.HashMap SubcId a) where
   uniq m = M.fromList <$> mapM (\(i,x) -> (i,) <$> uniq x) (M.toList m)
 
-instance Loc a => Unique (SimpC a) where
+instance Loc a => Unique (SimpC LHSymbol a) where
   uniq cs = do
     updateLoc $ srcSpan $ _cinfo cs
     rhs <- uniq (_crhs cs)
@@ -80,13 +81,13 @@ instance Unique BindId where
               return i'
       else return i
 
-instance Unique SortedReft where
+instance Unique (SortedReft LHSymbol) where
   uniq (RR s r) = RR s <$> uniq r
 
-instance Unique Reft where
+instance Unique (Reft LHSymbol) where
   uniq (Reft (x,e)) = (Reft . (x,)) <$> uniq e
 
-instance Unique Expr where
+instance Unique (Expr LHSymbol) where
   uniq = mapMExpr go
    where
     go (PGrad k su i e) = do
@@ -104,10 +105,10 @@ data UniqueST
   = UniqueST { freshId :: Integer
              , kmap    :: GSpan
              , change  :: Bool
-             , cache   :: M.HashMap KVar KVar
+             , cache   :: M.HashMap (KVar LHSymbol) (KVar LHSymbol)
              , uloc    :: Maybe SrcSpan
              , ubs     :: [BindId]
-             , benv    :: BindEnv
+             , benv    :: BindEnv LHSymbol
              }
 
 
@@ -126,7 +127,7 @@ emptyCache :: UniqueM ()
 emptyCache = modify $ \s -> s{cache = mempty}
 
 
-updateBEnv :: BindId -> BindEnv -> UniqueM ()
+updateBEnv :: BindId -> BindEnv LHSymbol -> UniqueM ()
 updateBEnv i bs = modify $ \s -> s{benv = bs, ubs = i:(ubs s)}
 
 setChange :: UniqueM ()
@@ -135,10 +136,10 @@ setChange = modify $ \s -> s{change = True}
 resetChange :: UniqueM ()
 resetChange = modify $ \s -> s{change = False}
 
-initUniqueST :: BindEnv ->  UniqueST
+initUniqueST :: BindEnv LHSymbol ->  UniqueST
 initUniqueST = UniqueST 0 mempty False mempty Nothing mempty
 
-freshK, freshK', freshK'' :: KVar -> UniqueM KVar
+freshK, freshK', freshK'' :: KVar LHSymbol -> UniqueM (KVar LHSymbol)
 freshK k  = do
   setChange
   cached <- cache <$> get
@@ -178,7 +179,7 @@ data RelativePos a
   | Greater  a
   | NoRelative
 
-existingSpan :: KVar -> Maybe SrcSpan -> [(KVar, Maybe SrcSpan)] -> UniqueM (Maybe KVar)
+existingSpan :: KVar LHSymbol -> Maybe SrcSpan -> [(KVar LHSymbol, Maybe SrcSpan)] -> UniqueM (Maybe (KVar LHSymbol))
 existingSpan _ Nothing _ = return Nothing 
 existingSpan k (Just span) kspans
   = case go kspans of 
@@ -221,13 +222,13 @@ isSmaller (SS start1 end1) (SS start2 end2)
 freshK' k = do
   i <- freshId <$> get
   modify $ (\s -> s{freshId = i + 1})
-  let k' = KV $ gradIntSymbol i
+  let k' = KV . FS $ gradIntSymbol i
   addK k k'
   addCache k k'
   return k'
 
 
-updateK :: KVar -> KVar -> SrcSpan -> UniqueM ()
+updateK :: KVar LHSymbol -> KVar LHSymbol -> SrcSpan -> UniqueM ()
 updateK k k' sp = 
   modify $ (\s -> s{kmap = M.mapWithKey f (kmap s)})
   where
@@ -235,11 +236,11 @@ updateK k k' sp =
       | key == k  = (\(kk,vv) -> if kk == k' then (kk,Just sp) else (kk,vv)) <$> val 
       | otherwise = val 
 
-addK :: KVar -> KVar -> UniqueM ()
+addK :: KVar LHSymbol -> KVar LHSymbol -> UniqueM ()
 addK key val =
   modify $ (\s -> s{kmap = M.insertWith (++) key [(val, uloc s)] (kmap s)})
 
-addCache :: KVar -> KVar -> UniqueM ()
+addCache :: KVar LHSymbol -> KVar LHSymbol -> UniqueM ()
 addCache k k' = modify $ \s -> s{cache = M.insert k k' (cache s)}
 
 -------------------------------------------------------------------------------
@@ -248,8 +249,8 @@ addCache k k' = modify $ \s -> s{cache = M.insert k k' (cache s)}
 
 expandWF :: (NFData a, Fixpoint a)
          => GSpan
-         -> M.HashMap KVar (WfC a)
-         -> M.HashMap KVar (WfC a)
+         -> M.HashMap (KVar LHSymbol) (WfC LHSymbol a)
+         -> M.HashMap (KVar LHSymbol) (WfC LHSymbol a)
 expandWF km ws
   = M.fromList $
        ([(k, updateKVar k src w) | (i, w) <- gws, (kw, ks) <- km', kw == i, (k, src) <- ks]

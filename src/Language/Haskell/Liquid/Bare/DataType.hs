@@ -39,6 +39,7 @@ import qualified Language.Haskell.Liquid.GHC.API        as Ghc
 import           Language.Haskell.Liquid.Types.PredType (dataConPSpecType)
 import qualified Language.Haskell.Liquid.Types.RefType  as RT
 import           Language.Haskell.Liquid.Types.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 import           Language.Haskell.Liquid.Types.Meet
 import qualified Language.Fixpoint.Misc                 as Misc
 import qualified Language.Haskell.Liquid.Misc           as Misc
@@ -307,7 +308,7 @@ makeDataDecl tce tc dd ctors
     ftc = F.symbolFTycon (tyConLocSymbol tc dd)
 
 tyConLocSymbol :: Ghc.TyCon -> DataDecl -> LocSymbol
-tyConLocSymbol tc dd = F.atLoc (tycName dd) (F.symbol tc)
+tyConLocSymbol tc dd = F.atLoc (tycName dd) (F.AS . LHName $ tc)
 
 -- [NOTE:ADT] We need to POST-PROCESS the 'Sort' so that:
 -- 1. The poly tyvars are replaced with debruijn

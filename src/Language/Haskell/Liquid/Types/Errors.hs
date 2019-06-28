@@ -73,6 +73,7 @@ import           Language.Fixpoint.Types      (pprint, showpp, Tidy (..), PPrint
 import qualified Language.Fixpoint.Misc       as Misc
 import qualified Language.Haskell.Liquid.Misc     as Misc 
 import           Language.Haskell.Liquid.Misc ((<->))
+import           Language.Haskell.Liquid.Types.LHSymbol
 
 instance PPrint ParseError where
   pprintTidy _ e = vcat $ tail $ text <$> ls
@@ -203,7 +204,7 @@ ppOblig OInv  = text "Invariant Check"
 data TError t =
     ErrSubType { pos  :: !SrcSpan
                , msg  :: !Doc
-               , ctx  :: !(M.HashMap Symbol t)
+               , ctx  :: !(M.HashMap (Symbol LHSymbol) t)
                , tact :: !t
                , texp :: !t
                } -- ^ liquid type error
@@ -211,21 +212,21 @@ data TError t =
   | ErrSubTypeModel
                { pos  :: !SrcSpan
                , msg  :: !Doc
-               , ctxM  :: !(M.HashMap Symbol (WithModel t))
+               , ctxM  :: !(M.HashMap (Symbol LHSymbol) (WithModel t))
                , tactM :: !(WithModel t)
                , texp :: !t
                } -- ^ liquid type error with a counter-example
 
   | ErrFCrash  { pos  :: !SrcSpan
                , msg  :: !Doc
-               , ctx  :: !(M.HashMap Symbol t)
+               , ctx  :: !(M.HashMap (Symbol LHSymbol) t)
                , tact :: !t
                , texp :: !t
                } -- ^ liquid type error
 
   | ErrHole    { pos :: !SrcSpan
                , msg :: !Doc
-               , ctx :: !(M.HashMap Symbol t)
+               , ctx :: !(M.HashMap (Symbol LHSymbol) t)
                , var :: !Doc 
                , thl :: !t 
                } -- ^ hole type 
@@ -233,7 +234,7 @@ data TError t =
   | ErrAssType { pos  :: !SrcSpan
                , obl  :: !Oblig
                , msg  :: !Doc
-               , ctx  :: !(M.HashMap Symbol t)
+               , ctx  :: !(M.HashMap (Symbol LHSymbol) t)
                , cond :: t
                } -- ^ condition failure error
 
@@ -252,7 +253,7 @@ data TError t =
   | ErrTermSpec { pos  :: !SrcSpan
                 , var  :: !Doc
                 , msg  :: !Doc
-                , exp  :: !Expr
+                , exp  :: !(Expr LHSymbol)
                 , typ  :: !t
                 , msg' :: !Doc
                 } -- ^ sort error in specification
@@ -581,7 +582,7 @@ ppFull :: Tidy -> Doc -> Doc
 ppFull Full  d = d
 ppFull Lossy _ = empty
 
-ppReqInContext :: PPrint t => Tidy -> t -> t -> M.HashMap Symbol t -> Doc
+ppReqInContext :: PPrint t => Tidy -> t -> t -> M.HashMap (Symbol LHSymbol) t -> Doc
 ppReqInContext td tA tE c
   = sepVcat blankLine
       [ nests 2 [ text "Inferred type"
@@ -591,7 +592,7 @@ ppReqInContext td tA tE c
       , ppContext td c 
       ]
 
-ppContext :: PPrint t => Tidy -> M.HashMap Symbol t -> Doc 
+ppContext :: PPrint t => Tidy -> M.HashMap (Symbol LHSymbol) t -> Doc 
 ppContext td c
   | 0 < length xts = nests 2 [ text "In Context"
                              , vsep (map (uncurry (pprintBind td)) xts)
@@ -600,11 +601,11 @@ ppContext td c
   where 
     xts            = M.toList c 
 
-pprintBind :: PPrint t => Tidy -> Symbol -> t -> Doc
+pprintBind :: PPrint t => Tidy -> Symbol LHSymbol -> t -> Doc
 pprintBind td v t = pprintTidy td v <+> char ':' <+> pprintTidy td t
 
 ppReqModelInContext
-  :: (PPrint t) => Tidy -> WithModel t -> t -> (M.HashMap Symbol (WithModel t)) -> Doc
+  :: (PPrint t) => Tidy -> WithModel t -> t -> (M.HashMap (Symbol LHSymbol) (WithModel t)) -> Doc
 ppReqModelInContext td tA tE c
   = sepVcat blankLine
       [ nests 2 [ text "Inferred type"
@@ -619,7 +620,7 @@ ppReqModelInContext td tA tE c
 vsep :: [Doc] -> Doc
 vsep = vcat . L.intersperse (char ' ')
 
-pprintModel :: PPrint t => Tidy -> Symbol -> WithModel t -> Doc
+pprintModel :: PPrint t => Tidy -> Symbol LHSymbol -> WithModel t -> Doc
 pprintModel td v wm = case wm of
   NoModel t
     -> pprintTidy td v <+> char ':' <+> pprintTidy td t
