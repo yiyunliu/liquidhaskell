@@ -28,7 +28,7 @@ import Type
 import Var
 
 import           Language.Haskell.Liquid.GHC.Misc (showPpr)
-import           Language.Fixpoint.Types (symbol)
+
 
 -- e368f3265b80aeb337fbac3f6a70ee54ab14edfd
 
@@ -68,8 +68,8 @@ instance Eq Coercion where
 showTy :: Type -> String 
 showTy (TyConApp c ts) = "(RApp   " ++ showPpr c ++ " " ++ sep' ", " (showTy <$> ts) ++ ")"
 showTy (AppTy t1 t2)   = "(TAppTy " ++ (showTy t1 ++ " " ++ showTy t2) ++ ")" 
-showTy (TyVarTy v)   = "(RVar " ++ show (symbol v)  ++ ")" 
-showTy (ForAllTy (TvBndr v _) t)  = "ForAllTy " ++ show (symbol v) ++ ". (" ++  showTy t ++ ")"
+showTy (TyVarTy v)   = "(RVar " ++ show v  ++ ")" 
+showTy (ForAllTy (TvBndr v _) t)  = "ForAllTy " ++ show v ++ ". (" ++  showTy t ++ ")"
 showTy (FunTy t1 t2)   = "FunTy " ++ showTy t1 ++ ". (" ++  showTy t2 ++ ")"
 showTy (CastTy _ _)    = "CastTy"
 showTy (CoercionTy _)  = "CoercionTy"
@@ -99,14 +99,14 @@ substType x tx (TyConApp c ts)
 substType x tx (AppTy t1 t2)   
   = AppTy (subst x tx t1) (subst x tx t2) 
 substType x tx (TyVarTy y)   
-  | symbol x == symbol y
+  | x == y
   = tx 
   | otherwise
   = TyVarTy y 
 substType x tx (FunTy t1 t2)
   = FunTy (subst x tx t1) (subst x tx t2)
 substType x tx f@(ForAllTy b@(TvBndr y _) t)  
-  | symbol x == symbol y 
+  | x == y 
   = f
   | otherwise 
   = ForAllTy b (subst x tx t)
@@ -131,7 +131,7 @@ substCoercion x tx (AppCo c1 c2)
 substCoercion x tx (FunCo r c1 c2)
   = FunCo r (subst x tx c1) (subst x tx c2)
 substCoercion x tx (ForAllCo y c1 c2)
-  | symbol x == symbol y 
+  | x == y 
   = (ForAllCo y c1 c2)
   | otherwise 
   = ForAllCo y (subst x tx c1) (subst x tx c2)

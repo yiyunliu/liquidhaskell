@@ -544,10 +544,10 @@ instance Hashable BTyVar
 instance NFData   BTyVar
 instance NFData   RTyVar
 
-instance F.Symbolic BTyVar where
+instance F.FixSymbolic BTyVar where
   symbol (BTV tv) = tv
 
-instance F.Symbolic RTyVar where
+instance F.FixSymbolic RTyVar where
   symbol (RTV tv) = F.symbol tv -- tyVarUniqueSymbol tv
 
 -- instance F.Symbolic RTyVar where
@@ -573,7 +573,7 @@ data RTyCon = RTyCon
   }
   deriving (Generic, Data, Typeable)
 
-instance F.Symbolic RTyCon where
+instance F.FixSymbolic RTyCon where
   symbol = F.symbol . rtc_tc 
 
 instance F.Symbolic BTyCon where
