@@ -3,7 +3,9 @@
 -- | abstract "s" in the refactored liquid-fixpoint
 
 {-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+
 
 
 module Language.Haskell.Liquid.Types.LHSymbol
@@ -19,12 +21,13 @@ import           Language.Haskell.Liquid.Types.PrettyPrint.Instances ()
 import           Data.Hashable
 import           Outputable                                 ()
 import           Var
+import           Data.Data
 
 -----------------------------------------------------------------------------
 -- | GHC Specific Symbol
 -----------------------------------------------------------------------------
 data LHSymbol = LHName Name | LHVar Var
-  deriving (Eq, Ord, Generic)
+  deriving (Eq, Ord, Generic, Data)
 
 
 instance Hashable LHSymbol

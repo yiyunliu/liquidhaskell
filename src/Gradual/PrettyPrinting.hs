@@ -1,19 +1,21 @@
+{-# LANGUAGE FlexibleInstances #-}
 module Gradual.PrettyPrinting where
 
 import Language.Fixpoint.Types
 import Language.Haskell.Liquid.GHC.Misc
+import Language.Haskell.Liquid.Types.LHSymbol
 
 
 class Pretty a where
   pretty :: a -> String 
 
-instance Pretty Expr where
+instance Pretty (Expr LHSymbol) where
   pretty = showpp . simplifyExpr 
 
-instance Pretty KVar where
+instance Pretty (KVar LHSymbol) where
   pretty (KV x) = pretty x  
 
-instance Pretty Symbol where
+instance Pretty (Symbol LHSymbol) where
   pretty = show . dropModuleNames. tidySymbol
 
 instance (Pretty a, Pretty b) => Pretty (a, b) where 
@@ -22,7 +24,7 @@ instance (Pretty a, Pretty b) => Pretty (a, b) where
 instance (Pretty a) => Pretty [a] where 
   pretty xs = unlines $ map pretty xs 
 
-simplifyExpr :: Expr -> Expr
+simplifyExpr :: Expr LHSymbol -> Expr LHSymbol
 simplifyExpr = go 
   where
     go (ECst e _)   = go e

@@ -368,7 +368,7 @@ _showExpr e = show' e
     showAlt' (c, bs, e) = showPpr c ++ unwords (_showVar <$> bs) ++ " -> " ++ show' e
 
 _showVar :: Var -> String
-_showVar = show . F.symbol
+_showVar = show
 
 _errorSkip :: String -> a -> b
 _errorSkip x _ = error x
