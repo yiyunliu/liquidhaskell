@@ -342,7 +342,7 @@ substPred msg su@(π,prop) (RFun x t t' r)
   | null πs                     = RFun x (substPred msg su t) (substPred msg su t') r
   | otherwise                   =
       let sus = (\π -> F.mkSubst (zip (fst <$> rf_args prop) (thd3 <$> pargs π))) <$> πs in
-      foldl (\t su -> t `F.meet` F.subst su (rf_body prop)) (RFun x (substPred msg su t) (substPred msg su t') r') sus
+      foldl (\t su -> F.meet t $ F.subst su (rf_body prop)) (RFun x (substPred msg su t) (substPred msg su t') r') sus
   where (r', πs)                = splitRPvar π r
 -- ps has   , pargs :: ![(t, Symbol, Expr)]
 
@@ -351,7 +351,7 @@ substPred msg su@(π,prop) (RImpF x t t' r)
   | null πs                     = RImpF x (substPred msg su t) (substPred msg su t') r
   | otherwise                   =
       let sus = (\π -> F.mkSubst (zip (fst <$> rf_args prop) (thd3 <$> pargs π))) <$> πs in
-      foldl (\t su -> t `F.meet` F.subst su (rf_body prop)) (RImpF x (substPred msg su t) (substPred msg su t') r') sus
+      foldl (\t su -> F.meet t $ F.subst su (rf_body prop)) (RImpF x (substPred msg su t) (substPred msg su t') r') sus
   where (r', πs)                = splitRPvar π r
 
 
@@ -477,9 +477,9 @@ meetListWithPSubsRef πs ss r1 r2 = L.foldl' ((meetListWithPSubRef ss) r1) r2 π
 meetListWithPSub ::  (F.Reftable r, PPrint t) => [(F.Symbol, RSort)]-> r -> r -> PVar t -> r
 meetListWithPSub ss r1 r2 π
   | all (\(_, x, F.EVar y) -> x == y) (pargs π)
-  = r2 `F.meet` r1
+  = F.meet r2 r1
   | all (\(_, x, F.EVar y) -> x /= y) (pargs π)
-  = r2 `F.meet` (F.subst su r1)
+  = F.meet r2 (F.subst su r1)
   | otherwise
   = panic Nothing $ "PredType.meetListWithPSub partial application to " ++ showpp π
   where
@@ -497,9 +497,9 @@ meetListWithPSubRef _ _ (RProp _ (RHole _)) _
   = panic Nothing "PredType.meetListWithPSubRef called with invalid input"
 meetListWithPSubRef ss (RProp s1 r1) (RProp s2 r2) π
   | all (\(_, x, F.EVar y) -> x == y) (pargs π)
-  = RProp s1 $ (F.subst su' r2) `F.meet` r1
+  = RProp s1 $ F.meet (F.subst su' r2) r1
   | all (\(_, x, F.EVar y) -> x /= y) (pargs π)
-  = RProp s2 $ r2 `F.meet` (F.subst su r1)
+  = RProp s2 $ F.meet r2 (F.subst su r1)
   | otherwise
   = panic Nothing $ "PredType.meetListWithPSubRef partial application to " ++ showpp π
   where

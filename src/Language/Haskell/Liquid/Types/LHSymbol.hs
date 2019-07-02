@@ -1,10 +1,11 @@
-
 -- | This module defines the type used to instantiate the
 -- | abstract "s" in the refactored liquid-fixpoint
 
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances     #-}
+
 
 
 
@@ -20,7 +21,9 @@ import qualified Language.Fixpoint.Smt.Theories as Thy
 import           Language.Haskell.Liquid.Types.PrettyPrint.Instances ()
 import           Data.Hashable
 import           Outputable                                 ()
+import           Data.Binary
 import           Var
+import           Control.DeepSeq
 import           Data.Data
 
 -----------------------------------------------------------------------------
@@ -32,12 +35,22 @@ data LHSymbol = LHName Name | LHVar Var
 
 instance Hashable LHSymbol
 
-
 instance PPrint LHSymbol where
   pprintTidy op (LHName name)  = pprintTidy op name
   pprintTidy op (LHVar var)  = pprintTidy op var
 
+instance NFData LHSymbol
 
+
+instance Binary Name where
+  put = undefined
+  get = undefined
+
+instance Binary Var where
+  put = undefined
+  get = undefined
+
+instance Binary LHSymbol
 
 -- should be defined based on Name
 instance SMTLIB2 LHSymbol LHSymbol where

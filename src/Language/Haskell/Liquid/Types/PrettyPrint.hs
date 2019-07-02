@@ -2,6 +2,7 @@
 --   without using *any* simplifications.
 
 {-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE TypeApplications     #-}
 {-# LANGUAGE ConstraintKinds      #-}
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE TupleSections        #-}
@@ -25,9 +26,9 @@ module Language.Haskell.Liquid.Types.PrettyPrint
 import qualified Data.HashMap.Strict              as M
 import qualified Data.List                        as L                               -- (sort)
 import           Data.String
-import           ErrUtils                         (ErrMsg)
-import           GHC                              (Name, Class)
-import           HscTypes                         (SourceError)
+import           ErrUtils                         ()
+import           GHC                              ()
+import           HscTypes                         ()
 import           Language.Fixpoint.Misc
 import qualified Language.Fixpoint.Types          as F 
 import           Language.Haskell.Liquid.GHC.Misc
@@ -37,10 +38,10 @@ import           Language.Haskell.Liquid.Types.Types
 import           Prelude                          hiding (error)
 import           SrcLoc
 import           Text.PrettyPrint.HughesPJ        hiding ((<>))
-import           TyCon                            (TyCon)
+import           TyCon                            ()
 import           Language.Haskell.Liquid.GHC.TypeRep  hiding (maybeParen)
-import           Var                              (Var)
-
+import           Var                              ()
+import           Language.Haskell.Liquid.Types.LHSymbol
 --------------------------------------------------------------------------------
 pprManyOrdered :: (PPrint a, Ord a) => F.Tidy -> String -> [a] -> [Doc]
 --------------------------------------------------------------------------------
@@ -53,7 +54,7 @@ pprintLongList k = brackets . vcat . map (pprintTidy k)
 
 
 --------------------------------------------------------------------------------
-pprintSymbol :: F.Symbol -> Doc
+pprintSymbol :: F.Symbol LHSymbol -> Doc
 --------------------------------------------------------------------------------
 pprintSymbol x = char '‘' <-> pprint x <-> char '’'
 
@@ -163,22 +164,22 @@ ppr_rtype bb p t@(RAllP _ _)
 ppr_rtype bb p t@(RAllS _ _)
   = ppr_forall bb p t
 ppr_rtype _ _ (RVar a r)
-  = F.ppTy r $ pprint a
+  = F.ppTy @LHSymbol r $ pprint a
 ppr_rtype bb p t@(RImpF _ _ _ _)
   = maybeParen p funPrec (ppr_rty_fun bb empty t)
 ppr_rtype bb p t@(RFun _ _ _ _)
   = maybeParen p funPrec (ppr_rty_fun bb empty t)
 ppr_rtype bb p (RApp c [t] rs r)
   | isList c
-  = F.ppTy r $ brackets (ppr_rtype bb p t) <-> ppReftPs bb p rs
+  = F.ppTy @LHSymbol r $ brackets (ppr_rtype bb p t) <-> ppReftPs bb p rs
 ppr_rtype bb p (RApp c ts rs r)
   | isTuple c
-  = F.ppTy r $ parens (intersperse comma (ppr_rtype bb p <$> ts)) <-> ppReftPs bb p rs
+  = F.ppTy @LHSymbol r $ parens (intersperse comma (ppr_rtype bb p <$> ts)) <-> ppReftPs bb p rs
 ppr_rtype bb p (RApp c ts rs r)
   | isEmpty rsDoc && isEmpty tsDoc
-  = F.ppTy r $ ppT c
+  = F.ppTy @LHSymbol r $ ppT c
   | otherwise
-  = F.ppTy r $ parens $ ppT c <+> rsDoc <+> tsDoc
+  = F.ppTy @LHSymbol r $ parens $ ppT c <+> rsDoc <+> tsDoc
   where
     rsDoc            = ppReftPs bb p rs
     tsDoc            = hsep (ppr_rtype bb p <$> ts)
@@ -191,7 +192,7 @@ ppr_rtype bb p t@(RAllE _ _ _)
 ppr_rtype _ _ (RExprArg e)
   = braces $ pprint e
 ppr_rtype bb p (RAppTy t t' r)
-  = F.ppTy r $ ppr_rtype bb p t <+> ppr_rtype bb p t'
+  = F.ppTy @LHSymbol r $ ppr_rtype bb p t <+> ppr_rtype bb p t'
 ppr_rtype bb p (RRTy e _ OCons t)
   = sep [braces (ppr_rsubtype bb p e) <+> "=>", ppr_rtype bb p t]
 ppr_rtype bb p (RRTy e r o t)
@@ -201,15 +202,15 @@ ppr_rtype bb p (RRTy e r o t)
     ppp  = \doc -> text "<<" <+> doc <+> text ">>"
     ppxt = \(x, t) -> pprint x <+> ":" <+> ppr_rtype bb p t
 ppr_rtype _ _ (RHole r)
-  = F.ppTy r $ text "_"
+  = F.ppTy @LHSymbol r $ text "_"
 
 ppTyConB :: TyConable c => PPEnv -> c -> Doc
 ppTyConB bb
   | ppShort bb = {- shortModules . -} ppTycon
   | otherwise  = ppTycon
 
-shortModules :: Doc -> Doc
-shortModules = text . F.symbolString . dropModuleNames . F.symbol . render
+-- shortModules :: Doc -> Doc
+-- shortModules = text . F.symbolString . dropModuleNames . F.symbol . render
 
 ppr_rsubtype
   :: (OkRT c tv r, PPrint a, PPrint (RType c tv r), PPrint (RType c tv ()))
@@ -232,8 +233,8 @@ maybeParen ctxt_prec inner_prec pretty
 
 ppExists
   :: (OkRT c tv r, PPrint c, PPrint tv, PPrint (RType c tv r),
-      PPrint (RType c tv ()), F.Reftable (RTProp c tv r),
-      F.Reftable (RTProp c tv ()))
+      PPrint (RType c tv ()), F.Reftable LHSymbol (RTProp c tv r),
+      F.Reftable LHSymbol (RTProp c tv ()))
   => PPEnv -> Prec -> RType c tv r -> Doc
 ppExists bb p t
   = text "exists" <+> brackets (intersperse comma [ppr_dbind bb topPrec x t | (x, t) <- zs]) <-> dot <-> ppr_rtype bb p t'
@@ -253,18 +254,19 @@ ppAllExpr bb p t
 
 ppReftPs
   :: (OkRT c tv r, PPrint (RType c tv r), PPrint (RType c tv ()),
-      F.Reftable (Ref (RType c tv ()) (RType c tv r)))
+      F.Reftable LHSymbol (Ref (RType c tv ()) (RType c tv r)))
   => t -> t1 -> [Ref (RType c tv ()) (RType c tv r)] -> Doc
 ppReftPs _ _ rs
-  | all F.isTauto rs   = empty
+  | all (F.isTauto @LHSymbol) rs   = empty
   | not (ppPs ppEnv) = empty
   | otherwise        = angleBrackets $ hsep $ punctuate comma $ ppr_ref <$> rs
 
 ppr_dbind
   :: (OkRT c tv r, PPrint (RType c tv r), PPrint (RType c tv ()))
-  => PPEnv -> Prec -> F.Symbol -> RType c tv r -> Doc
+  => PPEnv -> Prec -> F.Symbol LHSymbol -> RType c tv r -> Doc
 ppr_dbind bb p x t
-  | F.isNonSymbol x || (x == F.dummySymbol)
+  | F.FS x' <- x
+  , F.isNonSymbol x' || (x' == F.dummySymbol)
   = ppr_rtype bb p t
   | otherwise
   = pprint x <-> colon <-> ppr_rtype bb p t
@@ -296,7 +298,7 @@ ppr_rty_fun' bb t
   = ppr_rtype bb topPrec t
 -}
 
-brkFun :: RType c tv r -> ([(F.Symbol, RType c tv r, Doc)], RType c tv r) 
+brkFun :: RType c tv r -> ([(F.Symbol LHSymbol, RType c tv r, Doc)], RType c tv r) 
 brkFun (RImpF b t t' _) = ((b, t, (text "~>")) : args, out)   where (args, out)     = brkFun t'  
 brkFun (RFun b t t' _)  = ((b, t, (text "->")) : args, out)   where (args, out)     = brkFun t'  
 brkFun out              = ([], out) 
@@ -331,7 +333,7 @@ ppr_forall bb p t = maybeParen p funPrec $ sep [
 ppr_rtvar_def :: (PPrint tv) => [RTVar tv (RType c tv ())] -> Doc
 ppr_rtvar_def = sep . map (pprint . ty_var_value)
 
-ppr_symbols :: [F.Symbol] -> Doc
+ppr_symbols :: [F.Symbol LHSymbol] -> Doc
 ppr_symbols [] = empty
 ppr_symbols ss = angleBrackets $ intersperse comma $ pprint <$> ss
 
@@ -342,7 +344,8 @@ ppr_cls
 ppr_cls bb p c ts
   = pp c <+> hsep (map (ppr_rtype bb p) ts)
   where
-    pp | ppShort bb = text . F.symbolString . dropModuleNames . F.symbol . render . pprint
+    pp | ppShort bb = text . F.symbolString . -- dropModuleNames .
+         F.symbol . render . pprint
        | otherwise  = pprint
 
 
@@ -354,11 +357,13 @@ ppr_pvar_def bb p (PV s t _ xts)
 
 
 ppr_pvar_kind :: (OkRT c tv ()) => PPEnv -> Prec -> PVKind (RType c tv ()) -> Doc
-ppr_pvar_kind bb p (PVProp t) = ppr_pvar_sort bb p t <+> arrow <+> ppr_name F.boolConName -- propConName
+ppr_pvar_kind bb p (PVProp t) = ppr_pvar_sort bb p t <+> arrow <+> ppr_name (F.FS F.boolConName) -- propConName
 ppr_pvar_kind _ _ (PVHProp)   = panic Nothing "TODO: ppr_pvar_kind:hprop" -- ppr_name hpropConName
 
-ppr_name :: F.Symbol -> Doc
-ppr_name                      = text . F.symbolString
+ppr_name :: F.Symbol LHSymbol -> Doc
+ppr_name (F.FS fs)               = text . F.symbolString $ fs
+ppr_name (F.AS (LHName name))    = text . show $ name
+ppr_name (F.AS (LHVar name))     = text . show $ name
 
 ppr_pvar_sort :: (OkRT c tv ()) => PPEnv -> Prec -> RType c tv () -> Doc
 ppr_pvar_sort bb p t = ppr_rtype bb p t
@@ -367,9 +372,9 @@ ppr_ref :: (OkRT c tv r) => Ref (RType c tv ()) (RType c tv r) -> Doc
 ppr_ref  (RProp ss s) = ppRefArgs (fst <$> ss) <+> pprint s
 -- ppr_ref (RProp ss s) = ppRefArgs (fst <$> ss) <+> pprint (fromMaybe mempty (stripRTypeBase s))
 
-ppRefArgs :: [F.Symbol] -> Doc
+ppRefArgs :: [F.Symbol LHSymbol] -> Doc
 ppRefArgs [] = empty
-ppRefArgs ss = text "\\" <-> hsep (ppRefSym <$> ss ++ [F.vv Nothing]) <+> arrow 
+ppRefArgs ss = text "\\" <-> hsep (ppRefSym <$> ss ++ [F.FS $ F.vv Nothing]) <+> arrow 
 
 ppRefSym :: (Eq a, IsString a, PPrint a) => a -> Doc
 ppRefSym "" = text "_"
@@ -378,10 +383,10 @@ ppRefSym s  = pprint s
 dot :: Doc
 dot                = char '.'
 
-instance (PPrint r, F.Reftable r) => PPrint (UReft r) where
+instance (PPrint r, F.Reftable LHSymbol r) => PPrint (UReft r) where
   pprintTidy k (MkUReft r p _)
-    | F.isTauto r  = pprintTidy k p
-    | F.isTauto p  = pprintTidy k r
+    | F.isTauto @LHSymbol r  = pprintTidy k p
+    | F.isTauto @LHSymbol p  = pprintTidy k r
     | otherwise  = pprintTidy k p <-> text " & " <-> pprintTidy k r
 
 --------------------------------------------------------------------------------

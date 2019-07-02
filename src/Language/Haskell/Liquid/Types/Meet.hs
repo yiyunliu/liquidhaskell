@@ -1,4 +1,4 @@
--- | This code has various wrappers around `meet` and `strengthen`
+-- | This code has various wrappers around meet and `strengthen`
 --   that are here so that we can throw decent error messages if
 --   they fail. The module depends on `RefType` and `UX.Tidy`.
 
@@ -25,7 +25,7 @@ meetVarTypes _emb _v hs lq = {- meetError emb err -} F.meet hsT lqT
 _meetError :: F.TCEmb TyCon -> Error -> SpecType -> SpecType -> SpecType
 _meetError _emb _e t t'
   -- // | meetable emb t t'
-  | True              = t `F.meet` t'
+  | True              = F.meet @LHSymbol t t'
   -- // | otherwise         = panicError e
 
 _meetable :: F.TCEmb TyCon -> SpecType -> SpecType -> Bool

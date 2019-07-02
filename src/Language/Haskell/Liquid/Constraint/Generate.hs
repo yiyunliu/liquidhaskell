@@ -1204,7 +1204,7 @@ caseEnv γ x _   (DataAlt c) ys pIs = do
   let ys''         = F.symbol <$> filter (not . GM.isPredVar) ys
   let r1           = dataConReft   c   ys''
   let r2           = dataConMsReft rtd ys''
-  let xt           = (xt0 `F.meet` rtd) `strengthen` (uTop (r1 `F.meet` r2))
+  let xt           = (F.meet @LHSymbol xt0 rtd) `strengthen` (uTop (F.meet @LHSymbol r1 r2))
   let cbs          = safeZip "cconsCase" (x':ys') (xt0 : yts)
   cγ'             <- addBinders γ   x' cbs
   cγ              <- addBinders cγ' x' [(x', xt)]
@@ -1448,15 +1448,15 @@ strengthenTop t _                  = t
 
 -- TODO: this is almost identical to RT.strengthen! merge them!
 strengthenMeet :: (PPrint r, F.Reftable r) => RType c tv r -> r -> RType c tv r
-strengthenMeet (RApp c ts rs r) r'  = RApp c ts rs (r `F.meet` r')
-strengthenMeet (RVar a r) r'        = RVar a       (r `F.meet` r')
-strengthenMeet (RFun b t1 t2 r) r'  = RFun b t1 t2 (r `F.meet` r')
-strengthenMeet (RAppTy t1 t2 r) r'  = RAppTy t1 t2 (r `F.meet` r')
+strengthenMeet (RApp c ts rs r) r'  = RApp c ts rs (F.meet @LHSymbol r r')
+strengthenMeet (RVar a r) r'        = RVar a       (F.meet @LHSymbol r r')
+strengthenMeet (RFun b t1 t2 r) r'  = RFun b t1 t2 (F.meet @LHSymbol r r')
+strengthenMeet (RAppTy t1 t2 r) r'  = RAppTy t1 t2 (F.meet @LHSymbol r r')
 strengthenMeet (RAllT a t) r'       = RAllT a $ strengthenMeet t r'
 strengthenMeet t _                  = t
 
 -- topMeet :: (PPrint r, F.Reftable r) => r -> r -> r
--- topMeet r r' = r `F.meet` r'
+-- topMeet r r' = F.meet @LHSymbol r r'
 
 --------------------------------------------------------------------------------
 -- | Cleaner Signatures For Rec-bindings ---------------------------------------

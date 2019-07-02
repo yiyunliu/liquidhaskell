@@ -11,13 +11,14 @@ import Prelude hiding (error)
 
 import Language.Fixpoint.Types (Symbol)
 import Language.Haskell.Liquid.Types.Types hiding (Def, Loc)
+import Language.Haskell.Liquid.Types.LHSymbol
 
 (<:=) :: (Foldable t, Foldable t1) => t Stratum -> t1 Stratum -> Bool
 s1 <:= s2
   | any (==SDiv) s1 && any (==SFin) s2 = False
   | otherwise                          = True
 
-solveStrata :: [([Stratum], [Stratum])] -> [(Symbol, Stratum)]
+solveStrata :: [([Stratum], [Stratum])] -> [(Symbol LHSymbol, Stratum)]
 solveStrata = go True [] []
   where go False solved _   [] = solved
         go True  solved acc [] = go False solved [] $ {-traceShow ("OLD \n" ++ showMap solved acc ) $ -} subsS solved <$> acc
@@ -44,7 +45,7 @@ updateFin (xs, ys) = any (==SFin) ys && any isSVar   xs
 updateDiv :: (Foldable t, Foldable t1) => (t1 Stratum, t Stratum) -> Bool
 updateDiv (xs, ys) = any isSVar   ys && any (==SDiv) xs
 
-solve :: ([Stratum], [Stratum]) -> [(Symbol, Stratum)]
+solve :: ([Stratum], [Stratum]) -> [(Symbol LHSymbol, Stratum)]
 solve (xs, ys)
   | any (== SDiv) xs = [(l, SDiv) | SVar l <- ys]
   | any (== SFin) ys = [(l, SFin) | SVar l <- xs]
@@ -52,8 +53,8 @@ solve (xs, ys)
 
 
 class SubStratum a where
-  subS  :: (Symbol, Stratum) -> a -> a
-  subsS :: [(Symbol, Stratum)] -> a -> a
+  subS  :: (Symbol LHSymbol, Stratum) -> a -> a
+  subsS :: [(Symbol LHSymbol, Stratum)] -> a -> a
 
   subsS su x = foldr subS x su
 

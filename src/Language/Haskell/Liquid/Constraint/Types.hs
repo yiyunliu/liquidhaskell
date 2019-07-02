@@ -352,13 +352,13 @@ conjoinInvariantShift t1 t2
 conjoinInvariant :: SpecType -> SpecType -> SpecType
 conjoinInvariant (RApp c ts rs r) (RApp ic its _ ir)
   | c == ic && length ts == length its
-  = RApp c (zipWith conjoinInvariantShift ts its) rs (r `F.meet` ir)
+  = RApp c (zipWith conjoinInvariantShift ts its) rs (F.meet @LHSymbol r ir)
 
 conjoinInvariant t@(RApp _ _ _ r) (RVar _ ir)
-  = t { rt_reft = r `F.meet` ir }
+  = t { rt_reft = F.meet @LHSymbol r ir }
 
 conjoinInvariant t@(RVar _ r) (RVar _ ir)
-  = t { rt_reft = r `F.meet` ir }
+  = t { rt_reft = F.meet @LHSymbol r ir }
 
 conjoinInvariant t _
   = t

@@ -815,7 +815,7 @@ bTup ts rs r
 -- Temporarily restore this hack benchmarks/esop2013-submission/Array.hs fails
 -- w/o it
 -- TODO RApp Int [] [p] true should be syntactically different than RApp Int [] [] p
--- bCon b s [RProp _ (RHole r1)] [] _ r = RApp b [] [] $ r1 `meet` (MkUReft r mempty s)
+-- bCon b s [RProp _ (RHole r1)] [] _ r = RApp b [] [] $ meet @LHSymbol r1 (MkUReft r mempty s)
 bCon :: c
      -> Strata
      -> [RTProp c tv (UReft r)]

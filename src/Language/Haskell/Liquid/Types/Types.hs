@@ -1,5 +1,6 @@
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveFoldable             #-}
 {-# LANGUAGE DeriveGeneric              #-}
@@ -170,7 +171,8 @@ module Language.Haskell.Liquid.Types.Types (
   -- * Modules and Imports
   , ModName (..), ModType (..)
   , isSrcImport, isSpecImport, isTarget
-  , getModName, getModString, qualifyModName
+  , getModName, getModString
+  -- , qualifyModName
 
   -- * Refinement Type Aliases
   , RTEnv (..), BareRTEnv, SpecRTEnv, BareRTAlias, SpecRTAlias
@@ -240,9 +242,10 @@ import           Data.String
 import           DataCon
 import           GHC                                    (ModuleName, moduleNameString, getName)
 import           GHC.Generics
-import           Module                                 (moduleNameFS)
+import           Module                                 ()
 -- import           NameSet
 import           PrelInfo                               (isNumericClass)
+import           Name                                   (isTyConName)
 import           Prelude                          hiding  (error)
 import qualified Prelude
 import           SrcLoc                                 (SrcSpan)
@@ -948,6 +951,29 @@ type OkRT c tv r = ( TyConable c
 -- | TyConable Instances -------------------------------------------------------
 -------------------------------------------------------------------------------
 
+instance TyConable LHSymbol where
+  -- isFun    :: c -> Bool
+  isFun _ = False
+  -- isList   :: c -> Bool
+  isList (LHName name) = getName listTyCon == name
+  isList _ = False
+  -- isTuple  :: c -> Bool
+  isTuple _ = False
+  -- ppTycon  :: c -> Doc
+  ppTycon = F.pprintTidy F.Lossy 
+  -- isClass  :: c -> Bool
+  isClass (LHName name) = isTyConName name
+  isClass (LHVar  name) = isTyConName (getName name)
+  -- isEqual  :: c -> Bool
+
+  -- isNumCls  :: c -> Bool
+  -- isFracCls :: c -> Bool
+
+  -- isClass   = const False
+  -- isEqual   = const False
+  -- isNumCls  = const False
+  -- isFracCls = const False
+
 instance TyConable RTyCon where
   isFun      = isFunTyCon . rtc_tc
   isList     = (listTyCon ==) . rtc_tc
@@ -991,7 +1017,7 @@ instance TyConable Symbol where
   isList _ = False
   
   isTuple (F.FS s) = F.tupConName == s
-  isTuple (F.AS (LHName name)) = undefined
+  isTuple (F.AS (LHName _)) = undefined
   isTuple _ = False
   
   ppTycon (F.FS s) = text . F.symbolString $ s
@@ -1024,7 +1050,7 @@ instance F.Fixpoint RTyCon where
   toFix (RTyCon c _ _) = text $ showPpr c
 
 instance F.Fixpoint BTyCon where
-  toFix = text . F.symbolString . F.val . btc_tc
+  toFix = F.toFix . F.val . btc_tc
 
 instance F.Fixpoint Cinfo where
   toFix = text . showPpr . ci_loc
@@ -1034,11 +1060,11 @@ instance F.PPrint RTyCon where
     | ppDebug ppEnv = F.pprintTidy k tc  <-> (angleBrackets $ F.pprintTidy k pvs)
     | otherwise     = text . showPpr . rtc_tc $ c
     where 
-      tc            = F.symbol (rtc_tc c) 
+      tc            = rtc_tc c
       pvs           = rtc_pvars c 
 
 instance F.PPrint BTyCon where
-  pprintTidy _ = text . F.symbolString . F.val . btc_tc
+  pprintTidy k = F.pprintTidy k . F.val . btc_tc
 
 instance F.PPrint v => F.PPrint (RTVar v s) where
   pprintTidy k (RTVar x _) = F.pprintTidy k x
@@ -1175,7 +1201,7 @@ instance Show SizeFun where
 
 szFun :: SizeFun -> Symbol -> Expr
 szFun IdSizeFun      = F.EVar
-szFun (SymSizeFun f) = \x -> F.mkEApp (F.symbol <$> f) [F.EVar x]
+szFun (SymSizeFun f) = \x -> F.mkEApp f [F.EVar x]
 
 data HasDataDecl
   = NoDecl  (Maybe SizeFun)
@@ -1196,7 +1222,7 @@ hasDecl d
   = HasDecl
 
 instance Hashable DataName where
-  hashWithSalt i = hashWithSalt i . F.symbol
+  hashWithSalt i = hashWithSalt i . F.val . dataNameSymbol
 
 
 instance NFData   SizeFun
@@ -1396,7 +1422,7 @@ rRCls rc ts = RApp rc ts [] mempty
 
 addInvCond :: SpecType -> RReft -> SpecType
 addInvCond t r'
-  | F.isTauto $ ur_reft r' -- null rv
+  | F.isTauto @LHSymbol $ ur_reft r' -- null rv
   = t
   | otherwise
   = fromRTypeRep $ trep {ty_res = RRTy [(x', tbd)] r OInv tbd}
@@ -1448,27 +1474,28 @@ instance UReftable () where
 instance (F.PPrint r, F.Reftable LHSymbol r) => F.Reftable LHSymbol (UReft r) where
   isTauto                 = isTauto_ureft
   ppTy                    = ppTy_ureft
-  toReft (MkUReft r ps _) = F.toReft r `F.meet` F.toReft ps
+  toReft (MkUReft r ps _) = F.meet @LHSymbol (F.toReft r) (F.toReft ps)
   params (MkUReft r _ _)  = F.params r
-  bot (MkUReft r _ s)     = MkUReft (F.bot r) (Pr []) (F.bot s)
-  top (MkUReft r p s)     = MkUReft (F.top r) (F.top p) s
+  bot (MkUReft r _ s)     = MkUReft (F.bot @LHSymbol r) (Pr []) (F.bot @LHSymbol s)
+  top (MkUReft r p s)     = MkUReft (F.top @LHSymbol r) (F.top @LHSymbol p) s
   ofReft r                = MkUReft (F.ofReft r) mempty mempty
 
 instance F.Expression LHSymbol (UReft ()) where
-  expr = F.expr . F.toReft
+  expr = F.expr . F.toReft @LHSymbol
 
 
 
 isTauto_ureft :: F.Reftable LHSymbol r => UReft r -> Bool
-isTauto_ureft u      = F.isTauto (ur_reft u) && F.isTauto (ur_pred u) -- && (isTauto $ ur_strata u)
+isTauto_ureft u      = F.isTauto @LHSymbol (ur_reft u) &&
+  F.isTauto @LHSymbol (ur_pred u) -- && (isTauto $ ur_strata u)
 
 ppTy_ureft :: F.Reftable LHSymbol r => UReft r -> Doc -> Doc
 ppTy_ureft u@(MkUReft r p s) d
   | isTauto_ureft  u  = d
-  | otherwise         = ppr_reft r (F.ppTy p d) s
+  | otherwise         = ppr_reft r (F.ppTy @LHSymbol p d) s
 
 ppr_reft :: (F.PPrint [t], F.Reftable LHSymbol r) => r -> Doc -> [t] -> Doc
-ppr_reft r d s       = braces (F.pprint v <+> colon <+> d <-> ppr_str s <+> text "|" <+> F.pprint r')
+ppr_reft r d s       = braces (F.pprint @Symbol v <+> colon <+> d <-> ppr_str s <+> text "|" <+> F.pprint r')
   where
     r'@(F.Reft (v, _)) = F.toReft r
 
@@ -1509,7 +1536,7 @@ instance F.Reftable LHSymbol Predicate where
   isTauto (Pr ps)      = null ps
 
   bot (Pr _)           = panic Nothing "No BOT instance for Predicate"
-  ppTy r d | F.isTauto r      = d
+  ppTy r d | F.isTauto @LHSymbol r      = d
            | not (ppPs ppEnv) = d
            | otherwise        = d <-> (angleBrackets $ F.pprint r)
 
@@ -1525,10 +1552,10 @@ pToRef p = pApp (pname p) $ (F.EVar $ parg p) : (thd3 <$> pargs p)
 pApp      :: Symbol -> [Expr] -> Expr
 pApp p es = F.mkEApp fn (F.EVar p:es)
   where
-    fn    = F.dummyLoc (pappSym n)
+    fn    = F.dummyLoc (F.FS $ pappSym n)
     n     = length es
 
-pappSym :: Show a => a -> Symbol
+pappSym :: Show a => a -> F.FixSymbol
 pappSym n  = F.symbol $ "papp" ++ show n
 
 --------------------------------------------------------------------------------
@@ -1540,7 +1567,7 @@ mapExprReft f = mapReft g
     g (MkUReft (F.Reft (x, e)) p s) = MkUReft (F.Reft (x, f x e)) p s
 
 isTrivial :: (F.Reftable LHSymbol r, TyConable c) => RType c tv r -> Bool
-isTrivial t = foldReft (\_ r b -> F.isTauto r && b) True t
+isTrivial t = foldReft (\_ r b -> F.isTauto @LHSymbol r && b) True t
 
 mapReft ::  (r1 -> r2) -> RType c tv r1 -> RType c tv r2
 mapReft f = emapReft (const f) []
@@ -1808,7 +1835,7 @@ ofRSort ::  F.Reftable LHSymbol r => RType c tv () -> RType c tv r
 ofRSort = fmap mempty
 
 toRSort :: RType c tv r -> RType c tv ()
-toRSort = stripAnnotations . mapBind (const F.dummySymbol) . fmap (const ())
+toRSort = stripAnnotations . mapBind (const . F.FS $ F.dummySymbol) . fmap (const ())
 
 stripAnnotations :: RType c tv r -> RType c tv r
 stripAnnotations (RAllT α t)      = RAllT α (stripAnnotations t)
@@ -1855,7 +1882,7 @@ stripRTypeBase _
   = Nothing
 
 topRTypeBase :: (F.Reftable LHSymbol r) => RType c tv r -> RType c tv r
-topRTypeBase = mapRBase F.top
+topRTypeBase = mapRBase (F.top @LHSymbol)
 
 mapRBase :: (r -> r) -> RType c tv r -> RType c tv r
 mapRBase f (RApp c ts rs r) = RApp c ts rs $ f r
@@ -2020,10 +2047,10 @@ getModName (ModName _ m) = m
 getModString :: ModName -> String
 getModString = moduleNameString . getModName
 
-qualifyModName :: ModName -> Symbol -> Symbol
-qualifyModName n = qualifySymbol nSym
-  where
-    nSym         = F.symbol n
+-- qualifyModName :: ModName -> Symbol -> Symbol
+-- qualifyModName n = qualifySymbol nSym
+--   where
+--     nSym         = F.symbol n
 
 --------------------------------------------------------------------------------
 -- | Refinement Type Aliases ---------------------------------------------------
@@ -2340,11 +2367,11 @@ instance F.PPrint KVProf where
 instance NFData KVProf
 
 hole :: Expr
-hole = F.PKVar "HOLE" mempty
+hole = F.PKVar (F.KV (F.FS "HOLE")) mempty
 
 isHole :: Expr -> Bool
-isHole (F.PKVar ("HOLE") _) = True
-isHole _                    = False
+isHole (F.PKVar (F.KV (F.FS "HOLE")) _) = True
+isHole _                                = False
 
 hasHole :: F.Reftable LHSymbol r => r -> Bool
 hasHole = any isHole . F.conjuncts . F.reftPred . F.toReft
@@ -2356,10 +2383,10 @@ instance F.PPrint DataCon where
   pprintTidy _ = text . showPpr
 
 instance Ord TyCon where 
-  compare = compare `on` F.symbol 
+  compare = compare `on` getName
 
 instance Ord DataCon where 
-  compare = compare `on` F.symbol 
+  compare = compare `on` getName
 
 instance F.PPrint TyThing where 
   pprintTidy _ = text . showPpr 
@@ -2425,11 +2452,11 @@ instance Eq ctor => Monoid (MSpec ty ctor) where
 --------------------------------------------------------------------------------
 
 instance F.PPrint BTyVar where
-  pprintTidy _ (BTV α) = text (F.symbolString α)
+  pprintTidy k (BTV α) = F.pprintTidy k α
 
 instance F.PPrint RTyVar where
   pprintTidy k (RTV α)
-   | ppTyVar ppEnv  = F.pprintTidy k (F.symbol α) -- shows full tyvar
+   | ppTyVar ppEnv  = F.pprintTidy k α -- shows full tyvar
    | otherwise      = ppr_tyvar_short α           -- drops the unique-suffix
    where
      ppr_tyvar_short :: TyVar -> Doc
@@ -2440,7 +2467,7 @@ instance (F.PPrint r, F.Reftable LHSymbol r, F.PPrint t, F.PPrint (RType c tv r)
 
 ppRefArgs :: F.Tidy -> [Symbol] -> Doc
 ppRefArgs _ [] = empty
-ppRefArgs k ss = text "\\" <-> hsep (ppRefSym k <$> ss ++ [F.vv Nothing]) <+> "->"
+ppRefArgs k ss = text "\\" <-> hsep (ppRefSym k <$> ss ++ [F.FS $ F.vv Nothing]) <+> "->"
 
 ppRefSym :: (Eq a, IsString a, F.PPrint a) => F.Tidy -> a -> Doc
 ppRefSym _ "" = text "_"

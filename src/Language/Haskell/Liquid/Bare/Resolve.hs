@@ -848,7 +848,7 @@ bareTCApp r (Loc _ _ c) rs ts
 
 tyApp :: F.Reftable r => RType c tv r -> [RType c tv r] -> [RTProp c tv r] -> r 
       -> RType c tv r
-tyApp (RApp c ts rs r) ts' rs' r' = RApp c (ts ++ ts') (rs ++ rs') (r `F.meet` r')
+tyApp (RApp c ts rs r) ts' rs' r' = RApp c (ts ++ ts') (rs ++ rs') (F.meet @LHSymbol r r')
 tyApp t                []  []  r  = t `RT.strengthen` r
 tyApp _                 _  _   _  = panic Nothing $ "Bare.Type.tyApp on invalid inputs"
 
@@ -886,8 +886,8 @@ addSymSort sp tce tyi (RApp rc@(RTyCon {}) ts rs r)
     -- pvs             = rTyConPVs rc'
     (rargs, rrest)     = splitAt (length pvs) rs
     r'                 = L.foldl' go r rrest
-    go r (RProp _ (RHole r')) = r' `F.meet` r
-    go r (RProp  _ t' )       = let r' = Mb.fromMaybe mempty (stripRTypeBase t') in r `F.meet` r'
+    go r (RProp _ (RHole r')) = F.meet @LHSymbol r' r
+    go r (RProp  _ t' )       = let r' = Mb.fromMaybe mempty (stripRTypeBase t') in F.meet @LHSymbol r r'
 
 addSymSort _ _ _ t
   = t
