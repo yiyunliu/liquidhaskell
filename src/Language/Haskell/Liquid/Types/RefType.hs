@@ -1804,24 +1804,22 @@ isDecreasing _ cenv (RVar v _)
 isDecreasing _ _ _
   = False
 
-makeDecrType :: FixSymbolic a
-             => S.HashSet TyCon
-             -> [(a, (Symbol LHSymbol, RType RTyCon t (UReft (Reft LHSymbol))))]
+makeDecrType :: S.HashSet TyCon
+             -> [(Var, (Symbol LHSymbol, RType RTyCon t (UReft (Reft LHSymbol))))]
              -> (Symbol LHSymbol, RType RTyCon t (UReft (Reft LHSymbol)))
 makeDecrType autoenv = mkDType autoenv [] []
 
-mkDType :: FixSymbolic a
-        => S.HashSet TyCon
+mkDType :: S.HashSet TyCon
         -> [(Symbol LHSymbol, Symbol LHSymbol, Symbol LHSymbol -> Expr LHSymbol)]
         -> [Expr LHSymbol]
-        -> [(a, (Symbol LHSymbol, RType RTyCon t (UReft (Reft LHSymbol))))]
+        -> [(Var, (Symbol LHSymbol, RType RTyCon t (UReft (Reft LHSymbol))))]
         -> (Symbol LHSymbol, RType RTyCon t (UReft (Reft LHSymbol)))
 mkDType autoenv xvs acc [(v, (x, t))]
   = (x, ) $ t `strengthen` tr
   where
     tr = uTop $ Reft (vv, pOr (r:acc))
     r  = cmpLexRef xvs (v', vv, f)
-    v' = symbol v
+    v' = F.AS . LHVar $ v
     f  = mkDecrFun autoenv  t
     vv = "vvRec"
 
@@ -1829,7 +1827,7 @@ mkDType autoenv xvs acc ((v, (x, t)):vxts)
   = mkDType autoenv ((v', x, f):xvs) (r:acc) vxts
   where
     r  = cmpLexRef xvs  (v', x, f)
-    v' = symbol v
+    v' = F.AS . LHVar $ v
     f  = mkDecrFun autoenv t
 
 

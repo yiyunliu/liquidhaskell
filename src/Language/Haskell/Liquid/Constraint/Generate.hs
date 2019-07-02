@@ -168,9 +168,8 @@ makeDecrIndexTy x t args
        trep       = toRTypeRep $ unOCons t
 
 
-recType :: F.Symbolic a
-        => S.HashSet TyCon
-        -> (([a], [Int]), (t, [Int], SpecType))
+recType :: S.HashSet TyCon
+        -> (([Var], [Int]), (t, [Int], SpecType))
         -> SpecType
 recType _ ((_, []), (_, [], t))
   = t
@@ -195,10 +194,10 @@ checkIndex (x, vs, t, index)
        msg2  = ErrTermin loc [xd] "No decreasing parameter"
        xd    = F.pprint x
 
-makeRecType :: (Enum a1, Eq a1, Num a1, F.Symbolic a)
+makeRecType :: (Enum a1, Eq a1, Num a1)
             => S.HashSet TyCon
             -> SpecType
-            -> [a]
+            -> [Var]
             -> [(F.Symbol, SpecType)]
             -> [a1]
             -> SpecType
