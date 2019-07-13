@@ -1,7 +1,9 @@
 
 {-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeApplications  #-}
 
 ---------------------------------------------------------------------
 -- | This module contains functions for cleaning up types before
@@ -43,6 +45,7 @@ import           Language.Haskell.Liquid.Types.RefType     (rVar, subsTyVars_mee
 import           Language.Haskell.Liquid.Types.PrettyPrint
 import           Data.Generics                             (everywhere, mkT)
 import           Text.PrettyPrint.HughesPJ
+import           Language.Haskell.Liquid.Types.LHSymbol
 
 
 ------------------------------------------------------------------------
@@ -88,25 +91,30 @@ tidySpecType k
 tidyValueVars :: SpecType -> SpecType
 tidyValueVars = mapReft $ \u -> u { ur_reft = tidyVV $ ur_reft u }
 
-tidyVV :: Reft -> Reft
+tidyVV :: Reft LHSymbol -> Reft LHSymbol
 tidyVV r@(Reft (va,_))
-  | isJunk va = shiftVV r v'
+  | FS va' <- va
+  , isJunk va' = shiftVV r (FS v')
   | otherwise = r
   where
-    v'        = if v `elem` xs then symbol ("v'" :: T.Text) else v
+    v'        = if FS @LHSymbol v `elem` xs then symbol ("v'" :: T.Text) else v
     v         = symbol ("v" :: T.Text)
     xs        = syms r
     isJunk    = isPrefixOfSym "x"
 
 tidySymbols :: Tidy -> SpecType -> SpecType
-tidySymbols k t = substa (shortSymbol k . tidySymbol) $ mapBind dropBind t
+tidySymbols _ t = substa @LHSymbol (-- shortSymbol k .
+  liftFixFun tidySymbol) $ mapBind dropBind t
   where
     xs          = S.fromList (syms t)
-    dropBind x  = if x `S.member` xs then tidySymbol x else nonSymbol
+    dropBind x  = if x `S.member` xs then liftFixFun tidySymbol x else FS nonSymbol
 
-shortSymbol :: Tidy -> Symbol -> Symbol 
-shortSymbol Lossy = GM.dropModuleNames 
-shortSymbol _     = id 
+
+-- YL: This shouldn't ever be used? Can we still have FixSymbol containing
+-- ModuleNames that needs to be shortened?
+-- shortSymbol :: Tidy -> Symbol LHSymbol -> Symbol LHSymbol
+-- shortSymbol Lossy = GM.dropModuleNames 
+-- shortSymbol _     = id 
 
 tidyLocalRefas   :: Tidy -> SpecType -> SpecType
 tidyLocalRefas k = mapReft (txStrata . txReft' k)
@@ -115,7 +123,9 @@ tidyLocalRefas k = mapReft (txStrata . txReft' k)
     txReft' Lossy                 = txReft
     txStrata (MkUReft r p l)      = MkUReft r p (txStr l)
     txReft u                      = u { ur_reft = mapPredReft dropLocals $ ur_reft u }
-    dropLocals                    = pAnd . filter (not . any isTmp . syms) . conjuncts
+    dropLocals                    = pAnd . filter (not .
+                                                   any (\case {FS x -> isTmp x; AS _ -> False}) .
+                                                   syms @LHSymbol) . conjuncts
     isTmp x                       = any (`isPrefixOfSym` x) [anfPrefix, "ds_"]
     txStr                         = filter (not . isSVar)
 
@@ -129,14 +139,15 @@ tidyInternalRefas   :: SpecType -> SpecType
 tidyInternalRefas = mapReft txReft
   where
     txReft u                      = u { ur_reft = mapPredReft dropInternals $ ur_reft u }
-    dropInternals                 = pAnd . filter (not . any isIntern . syms) . conjuncts
-    isIntern x                    = "is$" `isPrefixOfSym` x || "$select" `isSuffixOfSym` x
+    dropInternals                 = pAnd . filter (not . any isIntern . syms @LHSymbol) . conjuncts
+    isIntern (FS x)               = "is$" `isPrefixOfSym` x || "$select" `isSuffixOfSym` x
+    isIntern _                    = False
 
 
 tidyDSymbols :: SpecType -> SpecType
 tidyDSymbols t = mapBind tx $ substa tx t
   where
-    tx         = bindersTx [x | x <- syms t, isTmp x]
+    tx         = bindersTx [s | s@(FS x) <- syms t, isTmp x]
     isTmp      = (tempPrefix `isPrefixOfSym`)
 
 tidyFunBinds :: SpecType -> SpecType
@@ -153,11 +164,11 @@ tidyTyVars t = subsTyVarsAll αβs t
     pool = [[c] | c <- ['a'..'z']] ++ [ "t" ++ show i | i <- [1..]]
 
 
-bindersTx :: [Symbol] -> Symbol -> Symbol
+bindersTx :: [Symbol LHSymbol] -> Symbol LHSymbol -> Symbol LHSymbol
 bindersTx ds   = \y -> M.lookupDefault y y m
   where
     m          = M.fromList $ zip ds $ var <$> [1..]
-    var        = symbol . ('x' :) . show
+    var        = FS . symbol . ('x' :) . show
 
 
 tyVars :: RType c tv r -> [tv]
@@ -177,7 +188,7 @@ tyVars (RHole _)       = []
 
 subsTyVarsAll
   :: (Eq k, Hashable k,
-      Reftable r, TyConable c, SubsTy k (RType c k ()) c,
+      Reftable LHSymbol r, TyConable c, SubsTy k (RType c k ()) c,
       SubsTy k (RType c k ()) r,
       SubsTy k (RType c k ()) k,
       SubsTy k (RType c k ()) (RType c k ()),
@@ -191,7 +202,7 @@ subsTyVarsAll ats = go
     go t           = subsTyVars_meet ats t
 
 
-funBinds :: RType t t1 t2 -> [Symbol]
+funBinds :: RType t t1 t2 -> [Symbol LHSymbol]
 funBinds (RAllT _ t)      = funBinds t
 funBinds (RAllP _ t)      = funBinds t
 funBinds (RAllS _ t)      = funBinds t
@@ -242,6 +253,7 @@ ppSpecType k = rtypeDoc     k
              . tidySpecType k
              . fmap (everywhere (mkT noCasts))
   where
+    noCasts :: Expr LHSymbol -> Expr LHSymbol
     noCasts (ECst x _) = x
     noCasts e          = e
 

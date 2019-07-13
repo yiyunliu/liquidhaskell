@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE TupleSections        #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeApplications     #-}
 
 module Language.Haskell.Liquid.Types.PredType (
     PrType
@@ -53,9 +54,10 @@ import           Language.Haskell.Liquid.GHC.Misc
 import           Language.Haskell.Liquid.Misc
 import           Language.Haskell.Liquid.Types.RefType hiding (generalize)
 import           Language.Haskell.Liquid.Types.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 import           Data.Default
 
-makeTyConInfo :: F.TCEmb Ghc.TyCon -> [Ghc.TyCon] -> [TyConP] -> TyConMap
+makeTyConInfo :: F.TCEmb LHSymbol Ghc.TyCon -> [Ghc.TyCon] -> [TyConP] -> TyConMap
 makeTyConInfo tce fiTcs tcps = TyConMap 
   { tcmTyRTy    = tcM
   , tcmFIRTy    = tcInstM 
@@ -66,7 +68,7 @@ makeTyConInfo tce fiTcs tcps = TyConMap
     tcInstM     = mkFInstRTyCon tce fiTcs tcM 
     arities     = safeFromList "makeTyConInfo" [ (c, length ts) | (c, ts) <- M.keys tcInstM ]
 
-mkFInstRTyCon :: F.TCEmb Ghc.TyCon -> [Ghc.TyCon] -> M.HashMap Ghc.TyCon RTyCon -> M.HashMap (Ghc.TyCon, [F.Sort]) RTyCon
+mkFInstRTyCon :: F.TCEmb LHSymbol Ghc.TyCon -> [Ghc.TyCon] -> M.HashMap Ghc.TyCon RTyCon -> M.HashMap (Ghc.TyCon, [F.Sort LHSymbol]) RTyCon
 mkFInstRTyCon tce fiTcs tcm = M.fromList 
   [ ((c, typeSort tce <$> ts), rtc) 
     | fiTc    <- fiTcs
@@ -174,8 +176,8 @@ dcWrapSpecType dc (DataConP _ _ vs ps ls cs yts rt _ _ _)
     mkArrow makeVars ps ls [] ts' rt'
   where
     (xs, ts) = unzip (reverse yts)
-    mkDSym z = (F.symbol z) `F.suffixSymbol` (F.symbol dc)
-    ys       = mkDSym <$> xs
+    mkDSym z = (F.symbol z) `F.suffixSymbol` (F.symbol . encodeName . Ghc.getName $ dc)
+    ys       = F.FS . mkDSym <$> xs
     tx _  []     []     []     = []
     tx su (x:xs) (y:ys) (t:ts) = (y, F.subst (F.mkSubst su) t, mempty)
                                : tx ((x, F.EVar y):su) xs ys ts
@@ -225,7 +227,7 @@ dataConTy :: Monoid r
 dataConTy m (TyVarTy v)
   = M.lookupDefault (rVar v) (RTV v) m
 dataConTy m (FunTy t1 t2)
-  = rFun F.dummySymbol (dataConTy m t1) (dataConTy m t2)
+  = rFun (F.FS F.dummySymbol) (dataConTy m t1) (dataConTy m t2)
 dataConTy m (ForAllTy (TvBndr α _) t) -- α :: TyVar
   = RAllT (makeRTVar (RTV α)) (dataConTy m t)
 dataConTy m (TyConApp c ts)
@@ -236,8 +238,8 @@ dataConTy _ _
 ----------------------------------------------------------------------------
 -- | Interface: Replace Predicate With Uninterpreted Function Symbol -------
 ----------------------------------------------------------------------------
-replacePredsWithRefs :: (UsedPVar, (F.Symbol, [((), F.Symbol, F.Expr)]) -> F.Expr)
-                     -> UReft F.Reft -> UReft F.Reft
+replacePredsWithRefs :: (UsedPVar, (F.Symbol LHSymbol, [((), F.Symbol LHSymbol, F.Expr LHSymbol)]) -> F.Expr LHSymbol)
+                     -> UReft (F.Reft LHSymbol) -> UReft (F.Reft LHSymbol)
 replacePredsWithRefs (p, r) (MkUReft (F.Reft(v, rs)) (Pr ps) s)
   = MkUReft (F.Reft (v, rs'')) (Pr ps2) s
   where
@@ -245,7 +247,7 @@ replacePredsWithRefs (p, r) (MkUReft (F.Reft(v, rs)) (Pr ps) s)
     rs'              = r . (v,) . pargs <$> ps1
     (ps1, ps2)       = L.partition (== p) ps
 
-pVartoRConc :: PVar t -> (F.Symbol, [(a, b, F.Expr)]) -> F.Expr
+pVartoRConc :: PVar t -> (F.Symbol LHSymbol, [(a, b, F.Expr LHSymbol)]) -> F.Expr LHSymbol
 pVartoRConc p (v, args) | length args == length (pargs p)
   = pApp (pname p) $ F.EVar v : (thd3 <$> args)
 
@@ -261,7 +263,7 @@ pVartoRConc p (v, args)
 --   then @pvarRType π@ returns an @RType@ with an @RTycon@ called
 --   @predRTyCon@ `RApp predRTyCon [T1, T2, T3]`
 -----------------------------------------------------------------------
-pvarRType :: (PPrint r, F.Reftable r) => PVar RSort -> RRType r
+pvarRType :: (PPrint r, F.Reftable LHSymbol r) => PVar RSort -> RRType r
 -----------------------------------------------------------------------
 pvarRType (PV _ k {- (PVProp τ) -} _ args) = rpredType k (fst3 <$> args) -- (ty:tys)
   -- where
@@ -270,7 +272,7 @@ pvarRType (PV _ k {- (PVProp τ) -} _ args) = rpredType k (fst3 <$> args) -- (ty
 
 
 -- rpredType    :: (PPrint r, Reftable r) => PVKind (RRType r) -> [RRType r] -> RRType r
-rpredType :: F.Reftable r
+rpredType :: F.Reftable LHSymbol r
           => PVKind (RType RTyCon tv a)
           -> [RType RTyCon tv a] -> RType RTyCon tv r
 rpredType (PVProp t) ts = RApp predRTyCon  (uRTypeGen <$> t : ts) [] mempty
@@ -282,9 +284,8 @@ predRTyCon   = symbolRTyCon predName
 wpredRTyCon   :: RTyCon
 wpredRTyCon   = symbolRTyCon wpredName
 
-symbolRTyCon   :: F.Symbol -> RTyCon
+symbolRTyCon   :: F.FixSymbol -> RTyCon
 symbolRTyCon n = RTyCon (stringTyCon 'x' 42 $ F.symbolString n) [] def
-
 -------------------------------------------------------------------------------------
 -- | Instantiate `PVar` with `RTProp` -----------------------------------------------
 -------------------------------------------------------------------------------------
@@ -342,7 +343,7 @@ substPred msg su@(π,prop) (RFun x t t' r)
   | null πs                     = RFun x (substPred msg su t) (substPred msg su t') r
   | otherwise                   =
       let sus = (\π -> F.mkSubst (zip (fst <$> rf_args prop) (thd3 <$> pargs π))) <$> πs in
-      foldl (\t su -> F.meet t $ F.subst su (rf_body prop)) (RFun x (substPred msg su t) (substPred msg su t') r') sus
+      foldl (\t su -> F.meet @LHSymbol t $ F.subst su (rf_body prop)) (RFun x (substPred msg su t) (substPred msg su t') r') sus
   where (r', πs)                = splitRPvar π r
 -- ps has   , pargs :: ![(t, Symbol, Expr)]
 
@@ -351,7 +352,7 @@ substPred msg su@(π,prop) (RImpF x t t' r)
   | null πs                     = RImpF x (substPred msg su t) (substPred msg su t') r
   | otherwise                   =
       let sus = (\π -> F.mkSubst (zip (fst <$> rf_args prop) (thd3 <$> pargs π))) <$> πs in
-      foldl (\t su -> F.meet t $ F.subst su (rf_body prop)) (RImpF x (substPred msg su t) (substPred msg su t') r') sus
+      foldl (\t su -> F.meet @LHSymbol t $ F.subst su (rf_body prop)) (RImpF x (substPred msg su t) (substPred msg su t') r') sus
   where (r', πs)                = splitRPvar π r
 
 
@@ -365,16 +366,16 @@ substPred _   _  t              = t
 -- substRCon :: String -> (RPVar, SpecType) -> SpecType -> SpecType
 
 substRCon
-  :: (PPrint t, PPrint t2, Eq tv, F.Reftable r, Hashable tv, PPrint tv, PPrint r,
+  :: (PPrint t, PPrint t2, Eq tv, F.Reftable LHSymbol r, Hashable tv, PPrint tv, PPrint r,
       SubsTy tv (RType RTyCon tv ()) r,
       SubsTy tv (RType RTyCon tv ()) (RType RTyCon tv ()),
       SubsTy tv (RType RTyCon tv ()) RTyCon,
       SubsTy tv (RType RTyCon tv ()) tv,
-      F.Reftable (RType RTyCon tv r),
+      F.Reftable LHSymbol (RType RTyCon tv r),
       SubsTy tv (RType RTyCon tv ()) (RTVar tv (RType RTyCon tv ())),
       FreeVar RTyCon tv,
-      F.Reftable (RTProp RTyCon tv r),
-      F.Reftable (RTProp RTyCon tv ()))
+      F.Reftable LHSymbol (RTProp RTyCon tv r),
+      F.Reftable LHSymbol (RTProp RTyCon tv ()))
   => [Char]
   -> (t, Ref RSort (RType RTyCon tv r))
   -> RType RTyCon tv r
@@ -384,9 +385,9 @@ substRCon
 substRCon msg (_, RProp ss t1@(RApp c1 ts1 rs1 r1)) t2@(RApp c2 ts2 rs2 _) πs r2'
   | rtc_tc c1 == rtc_tc c2 = RApp c1 ts rs $ meetListWithPSubs πs ss r1 r2'
   where
-    ts                     = F.subst su $ safeZipWith (msg ++ ": substRCon")  strSub  ts1  ts2
+    ts                     = F.subst @LHSymbol su $ safeZipWith (msg ++ ": substRCon")  strSub  ts1  ts2
     rs                     = F.subst su $ safeZipWith (msg ++ ": substRCon2") strSubR rs1' rs2'
-    (rs1', rs2')           = pad "substRCon" F.top rs1 rs2
+    (rs1', rs2')           = pad "substRCon" (F.top @LHSymbol) rs1 rs2
     strSub r1 r2           = meetListWithPSubs πs ss r1 r2
     strSubR r1 r2          = meetListWithPSubsRef πs ss r1 r2
 
@@ -427,7 +428,7 @@ splitRPvar pv (MkUReft x (Pr pvs) s) = (MkUReft x (Pr pvs') s, epvs)
     (epvs, pvs')               = L.partition (uPVar pv ==) pvs
 
 -- TODO: rewrite using foldReft
-freeArgsPs :: PVar (RType t t1 ()) -> RType t t1 (UReft t2) -> [F.Symbol]
+freeArgsPs :: PVar (RType t t1 ()) -> RType t t1 (UReft t2) -> [F.Symbol LHSymbol]
 freeArgsPs p (RVar _ r)
   = freeArgsPsRef p r
 freeArgsPs p (RImpF _ t1 t2 r)
@@ -456,37 +457,37 @@ freeArgsPs p (RHole r)
 freeArgsPs p (RRTy env r _ t)
   = L.nub $ concatMap (freeArgsPs p) (snd <$> env) ++ freeArgsPsRef p r ++ freeArgsPs p t
 
-freeArgsPsRef :: PVar t1 -> UReft t -> [F.Symbol]
+freeArgsPsRef :: PVar t1 -> UReft t -> [F.Symbol LHSymbol]
 freeArgsPsRef p (MkUReft _ (Pr ps) _) = [x | (_, x, w) <- (concatMap pargs ps'),  (F.EVar x) == w]
   where
    ps' = f <$> filter (uPVar p ==) ps
    f q = q {pargs = pargs q ++ drop (length (pargs q)) (pargs $ uPVar p)}
 
-meetListWithPSubs :: (Foldable t, PPrint t1, F.Reftable b)
-                  => t (PVar t1) -> [(F.Symbol, RSort)] -> b -> b -> b
+meetListWithPSubs :: (Foldable t, PPrint t1, F.Reftable LHSymbol b)
+                  => t (PVar t1) -> [(F.Symbol LHSymbol, RSort)] -> b -> b -> b
 meetListWithPSubs πs ss r1 r2    = L.foldl' (meetListWithPSub ss r1) r2 πs
 
-meetListWithPSubsRef :: (Foldable t, F.Reftable (RType t1 t2 t3))
+meetListWithPSubsRef :: (Foldable t, F.Reftable LHSymbol (RType t1 t2 t3))
                      => t (PVar t4)
-                     -> [(F.Symbol, b)]
+                     -> [(F.Symbol LHSymbol, b)]
                      -> Ref τ (RType t1 t2 t3)
                      -> Ref τ (RType t1 t2 t3)
                      -> Ref τ (RType t1 t2 t3)
 meetListWithPSubsRef πs ss r1 r2 = L.foldl' ((meetListWithPSubRef ss) r1) r2 πs
 
-meetListWithPSub ::  (F.Reftable r, PPrint t) => [(F.Symbol, RSort)]-> r -> r -> PVar t -> r
+meetListWithPSub ::  (F.Reftable LHSymbol r, PPrint t) => [(F.Symbol LHSymbol, RSort)]-> r -> r -> PVar t -> r
 meetListWithPSub ss r1 r2 π
   | all (\(_, x, F.EVar y) -> x == y) (pargs π)
-  = F.meet r2 r1
+  = F.meet @LHSymbol r2 r1
   | all (\(_, x, F.EVar y) -> x /= y) (pargs π)
-  = F.meet r2 (F.subst su r1)
+  = F.meet @LHSymbol r2 (F.subst su r1)
   | otherwise
   = panic Nothing $ "PredType.meetListWithPSub partial application to " ++ showpp π
   where
     su  = F.mkSubst [(x, y) | (x, (_, _, y)) <- zip (fst <$> ss) (pargs π)]
 
-meetListWithPSubRef :: (F.Reftable (RType t t1 t2))
-                    => [(F.Symbol, b)]
+meetListWithPSubRef :: (F.Reftable LHSymbol (RType t t1 t2))
+                    => [(F.Symbol LHSymbol, b)]
                     -> Ref τ (RType t t1 t2)
                     -> Ref τ (RType t t1 t2)
                     -> PVar t3
@@ -497,9 +498,9 @@ meetListWithPSubRef _ _ (RProp _ (RHole _)) _
   = panic Nothing "PredType.meetListWithPSubRef called with invalid input"
 meetListWithPSubRef ss (RProp s1 r1) (RProp s2 r2) π
   | all (\(_, x, F.EVar y) -> x == y) (pargs π)
-  = RProp s1 $ F.meet (F.subst su' r2) r1
+  = RProp s1 $ F.meet @LHSymbol (F.subst su' r2) r1
   | all (\(_, x, F.EVar y) -> x /= y) (pargs π)
-  = RProp s2 $ F.meet r2 (F.subst su r1)
+  = RProp s2 $ F.meet @LHSymbol r2 (F.subst su r1)
   | otherwise
   = panic Nothing $ "PredType.meetListWithPSubRef partial application to " ++ showpp π
   where
@@ -513,15 +514,15 @@ meetListWithPSubRef ss (RProp s1 r1) (RProp s2 r2) π
 predType   :: Type
 predType   = symbolType predName
 
-wpredName, predName :: F.Symbol
+wpredName, predName :: F.FixSymbol
 predName   = "Pred"
 wpredName  = "WPred"
 
-symbolType :: F.Symbol -> Type
+symbolType :: F.FixSymbol -> Type
 symbolType = TyVarTy . symbolTyVar
 
 
-substParg :: Functor f => (F.Symbol, F.Expr) -> f Predicate -> f Predicate
+substParg :: Functor f => (F.Symbol LHSymbol, F.Expr LHSymbol) -> f Predicate -> f Predicate
 substParg (x, y) = fmap fp
   where
     fxy s        = if (s == F.EVar x) then y else s
@@ -533,12 +534,12 @@ substParg (x, y) = fmap fp
 pappArity :: Int
 pappArity  = 7
 
-pappSort :: Int -> F.Sort
+pappSort :: Int -> F.Sort LHSymbol
 pappSort n = F.mkFFunc (2 * n) $ [ptycon] ++ args ++ [F.boolSort]
   where
     ptycon = F.fAppTC predFTyCon $ F.FVar <$> [0..n-1]
     args   = F.FVar <$> [n..(2*n-1)]
 
 
-predFTyCon :: F.FTycon
-predFTyCon = F.symbolFTycon $ dummyLoc predName
+predFTyCon :: F.FTycon LHSymbol
+predFTyCon = F.symbolFTycon $ dummyLoc (F.FS predName)

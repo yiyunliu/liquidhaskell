@@ -54,8 +54,8 @@ data GhcSrc = Src
 
 -- | @QImports@ is a map of qualified imports.
 data QImports = QImports 
-  { qiModules :: !(S.HashSet F.Symbol)            -- ^ All the modules that are imported qualified
-  , qiNames   :: !(M.HashMap F.Symbol [F.Symbol]) -- ^ Map from qualification to full module name
+  { qiModules :: !(S.HashSet F.FixSymbol)            -- ^ All the modules that are imported qualified
+  , qiNames   :: !(M.HashMap F.FixSymbol [F.FixSymbol]) -- ^ Map from qualification to full module name
   }
 
 data GhcSpec = SP 
@@ -160,8 +160,8 @@ instance B.Binary BareSpec
 
 data Spec ty bndr  = Spec
   { measures   :: ![Measure ty bndr]              -- ^ User-defined properties for ADTs
-  , impSigs    :: ![(F.Symbol, F.Sort)]           -- ^ Imported variables types
-  , expSigs    :: ![(F.Symbol, F.Sort)]           -- ^ Exported variables types
+  , impSigs    :: ![(F.FixSymbol, F.Sort)]           -- ^ Imported variables types
+  , expSigs    :: ![(F.FixSymbol, F.Sort)]           -- ^ Exported variables types
   , asmSigs    :: ![(F.LocSymbol, ty)]            -- ^ Assumed (unchecked) types; including reflected signatures
   , sigs       :: ![(F.LocSymbol, ty)]            -- ^ Imported functions and types
   , localSigs  :: ![(F.LocSymbol, ty)]            -- ^ Local type signatures

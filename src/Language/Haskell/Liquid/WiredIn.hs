@@ -31,7 +31,7 @@ import Language.Haskell.Liquid.Types.Types
 import Language.Haskell.Liquid.Types.RefType
 import Language.Haskell.Liquid.Types.Variance
 import Language.Haskell.Liquid.Types.PredType
-
+import Language.Haskell.Liquid.Types.LHSymbol
 -- import Language.Fixpoint.Types hiding (panic)
 import qualified Language.Fixpoint.Types as F
 import qualified Data.HashSet as S 
@@ -50,31 +50,31 @@ import CoreSyn hiding (mkTyArg)
 --   *do not* correspond to GHC Vars and
 --   *should not* be resolved to GHC Vars.
 
-isWiredIn :: F.LocSymbol -> Bool
+isWiredIn :: LHSymbol -> Bool
 isWiredIn x = isWiredInLoc x  || isWiredInName (val x) || isWiredInShape x
 
-isWiredInLoc :: F.LocSymbol -> Bool
+isWiredInLoc :: LHSymbol -> Bool
 isWiredInLoc x  = l == l' && l == 0 && c == c' && c' == 0
   where
     (l , c)  = spe (loc x)
     (l', c') = spe (locE x)
     spe l    = (x, y) where (_, x, y) = F.sourcePosElts l
 
-isWiredInName :: F.Symbol -> Bool
+isWiredInName :: LHSymbol -> Bool
 isWiredInName x = x `S.member` wiredInNames
 
-wiredInNames :: S.HashSet F.Symbol
+wiredInNames :: S.HashSet LHSymbol
 wiredInNames = S.fromList [ "head", "tail", "fst", "snd", "len" ]
 
-isWiredInShape :: F.LocSymbol -> Bool
+isWiredInShape :: LHSymbol -> Bool
 isWiredInShape x = any (`F.isPrefixOfSym` (val x)) [F.anfPrefix, F.tempPrefix, dcPrefix]
   -- where s        = val x
         -- dcPrefix = "lqdc"
 
-dcPrefix :: F.Symbol
+dcPrefix :: F.FixSymbol
 dcPrefix = "lqdc"
 
-wiredSortedSyms :: [(F.Symbol, F.Sort)]
+wiredSortedSyms :: [(F.FixSymbol, F.Sort LHSymbol)]
 wiredSortedSyms = [(pappSym n, pappSort n) | n <- [1..pappArity]]
 
 --------------------------------------------------------------------------------
@@ -101,7 +101,7 @@ dictionaryBind = Rec [(v, Lam a $ App (Var v) (Type $ TyVarTy a))]
 combineProofsName :: String
 combineProofsName = "combineProofs"
 
-proofTyConName :: F.Symbol
+proofTyConName :: F.Symbol LHSymbol
 proofTyConName = "Proof"
 
 --------------------------------------------------------------------------------
@@ -142,7 +142,7 @@ listTyDataCons   = ( [(TyConP l0 c [RTV tyv] [p] [] [Covariant] [Covariant] (Jus
       cargs      = [(xTail, xst), (xHead, xt)]
       fsize      = SymSizeFun (dummyLoc "len")
 
-wiredInName :: F.Symbol
+wiredInName :: F.FixSymbol
 wiredInName = "WiredIn"
 
 tupleTyDataCons :: Int -> ([TyConP] , [DataConP])
@@ -170,15 +170,15 @@ tupleTyDataCons n = ( [(TyConP   l0 c  (RTV <$> tyvs) ps [] tyvarinfo pdvarinfo 
     mks_ x        = (\i -> F.symbol (x++ show i)) <$> [2..n]
 
 
-mkps :: [F.Symbol]
-     -> [t] -> [(F.Symbol, F.Expr)] -> [PVar t]
+mkps :: [F.FixSymbol]
+     -> [t] -> [(F.FixSymbol, F.Expr LHSymbol)] -> [PVar t]
 mkps ns (t:ts) ((f,x):fxs) = reverse $ mkps_ ns ts fxs [(t, f, x)] []
 mkps _  _      _           = panic Nothing "Bare : mkps"
 
-mkps_ :: [F.Symbol]
+mkps_ :: [F.FixSymbol]
       -> [t]
-      -> [(F.Symbol, F.Expr)]
-      -> [(t, F.Symbol, F.Expr)]
+      -> [(F.FixSymbol, F.Expr LHSymbol)]
+      -> [(t, F.FixSymbol, F.Expr LHSymbol)]
       -> [PVar t]
       -> [PVar t]
 mkps_ []     _       _          _    ps = ps
@@ -197,7 +197,7 @@ isDerivedInstance i = F.notracepp ("IS-DERIVED: " ++ F.showpp classSym)
   where 
     classSym        = F.symbol . Ghc.is_cls $ i
   
-derivingClasses :: S.HashSet F.Symbol 
+derivingClasses :: S.HashSet F.FixSymbol 
 derivingClasses = S.fromList 
   [ "GHC.Classes.Eq"
   , "GHC.Classes.Ord"

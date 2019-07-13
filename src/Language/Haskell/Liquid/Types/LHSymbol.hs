@@ -16,7 +16,7 @@ module Language.Haskell.Liquid.Types.LHSymbol
 import           Name
 import           GHC.Generics              (Generic)
 import           Language.Fixpoint.Smt.Types
-import           Language.Fixpoint.Types   (Symbol(..), PPrint(..), Fixpoint(..))
+import           Language.Fixpoint.Types   (Symbol(..), PPrint(..), Fixpoint(..), FixSymbol(..))
 import qualified Language.Fixpoint.Smt.Theories as Thy
 import           Language.Haskell.Liquid.Types.PrettyPrint.Instances ()
 import           Data.Hashable
@@ -29,7 +29,11 @@ import           Data.Data
 -----------------------------------------------------------------------------
 -- | GHC Specific Symbol
 -----------------------------------------------------------------------------
-data LHSymbol = LHName Name | LHVar Var
+
+data LHSymbol =
+    LHName Name -- ^ placeholder
+  | LHVar Var -- ^ placeholder
+  | LHRefSym FixSymbol -- ^ placeholder
   deriving (Eq, Ord, Generic, Data)
 
 

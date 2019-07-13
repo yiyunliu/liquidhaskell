@@ -472,8 +472,8 @@ ignoreInline x = x {pm_parsed_source = go <$> pm_parsed_source x}
 -- symbolTyCon :: Char -> Int -> Symbol LHSymbol -> TyCon
 -- symbolTyCon x i n = stringTyCon x i (symbolString n)
 
--- symbolTyVar :: Symbol LHSymbol -> TyVar
--- symbolTyVar = stringTyVar . symbolString
+symbolTyVar :: FixSymbol -> TyVar
+symbolTyVar = stringTyVar . symbolString
 
 localVarSymbol ::  Var -> Symbol LHSymbol
 localVarSymbol = AS . LHVar
@@ -501,6 +501,9 @@ qualifiedNameSymbol n = concatFS [modFS, occFS, uniqFS]
 
 fastStringText :: FastString -> T.Text
 fastStringText = T.decodeUtf8With TE.lenientDecode . fastStringToByteString
+
+encodeName :: Name -> T.Text
+encodeName = F.encode . fastStringText . qualifiedNameSymbol
 
 tyConTyVarsDef :: TyCon -> [TyVar]
 tyConTyVarsDef c
