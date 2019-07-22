@@ -182,13 +182,13 @@ instance SubStratum SubC where
 -- | Generation: Types ---------------------------------------------------------
 --------------------------------------------------------------------------------
 data CGInfo = CGInfo 
-  { fEnv       :: !(F.SEnv F.Sort)             -- ^ top-level fixpoint env
+  { fEnv       :: !(F.SEnv LHSymbol (F.Sort LHSymbol))             -- ^ top-level fixpoint env
   , hsCs       :: ![SubC]                      -- ^ subtyping constraints over RType
   , hsWfs      :: ![WfC]                       -- ^ wellformedness constraints over RType
   , sCs        :: ![SubC]                      -- ^ additional stratum constrains for let bindings
-  , fixCs      :: ![FixSubC]                   -- ^ subtyping over Sort (post-splitting)
+  , fixCs      :: ![FixSubC LHSymbol]                   -- ^ subtyping over Sort (post-splitting)
   , isBind     :: ![Bool]                      -- ^ tracks constraints that come from let-bindings
-  , fixWfs     :: ![FixWfC]                    -- ^ wellformedness constraints over Sort (post-splitting)
+  , fixWfs     :: ![FixWfC LHSymbol]                    -- ^ wellformedness constraints over Sort (post-splitting)
   , freshIndex :: !Integer                     -- ^ counter for generating fresh KVars
   , binds      :: !F.BindEnv                   -- ^ set of environment binders
   , ebinds     :: ![F.BindId]                  -- ^ existentials

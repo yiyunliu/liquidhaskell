@@ -530,7 +530,7 @@ instance F.Subable LHSymbol Predicate where
 instance NFData r => NFData (UReft r)
 
 
-newtype BTyVar = BTV Symbol deriving (Show, Generic, Data, Typeable)
+newtype BTyVar = BTV F.FixSymbol deriving (Show, Generic, Data, Typeable)
 
 newtype RTyVar = RTV TyVar deriving (Generic, Data, Typeable)
 
@@ -955,15 +955,15 @@ instance TyConable LHSymbol where
   -- isFun    :: c -> Bool
   isFun _ = False
   -- isList   :: c -> Bool
-  isList (LHName name) = getName listTyCon == name
+  isList (LHTyCon tycon) = listTyCon == tycon
   isList _ = False
   -- isTuple  :: c -> Bool
   isTuple _ = False
   -- ppTycon  :: c -> Doc
   ppTycon = F.pprintTidy F.Lossy 
   -- isClass  :: c -> Bool
-  isClass (LHName name) = isTyConName name
-  isClass (LHVar  name) = isTyConName (getName name)
+  isClass (LHTyCon tycon) = isClass tycon
+  isClass _ = False
   -- isEqual  :: c -> Bool
 
   -- isNumCls  :: c -> Bool
@@ -1013,15 +1013,15 @@ instance TyConable Symbol where
   isFun _ = False
   
   isList (F.FS s) = F.listConName == s
-  isList (F.AS (LHName name)) = getName listTyCon == name
+  isList (F.AS (LHTyCon tycon)) = listTyCon == tycon
   isList _ = False
   
   isTuple (F.FS s) = F.tupConName == s
-  isTuple (F.AS (LHName _)) = undefined
-  isTuple _ = False
+  isTuple _ = undefined
   
   ppTycon (F.FS s) = text . F.symbolString $ s
-  ppTycon (F.AS (LHName name)) = F.pprintTidy F.Lossy name
+  ppTycon _ = undefined
+  -- ppTycon (F.AS (LHName name)) = F.pprintTidy F.Lossy name
 
 instance TyConable (F.LocSymbol LHSymbol) where
   isFun   = isFun   . F.val
@@ -1288,9 +1288,9 @@ dataNameSymbol (DnCon  z) = z
 -- | Refinement Type Aliases
 --------------------------------------------------------------------------------
 data RTAlias x a = RTA
-  { rtName  :: Symbol             -- ^ name of the alias
+  { rtName  :: LHSymbol             -- ^ name of the alias
   , rtTArgs :: [x]                -- ^ type parameters
-  , rtVArgs :: [Symbol]           -- ^ value parameters
+  , rtVArgs :: [F.FixSymbol]           -- ^ value parameters
   , rtBody  :: a                  -- ^ what the alias expands to
   -- , rtMod   :: !ModName           -- ^ module where alias was defined
   } deriving (Data, Typeable, Generic, Functor)

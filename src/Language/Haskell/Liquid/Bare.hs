@@ -116,8 +116,8 @@ ghcSpecEnv sp = fromListSEnv binds
     emb       = gsTcEmbeds (gsName sp)
     binds     = concat 
                  [ [(x,        rSort t) | (x, Loc _ _ t) <- gsMeas     (gsData sp)]
-                 , [(symbol v, rSort t) | (v, Loc _ _ t) <- gsCtors    (gsData sp)]
-                 , [(symbol v, vSort v) | v              <- gsReflects (gsRefl sp)]
+                 , [(AS . LHVar $ v, rSort t) | (v, Loc _ _ t) <- gsCtors    (gsData sp)]
+                 , [(AS . LHVar $ v, vSort v) | v              <- gsReflects (gsRefl sp)]
                  , [(x,        vSort v) | (x, v)         <- gsFreeSyms (gsName sp), Ghc.isConLikeId v ]
                  , [(x, RR s mempty)    | (x, s)         <- wiredSortedSyms       ]
                  , [(x, RR s mempty)    | (x, s)         <- gsImps sp       ]
@@ -148,7 +148,7 @@ makeGhcSpec0 cfg src lmap mspecs = SP
   , gsTerm   = makeSpecTerm cfg     mySpec env       name    
   , gsLSpec  = makeLiftedSpec   src env refl sData sig qual myRTE lSpec1 {
                    impSigs   = makeImports mspecs,
-                   expSigs   = [ (F.symbol v, F.sr_sort $ Bare.varSortedReft embs v) | v <- gsReflects refl ],
+                   expSigs   = [ (LHVar v, F.sr_sort $ Bare.varSortedReft embs v) | v <- gsReflects refl ],
                    dataDecls = dataDecls mySpec2 
                    } 
   }
@@ -229,7 +229,7 @@ makeLiftedSpec1 _ src tycEnv lmap mySpec = mempty
 -- 0. Where we only lift inlines,
 -- 1. Where we lift reflects, measures, and normalized tySigs
 -- 
--- This is because we need the inlines to build the @BareRTEnv@ which then
+-- This isf because we need the inlines to build the @BareRTEnv@ which then
 -- does the alias @expand@ business, that in turn, lets us build the DataConP,
 -- i.e. the refined datatypes and their associate selectors, projectors etc,
 -- that are needed for subsequent stages of the lifting.
@@ -364,7 +364,7 @@ tyConSort embs lc = Mb.maybe s0 fst (F.tceLookup c embs)
     s0            = tyConSortRaw lc
 
 tyConSortRaw :: F.Located Ghc.TyCon -> F.Sort 
-tyConSortRaw = FTC . F.symbolFTycon . fmap F.symbol 
+tyConSortRaw = FTC . F.symbolFTycon . fmap LHTyCon
 
 ------------------------------------------------------------------------------------------
 makeSpecTerm :: Config -> Ms.BareSpec -> Bare.Env -> ModName -> GhcSpecTerm 
@@ -436,7 +436,7 @@ makeSpecRefl src menv specs env name sig tycEnv = SpRefl
     lawMethods   = F.notracepp "Law Methods" $ concatMap Ghc.classMethods (fst <$> Bare.meCLaws menv) 
     mySpec       = M.lookupDefault mempty name specs 
     xtes         = Bare.makeHaskellAxioms src env tycEnv name lmap sig mySpec
-    myAxioms     = [ Bare.qualifyTop env name (F.loc lt) (e {eqName = symbol x}) | (x, lt, e) <- xtes]  
+    myAxioms     = [ Bare.qualifyTop env name (F.loc lt) (e {eqName = AS . LHVar $ x}) | (x, lt, e) <- xtes]  
     rflSyms      = S.fromList (getReflects specs)
     sigVars      = F.notracepp "SIGVARS" $ (fst3 <$> xtes)            -- reflects
                                         ++ (fst  <$> gsAsmSigs sig)   -- assumes
@@ -551,12 +551,13 @@ bareTySigs env name spec = checkDuplicateSigs
   ] 
 
 -- checkDuplicateSigs :: [(Ghc.Var, LocSpecType)] -> [(Ghc.Var, LocSpecType)] 
-checkDuplicateSigs :: (Symbolic x) => [(x, F.Located t)] -> [(x, F.Located t)]
+-- checkDuplicateSigs :: (Symbolic x) => [(x, F.Located t)] -> [(x, F.Located t)]
+checkDuplicateSigs :: [(Ghc.Var, F.Located t)] -> [(Ghc.Var, F.Located t)]
 checkDuplicateSigs xts = case Misc.uniqueByKey symXs  of
   Left (k, ls) -> uError (errDupSpecs (pprint k) (GM.sourcePosSrcSpan <$> ls))
   Right _      -> xts 
   where
-    symXs = [ (F.symbol x, F.loc t) | (x, t) <- xts ]
+    symXs = [ (F.AS . LHVar $ x, F.loc t) | (x, t) <- xts ]
 
 
 makeAsmSigs :: Bare.Env -> Bare.SigEnv -> ModName -> Bare.ModSpecs -> [(Ghc.Var, LocSpecType)]
@@ -623,7 +624,7 @@ makeVarTExprs env name spec =
 -- modules and such (see `Resolve.matchMod`). However, we should pick the closer name
 -- if its available.
 ----------------------------------------------------------------------------------------
-nameDistance :: F.Symbol -> ModName -> Int 
+nameDistance :: F.FixSymbol -> ModName -> Int 
 nameDistance vName tName 
   | vName == F.symbol tName = 0 
   | otherwise               = 1
@@ -747,10 +748,10 @@ makeMeasureInvariants env name sig mySpec
     sigs = gsTySigs sig 
     xs   = S.toList (Ms.hmeas  mySpec) 
 
-isSymbolOfVar :: Symbol -> Ghc.Var -> Bool
+isSymbolOfVar :: FixSymbol -> Ghc.Var -> Bool
 isSymbolOfVar x v = x == symbol' v
   where
-    symbol' :: Ghc.Var -> Symbol
+    symbol' :: Ghc.Var -> FixSymbol
     symbol' = GM.dropModuleNames . symbol . Ghc.getName
 
 measureTypeToInv :: Bare.Env -> ModName -> (LocSymbol, (Ghc.Var, LocSpecType)) -> ((Maybe Ghc.Var, LocSpecType), Maybe UnSortedExpr)
@@ -763,7 +764,7 @@ measureTypeToInv env name (x, (v, t))
     res  = ty_res   trep
     z    = last args
     tz   = last ts
-    usorted = if isSimpleADT tz then Nothing else ((mapFst (:[])) <$> mkReft (dummyLoc $ F.symbol v) z tz res)
+    usorted = if isSimpleADT tz then Nothing else ((mapFst (:[])) <$> mkReft (LHVar v) z tz res)
     mtype
       | null ts 
       = uError $ ErrHMeas (GM.sourcePosSrcSpan $ loc t) (pprint x) "Measure has no arguments!"
@@ -925,7 +926,7 @@ locFile :: (F.Loc a) => a -> FilePath
 locFile = Misc.fst3 . F.sourcePosElts . F.sp_start . F.srcSpan
 
 varLocSym :: Ghc.Var -> LocSymbol
-varLocSym v = F.symbol <$> GM.locNamedThing v
+varLocSym = LHVar
 
 -- makeSpecRTAliases :: Bare.Env -> BareRTEnv -> [Located SpecRTAlias]
 -- makeSpecRTAliases _env _rtEnv = [] -- TODO-REBARE 

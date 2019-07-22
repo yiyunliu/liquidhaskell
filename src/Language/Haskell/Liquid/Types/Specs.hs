@@ -14,7 +14,8 @@ import qualified Data.Binary             as B
 import qualified Language.Fixpoint.Types as F
 import qualified Data.HashSet            as S
 import qualified Data.HashMap.Strict     as M
-import           Language.Haskell.Liquid.Types.Types 
+import           Language.Haskell.Liquid.Types.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 import           Language.Haskell.Liquid.Types.Variance
 import           Language.Haskell.Liquid.Types.Bounds 
 import           Language.Haskell.Liquid.GHC.API 
@@ -67,7 +68,7 @@ data GhcSpec = SP
   , gsTerm   :: !GhcSpecTerm 
   , gsRefl   :: !GhcSpecRefl   
   , gsLaws   :: !GhcSpecLaws 
-  , gsImps   :: ![(F.Symbol, F.Sort)]  -- ^ Imported Environment          
+  , gsImps   :: ![(F.FixSymbol, F.Sort)]  -- ^ Imported Environment          
   , gsConfig :: !Config                       
   , gsLSpec  :: !BareSpec               -- ^ Lifted specification for the target module
   }
@@ -86,7 +87,7 @@ data GhcSpecVars = SpVar
   }
 
 data GhcSpecQual = SpQual 
-  { gsQualifiers :: ![F.Qualifier]                -- ^ Qualifiers in Source/Spec files e.g tests/pos/qualTest.hs
+  { gsQualifiers :: ![F.Qualifier LHSymbol]                -- ^ Qualifiers in Source/Spec files e.g tests/pos/qualTest.hs
   , gsRTAliases  :: ![F.Located SpecRTAlias]      -- ^ Refinement type aliases (only used for qualifiers)
   -- REBARE: , giHqFiles   :: ![FilePath]         -- ^ Imported .hqual files
   }
@@ -98,12 +99,12 @@ data GhcSpecSig = SpSig
   , gsNewTypes :: ![(TyCon, LocSpecType)]         -- ^ Mapping of 'newtype' type constructors with their refined types.
   , gsDicts    :: !(DEnv Var LocSpecType)            -- ^ Refined Classes from Instances 
   , gsMethods  :: ![(Var, MethodType LocSpecType)]   -- ^ Refined Classes from Classes 
-  , gsTexprs   :: ![(Var, LocSpecType, [F.Located F.Expr])]  -- ^ Lexicographically ordered expressions for termination
+  , gsTexprs   :: ![(Var, LocSpecType, [F.Located (F.Expr LHSymbol)])]  -- ^ Lexicographically ordered expressions for termination
   }
 
 data GhcSpecData = SpData 
   { gsCtors      :: ![(Var, LocSpecType)]         -- ^ Data Constructor Measure Sigs
-  , gsMeas       :: ![(F.Symbol, LocSpecType)]    -- ^ Measure Types eg.  len :: [a] -> Int
+  , gsMeas       :: ![(LHSymbol, LocSpecType)]    -- ^ Measure Types eg.  len :: [a] -> Int
   , gsInvariants :: ![(Maybe Var, LocSpecType)]   -- ^ Data type invariants from measure definitions, e.g forall a. {v: [a] | len(v) >= 0}
   , gsIaliases   :: ![(LocSpecType, LocSpecType)] -- ^ Data type invariant aliases 
   , gsMeasures   :: ![Measure SpecType DataCon]   -- ^ Measure definitions
@@ -111,12 +112,12 @@ data GhcSpecData = SpData
   }
 
 data GhcSpecNames = SpNames 
-  { gsFreeSyms   :: ![(F.Symbol, Var)]            -- ^ List of `Symbol` free in spec and corresponding GHC var, eg. (Cons, Cons#7uz) from tests/pos/ex1.hs
+  { gsFreeSyms   :: ![(F.FixSymbol, Var)]            -- ^ List of `Symbol` free in spec and corresponding GHC var, eg. (Cons, Cons#7uz) from tests/pos/ex1.hs
   , gsDconsP     :: ![F.Located DataCon]          -- ^ Predicated Data-Constructors, e.g. see tests/pos/Map.hs
   , gsTconsP     :: ![TyConP]                     -- ^ Predicated Type-Constructors, e.g. see tests/pos/Map.hs
   -- REBARE: == gsMeas , gsLits       :: ![(F.Symbol, LocSpecType)]    -- ^ Literals/Constants e.g. datacons: EQ, GT, string lits: "zombie",...
-  , gsTcEmbeds   :: !(F.TCEmb TyCon)              -- ^ Embedding GHC Tycons into fixpoint sorts e.g. "embed Set as Set_set" from include/Data/Set.spec
-  , gsADTs       :: ![F.DataDecl]                 -- ^ ADTs extracted from Haskell 'data' definitions
+  , gsTcEmbeds   :: !(F.TCEmb LHSymbol TyCon)              -- ^ Embedding GHC Tycons into fixpoint sorts e.g. "embed Set as Set_set" from include/Data/Set.spec
+  , gsADTs       :: ![F.DataDecl LHSymbol]                 -- ^ ADTs extracted from Haskell 'data' definitions
   , gsTyconEnv   :: !TyConMap
   }
 
@@ -130,9 +131,9 @@ data GhcSpecTerm = SpTerm
 
 data GhcSpecRefl = SpRefl 
   { gsAutoInst   :: !(M.HashMap Var (Maybe Int))      -- ^ Binders to USE PLE 
-  , gsHAxioms    :: ![(Var, LocSpecType, F.Equation)] -- ^ Lifted definitions 
-  , gsImpAxioms  :: ![F.Equation]                     -- ^ Axioms from imported reflected functions
-  , gsMyAxioms   :: ![F.Equation]                     -- ^ Axioms from my reflected functions
+  , gsHAxioms    :: ![(Var, LocSpecType, F.Equation LHSymbol)] -- ^ Lifted definitions 
+  , gsImpAxioms  :: ![F.Equation LHSymbol]                     -- ^ Axioms from imported reflected functions
+  , gsMyAxioms   :: ![F.Equation LHSymbol]                     -- ^ Axioms from my reflected functions
   , gsReflects   :: ![Var]                            -- ^ Binders for reflected functions
   , gsLogicMap   :: !LogicMap
   }
@@ -146,11 +147,13 @@ data LawInstance = LawInstance
   { lilName   :: Class
   , liSupers  :: [LocSpecType]
   , lilTyArgs :: [LocSpecType]
-  , lilEqus   :: [(VarOrLocSymbol, (VarOrLocSymbol, Maybe LocSpecType))]
+  -- , lilEqus   :: [(VarOrLocSymbol, (VarOrLocSymbol, Maybe LocSpecType))]
+  -- YL: VarOrLocSymbol -> LHSymbol : is this a good idea? 
+  , lilEqus   :: [(LHSymbol, (LHSymbol, Maybe LocSpecType))]
   , lilPos    :: SrcSpan
   }  
 
-type VarOrLocSymbol = Either Var LocSymbol
+-- type VarOrLocSymbol = Either Var LocSymbol
 type BareSpec      = Spec    LocBareType F.LocSymbol
 type BareMeasure   = Measure LocBareType F.LocSymbol
 type BareDef       = Def     LocBareType F.LocSymbol
@@ -161,21 +164,21 @@ instance B.Binary BareSpec
 data Spec ty bndr  = Spec
   { measures   :: ![Measure ty bndr]              -- ^ User-defined properties for ADTs
   , impSigs    :: ![(F.FixSymbol, F.Sort)]           -- ^ Imported variables types
-  , expSigs    :: ![(F.FixSymbol, F.Sort)]           -- ^ Exported variables types
+  , expSigs    :: ![(LHSymbol, F.Sort)]           -- ^ Exported variables types
   , asmSigs    :: ![(F.LocSymbol, ty)]            -- ^ Assumed (unchecked) types; including reflected signatures
   , sigs       :: ![(F.LocSymbol, ty)]            -- ^ Imported functions and types
   , localSigs  :: ![(F.LocSymbol, ty)]            -- ^ Local type signatures
   , reflSigs   :: ![(F.LocSymbol, ty)]            -- ^ Reflected type signatures
   , invariants :: ![(Maybe F.LocSymbol, ty)]      -- ^ Data type invariants; the Maybe is the generating measure
   , ialiases   :: ![(ty, ty)]                     -- ^ Data type invariants to be checked
-  , imports    :: ![F.Symbol]                     -- ^ Loaded spec module names
+  , imports    :: ![F.FixSymbol]                     -- ^ Loaded spec module names
   , dataDecls  :: ![DataDecl]                     -- ^ Predicated data definitions
   , newtyDecls :: ![DataDecl]                     -- ^ Predicated new type definitions
   , includes   :: ![FilePath]                     -- ^ Included qualifier files
-  , aliases    :: ![F.Located (RTAlias F.Symbol BareType)] -- ^ RefType aliases
-  , ealiases   :: ![F.Located (RTAlias F.Symbol F.Expr)]   -- ^ Expression aliases
-  , embeds     :: !(F.TCEmb F.LocSymbol)                   -- ^ GHC-Tycon-to-fixpoint Tycon map
-  , qualifiers :: ![F.Qualifier]                           -- ^ Qualifiers in source/spec files
+  , aliases    :: ![F.Located (RTAlias F.FixSymbol BareType)] -- ^ RefType aliases
+  , ealiases   :: ![F.Located (RTAlias F.FixSymbol F.Expr)]   -- ^ Expression aliases
+  , embeds     :: !(F.TCEmb FixSymbol F.LocSymbol)                   -- ^ GHC-Tycon-to-fixpoint Tycon map
+  , qualifiers :: ![F.Qualifier LHSymbol]                           -- ^ Qualifiers in source/spec files
   , decr       :: ![(F.LocSymbol, [Int])]         -- ^ Information on decreasing arguments
   , lvars      :: !(S.HashSet F.LocSymbol)        -- ^ Variables that should be checked in the environment they are used
   , lazy       :: !(S.HashSet F.LocSymbol)        -- ^ Ignore Termination Check in these Functions

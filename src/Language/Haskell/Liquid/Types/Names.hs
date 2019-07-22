@@ -3,12 +3,11 @@ module Language.Haskell.Liquid.Types.Names
 
 import Language.Fixpoint.Types
 import Language.Haskell.Liquid.Types.LHSymbol
-import Name (getName)
 import TysWiredIn (anyTyCon)
 
 -- RJ: Please add docs
-lenLocSymbol :: Located (Symbol LHSymbol)
-lenLocSymbol = dummyLoc . FS $ symbol ("autolen" :: String)
+lenLocSymbol :: Located FixSymbol
+lenLocSymbol = dummyLoc $ symbol ("autolen" :: String)
 
-anyTypeSymbol :: Symbol LHSymbol
-anyTypeSymbol = AS . LHName . getName $ anyTyCon
+anyTypeSymbol :: LHSymbol
+anyTypeSymbol = LHTyCon $ anyTyCon

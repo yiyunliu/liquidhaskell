@@ -314,18 +314,18 @@ getSourcePos = srcSpanSourcePos  . getSrcSpan
 getSourcePosE :: NamedThing a => a -> SourcePos
 getSourcePosE = srcSpanSourcePosE . getSrcSpan
 
-type family LocVar a where
-  LocVar Var = Var
-  LocVar a   = Name
+-- type family LocVar a where
+--   LocVar Var = Var
+--   LocVar a   = Name
 
-class NamedLocSymbol a where
-  namedLocSymbol :: a -> F.Located (F.Symbol LHSymbol)
+-- class NamedLocSymbol a where
+--   namedLocSymbol :: a -> F.Located (F.Symbol LHSymbol)
 
-instance NamedLocSymbol Var where
-  namedLocSymbol v = F.AS . LHVar <$> locNamedThing v
+-- instance NamedLocSymbol Var where
+--   namedLocSymbol v = F.AS . LHVar <$> locNamedThing v
 
-instance (NamedThing a, LocVar a ~ Name) => NamedLocSymbol a where
-  namedLocSymbol v = F.AS . LHName . getName <$> locNamedThing v
+-- instance (NamedThing a, LocVar a ~ Name) => NamedLocSymbol a where
+--   namedLocSymbol v = F.AS . LHName . getName <$> locNamedThing v
 
 locNamedThing :: NamedThing a => a -> F.Located a
 locNamedThing x = F.Loc l lE x
@@ -502,8 +502,8 @@ qualifiedNameSymbol n = concatFS [modFS, occFS, uniqFS]
 fastStringText :: FastString -> T.Text
 fastStringText = T.decodeUtf8With TE.lenientDecode . fastStringToByteString
 
-encodeName :: Name -> T.Text
-encodeName = F.encode . fastStringText . qualifiedNameSymbol
+-- encodeName :: Name -> T.Text
+-- encodeName = F.encode . fastStringText . qualifiedNameSymbol
 
 tyConTyVarsDef :: TyCon -> [TyVar]
 tyConTyVarsDef c
@@ -687,8 +687,6 @@ ignoreCoreBinds vs cbs
 
 findVarDef :: Symbol LHSymbol -> [CoreBind] -> Maybe (Var, CoreExpr)
 -- YL : seems unreliable to look up symbol in this way
-findVarDef (FS _) _ = Nothing
-findVarDef (AS (LHName _)) _ = Nothing
 findVarDef (AS (LHVar x)) cbs = case xCbs of
                      (NonRec v def   : _ ) -> Just (v, def)
                      (Rec [(v, def)] : _ ) -> Just (v, def)
@@ -697,6 +695,7 @@ findVarDef (AS (LHVar x)) cbs = case xCbs of
     xCbs            = [ cb | cb <- concatMap unRec cbs, x `elem` binders cb]
     unRec (Rec xes) = [NonRec x es | (x,es) <- xes]
     unRec nonRec    = [nonRec]
+findVarDef _ _ = Nothing
 
 
 

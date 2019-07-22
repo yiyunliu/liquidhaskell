@@ -129,7 +129,7 @@ weakenResult v t = F.notracepp msg t'
     vE           = mkEApp vF xs
     xs           = EVar . fst <$> dropWhile (isClassType . snd) xts 
     xts          = zip (ty_binds rep) (ty_args rep)
-    vF           = dummyLoc (symbol v)
+    vF           = AS . LHVar $ v
 
 type LogicM = ExceptT Error (StateT LState Identity)
 
@@ -186,7 +186,7 @@ coreAltToDef x z zs y t alts
     mkAlt x ctor _args dx (C.DataAlt d, xs, e)
       = Def x {- (toArgs id args) -} d (Just $ varRType dx) (toArgs Just xs) 
       . ctor 
-      . (`subst1` (F.symbol dx, F.mkEApp (GM.namedLocSymbol d) (F.eVar <$> xs))) 
+      . (`subst1` (AS . LHVar $ dx, F.mkEApp (AS . LHVar $ d) (F.eVar <$> xs))) 
      <$> coreToLg e
     mkAlt _ _ _ _ alt 
       = throw $ "Bad alternative" ++ GM.showPpr alt
@@ -200,8 +200,8 @@ coreAltToDef x z zs y t alts
     mkDef _ _ _ _ _ _ = 
       return [] 
 
-toArgs :: Reftable r => (Located (RRType r) -> b) -> [Var] -> [(Symbol, b)]
-toArgs f args = [(symbol x, f $ varRType x) | x <- args]
+toArgs :: Reftable r => (Located (RRType r) -> b) -> [Var] -> [(LHSymbol, b)]
+toArgs f args = [(LHVar x, f $ varRType x) | x <- args]
 
 defArgs :: Monoid r => LocSymbol -> [Type] -> [(Symbol, Maybe (Located (RRType r)))]
 defArgs x     = zipWith (\i t -> (defArg i, defRTyp t)) [0..] 
@@ -275,7 +275,7 @@ coreToLg (C.Case e b _ alts)
   | eqType (GM.expandVarType b) boolTy  = checkBoolAlts alts >>= coreToIte e
 coreToLg (C.Lam x e)           = do p     <- coreToLg e
                                     tce   <- lsEmb <$> getState
-                                    return $ ELam (symbol x, typeSort tce (GM.expandVarType x)) p
+                                    return $ ELam (AS . LHVar $ x, typeSort tce (GM.expandVarType x)) p
 coreToLg (C.Case e b _ alts)   = do p <- coreToLg e
                                     casesToLg b p alts
 coreToLg (C.Lit l)             = case mkLit l of
@@ -325,7 +325,7 @@ casesToLg v e alts = mapM (altToLg e) normAlts >>= go
                         e' <- go dps
                         return (EIte c p e' `subst1` su)
     go []          = panic (Just (getSrcSpan v)) "Unexpected empty cases in casesToLg"
-    su             = (symbol v, e)
+    su             = (AS . LHVar $ v, e)
 
 checkDataAlt :: C.AltCon -> Expr -> LogicM Expr
 checkDataAlt (C.DataAlt d) e = return $ EApp (EVar (makeDataConChecker d)) e
@@ -351,8 +351,8 @@ altToLg de (a@(C.DataAlt d), xs, e) = do
 altToLg _ (a, _, e)
   = (a, ) <$> coreToLg e
 
-dataConProj :: DataConMap -> Expr -> DataCon -> Var -> Int -> [(Symbol, Expr)]
-dataConProj dm de d x i = [(symbol x, t), (GM.simplesymbol x, t)]
+dataConProj :: DataConMap -> Expr -> DataCon -> Var -> Int -> [(Symbol LHSymbol, Expr)]
+dataConProj dm de d x i = [(AS . LHVar $ x, t), (GM.simplesymbol x, t)]
   where
     t | primDataCon  d  = de 
       | otherwise       = EApp (EVar $ makeDataConSelector (Just dm) d i) de
@@ -421,13 +421,13 @@ eVarWithMap x lmap = do
   -- let msg = "eVarWithMap x = " ++ show x ++ " f' = " ++ show f'
   return $ eAppWithMap lmap f' [] (varExpr x)
 
-varExpr :: Var -> Expr
+varExpr :: Var -> Expr LHSymbol
 varExpr x
-  | isPolyCst t = mkEApp (dummyLoc s) []
+  | isPolyCst t = mkEApp s []
   | otherwise   = EVar s
   where
     t           = GM.expandVarType x
-    s           = symbol x
+    s           = AS . LHVar $ x
 
 isPolyCst :: Type -> Bool
 isPolyCst (ForAllTy _ t) = isCst t
@@ -469,22 +469,22 @@ splitArgs e = (f, reverse es)
     go (C.App f e) = (f', e:es) where (f', es) = go f
     go f           = (f, [])
 
-tomaybesymbol :: C.CoreExpr -> Maybe Symbol
-tomaybesymbol (C.Var x) = Just $ symbol x
+tomaybesymbol :: C.CoreExpr -> Maybe LHSymbol
+tomaybesymbol (C.Var x) = Just . LHVar $ x
 tomaybesymbol _         = Nothing
 
-tosymbol :: C.CoreExpr -> LogicM (Located Symbol)
+tosymbol :: C.CoreExpr -> LogicM LocSymbol
 tosymbol e
  = case tomaybesymbol e of
-    Just x -> return $ dummyLoc x
+    Just x -> return $ AS . LHVar $ x
     _      -> throw ("Bad Measure Definition:\n" ++ GM.showPpr e ++ "\t cannot be applied")
 
-tosymbol' :: C.CoreExpr -> LogicM (Located Symbol)
-tosymbol' (C.Var x) = return $ dummyLoc $ symbol x 
+tosymbol' :: C.CoreExpr -> LogicM LocSymbol
+tosymbol' (C.Var x) = return $ AS . LHVar $ x 
 tosymbol' e        = throw ("Bad Measure Definition:\n" ++ GM.showPpr e ++ "\t cannot be applied")
 
-makesub :: C.CoreBind -> LogicM (Symbol, Expr)
-makesub (C.NonRec x e) =  (symbol x,) <$> coreToLg e
+makesub :: C.CoreBind -> LogicM (Symbol LHSymbol, Expr)
+makesub (C.NonRec x e) =  (AS . LHVar $ x,) <$> coreToLg e
 makesub  _             = throw "Cannot make Logical Substitution of Recursive Definitions"
 
 mkLit :: Literal -> Maybe Expr

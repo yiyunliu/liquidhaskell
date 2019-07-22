@@ -601,7 +601,7 @@ checkFilePragmas = Misc.applyNonNull (return ()) throw . mapMaybe err
 --------------------------------------------------------------------------------
 -- | Family instance information
 --------------------------------------------------------------------------------
-makeFamInstEnv :: HscEnv -> IO ([GHC.TyCon], [(Symbol, DataCon)])
+makeFamInstEnv :: HscEnv -> IO ([GHC.TyCon], [(FixSymbol, DataCon)])
 makeFamInstEnv env = do
   famInsts <- getFamInstances env
   let fiTcs = [ tc            | FamInst { fi_flavor = DataFamilyInst tc } <- famInsts ]
@@ -661,7 +661,7 @@ extractSpecQuote payload =
 refreshSymbols :: Data a => a -> a
 refreshSymbols = everywhere (mkT refreshSymbol)
 
-refreshSymbol :: Symbol -> Symbol
+refreshSymbol :: FixSymbol -> FixSymbol
 refreshSymbol = symbol . symbolText
 
 --------------------------------------------------------------------------------
@@ -799,9 +799,9 @@ listLMap  = toLogicMap [ (dummyLoc nilName , []     , hNil)
   where
     x     = "x"
     xs    = "xs"
-    hNil  = mkEApp (dcSym Ghc.nilDataCon ) []
-    hCons = mkEApp (dcSym Ghc.consDataCon)
-    dcSym = dummyLoc . dropModuleUnique . symbol
+    hNil  = mkEApp (AS . LHDataCon $ Ghc.nilDataCon ) []
+    hCons = mkEApp (AS . LHDataCon $ Ghc.consDataCon)
+    -- dcSym = dummyLoc . dropModuleUnique . symbol
 
 
 
