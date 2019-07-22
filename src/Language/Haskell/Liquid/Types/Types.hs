@@ -328,7 +328,7 @@ ppEnvShort pp = pp { ppShort = True }
 -- Huh?
 ------------------------------------------------------------------
 type Expr      = F.Expr LHSymbol
-type Symbol    = F.Symbol LHSymbol
+type Symbol    = LHSymbol
 
 
 -- [NOTE:LIFTED-VAR-SYMBOLS]: Following NOTE:REFLECT-IMPORTS, by default
@@ -353,7 +353,7 @@ instance Semigroup LogicMap where
   LM x1 x2 <> LM y1 y2 = LM (M.union x1 y1) (M.union x2 y2)
 
 data LMap = LMap
-  { lmVar  :: F.LocSymbol LHSymbol
+  { lmVar  :: F.Located LHSymbol
   , lmArgs :: [Symbol]
   , lmExpr :: Expr
   }
@@ -361,7 +361,7 @@ data LMap = LMap
 instance Show LMap where
   show (LMap x xs e) = show x ++ " " ++ show xs ++ "\t |-> \t" ++ show e
 
-toLogicMap :: [(F.LocSymbol LHSymbol, [Symbol], Expr)] -> LogicMap
+toLogicMap :: [(F.Located LHSymbol, [Symbol], Expr)] -> LogicMap
 toLogicMap ls = mempty {lmSymDefs = M.fromList $ map toLMap ls}
   where
     toLMap (x, ys, e) = (F.val x, LMap {lmVar = x, lmArgs = ys, lmExpr = e})
@@ -370,10 +370,10 @@ eAppWithMap :: LogicMap -> F.Located Symbol -> [Expr] -> Expr -> Expr
 eAppWithMap lmap f es def
   | Just (LMap _ xs e) <- M.lookup (F.val f) (lmSymDefs lmap)
   , length xs == length es
-  = F.subst (F.mkSubst $ zip xs es) e
+  = F.subst (F.mkSubst $ zip (F.AS <$> xs) es) e
   | Just (LMap _ xs e) <- M.lookup (F.val f) (lmSymDefs lmap)
   , isApp e
-  = F.subst (F.mkSubst $ zip xs es) $ dropApp e (length xs - length es)
+  = F.subst (F.mkSubst $ zip (F.AS <$> xs) es) $ dropApp e (length xs - length es)
   | otherwise
   = def
 
@@ -515,7 +515,7 @@ pvars :: Predicate -> [UsedPVar]
 pvars (Pr pvs) = pvs
 
 instance F.Subable LHSymbol UsedPVar where
-  syms pv         = [ y | (_, x, F.EVar y) <- pargs pv, x /= y ]
+  syms pv         = [ ay | (_, x, F.EVar ay@(F.AS y)) <- pargs pv, x /= y ]
   subst s pv      = pv { pargs = mapThd3 (F.subst s)  <$> pargs pv }
   substf f pv     = pv { pargs = mapThd3 (F.substf f) <$> pargs pv }
   substa f pv     = pv { pargs = mapThd3 (F.substa f) <$> pargs pv }
@@ -951,28 +951,28 @@ type OkRT c tv r = ( TyConable c
 -- | TyConable Instances -------------------------------------------------------
 -------------------------------------------------------------------------------
 
-instance TyConable LHSymbol where
-  -- isFun    :: c -> Bool
-  isFun _ = False
-  -- isList   :: c -> Bool
-  isList (LHTyCon tycon) = listTyCon == tycon
-  isList _ = False
-  -- isTuple  :: c -> Bool
-  isTuple _ = False
-  -- ppTycon  :: c -> Doc
-  ppTycon = F.pprintTidy F.Lossy 
-  -- isClass  :: c -> Bool
-  isClass (LHTyCon tycon) = isClass tycon
-  isClass _ = False
-  -- isEqual  :: c -> Bool
+-- instance TyConable LHSymbol where
+--   -- isFun    :: c -> Bool
+--   isFun _ = False
+--   -- isList   :: c -> Bool
+--   isList (LHTyCon tycon) = listTyCon == tycon
+--   isList _ = False
+--   -- isTuple  :: c -> Bool
+--   isTuple _ = False
+--   -- ppTycon  :: c -> Doc
+--   ppTycon = F.pprintTidy F.Lossy 
+--   -- isClass  :: c -> Bool
+--   isClass (LHTyCon tycon) = isClass tycon
+--   isClass _ = False
+--   -- isEqual  :: c -> Bool
 
-  -- isNumCls  :: c -> Bool
-  -- isFracCls :: c -> Bool
+--   -- isNumCls  :: c -> Bool
+--   -- isFracCls :: c -> Bool
 
-  -- isClass   = const False
-  -- isEqual   = const False
-  -- isNumCls  = const False
-  -- isFracCls = const False
+--   -- isClass   = const False
+--   -- isEqual   = const False
+--   -- isNumCls  = const False
+--   -- isFracCls = const False
 
 instance TyConable RTyCon where
   isFun      = isFunTyCon . rtc_tc
@@ -1008,18 +1008,18 @@ isClassOrSubClass p cls
                  (mapMaybe getClassPredTys_maybe (classSCTheta cls))
 
 -- MOVE TO TYPES
-instance TyConable Symbol where
-  isFun (F.FS s) = F.funConName == s
+instance TyConable LHSymbol where
+  isFun (LHRefSym s) = F.funConName == s
   isFun _ = False
   
-  isList (F.FS s) = F.listConName == s
-  isList (F.AS (LHTyCon tycon)) = listTyCon == tycon
+  isList (LHRefSym s) = F.listConName == s
+  isList (LHTyCon tycon) = listTyCon == tycon
   isList _ = False
   
-  isTuple (F.FS s) = F.tupConName == s
+  isTuple (LHRefSym s) = F.tupConName == s
   isTuple _ = undefined
   
-  ppTycon (F.FS s) = text . F.symbolString $ s
+  ppTycon (LHRefSym s) = text . F.symbolString $ s
   ppTycon _ = undefined
   -- ppTycon (F.AS (LHName name)) = F.pprintTidy F.Lossy name
 
@@ -1200,8 +1200,8 @@ instance Show SizeFun where
   show (SymSizeFun x) = "SymSizeFun " ++ show (F.val x)
 
 szFun :: SizeFun -> Symbol -> Expr
-szFun IdSizeFun      = F.EVar
-szFun (SymSizeFun f) = \x -> F.mkEApp f [F.EVar x]
+szFun IdSizeFun      = F.EVar . F.AS
+szFun (SymSizeFun f) = \x -> F.mkEApp f [F.EVar (F.AS x)]
 
 data HasDataDecl
   = NoDecl  (Maybe SizeFun)
@@ -1290,7 +1290,7 @@ dataNameSymbol (DnCon  z) = z
 data RTAlias x a = RTA
   { rtName  :: LHSymbol             -- ^ name of the alias
   , rtTArgs :: [x]                -- ^ type parameters
-  , rtVArgs :: [F.FixSymbol]           -- ^ value parameters
+  , rtVArgs :: [LHSymbol]           -- ^ value parameters
   , rtBody  :: a                  -- ^ what the alias expands to
   -- , rtMod   :: !ModName           -- ^ module where alias was defined
   } deriving (Data, Typeable, Generic, Functor)
@@ -1430,15 +1430,15 @@ addInvCond t r'
     trep = toRTypeRep t
     tbd  = ty_res trep
     r    = r' {ur_reft = F.Reft (v, rx)}
-    su   = (v, F.EVar x')
-    x'   = "xInv"
+    su   = (v, F.EVar (F.AS x'))
+    x'   = LHRefSym "xInv"
     rx   = F.PIff (F.EVar v) $ F.subst1 rv su
     F.Reft(v, rv) = ur_reft r'
 
 -------------------------------------------
 
 instance F.Subable LHSymbol Stratum where
-  syms (SVar s) = [s]
+  syms (SVar s) = [F.AS s]
   syms _        = []
   subst su (SVar s) = SVar $ F.subst su s
   subst _ s         = s
@@ -1453,7 +1453,7 @@ instance F.Reftable LHSymbol Strata where
 
   ppTy _             = panic Nothing "ppTy on Strata"
   toReft _           = mempty
-  params s           = [l | SVar l <- s]
+  params s           = [F.AS l | SVar l <- s]
   bot _              = []
   top _              = []
 
@@ -1495,7 +1495,7 @@ ppTy_ureft u@(MkUReft r p s) d
   | otherwise         = ppr_reft r (F.ppTy @LHSymbol p d) s
 
 ppr_reft :: (F.PPrint [t], F.Reftable LHSymbol r) => r -> Doc -> [t] -> Doc
-ppr_reft r d s       = braces (F.pprint @Symbol v <+> colon <+> d <-> ppr_str s <+> text "|" <+> F.pprint r')
+ppr_reft r d s       = braces (F.pprint v <+> colon <+> d <-> ppr_str s <+> text "|" <+> F.pprint r')
   where
     r'@(F.Reft (v, _)) = F.toReft r
 
@@ -1510,7 +1510,7 @@ instance F.Subable LHSymbol r => F.Subable LHSymbol (UReft r) where
   substa f (MkUReft r z l) = MkUReft (F.substa f r) (F.substa f z) (F.substa f l)
 
 instance (F.Reftable LHSymbol r, TyConable c) => F.Subable LHSymbol (RTProp c tv r) where
-  syms (RProp  ss r)     = (fst <$> ss) ++ F.syms r
+  syms (RProp  ss r)     = (F.AS . fst <$> ss) ++ F.syms r
 
   subst su (RProp ss (RHole r)) = RProp ss (RHole (F.subst su r))
   subst su (RProp  ss t) = RProp ss (F.subst su <$> t)
@@ -1540,17 +1540,17 @@ instance F.Reftable LHSymbol Predicate where
            | not (ppPs ppEnv) = d
            | otherwise        = d <-> (angleBrackets $ F.pprint r)
 
-  toReft (Pr ps@(p:_))        = F.Reft (parg p, F.pAnd $ pToRef <$> ps)
+  toReft (Pr ps@(p:_))        = F.Reft (F.AS $ parg p, F.pAnd $ pToRef <$> ps)
   toReft _                    = mempty
   params                      = todo Nothing "TODO: instance of params for Predicate"
 
   ofReft = todo Nothing "TODO: Predicate.ofReft"
 
 pToRef :: PVar a -> F.Expr LHSymbol
-pToRef p = pApp (pname p) $ (F.EVar $ parg p) : (thd3 <$> pargs p)
+pToRef p = pApp (pname p) $ (F.EVar . F.AS $ parg p) : (thd3 <$> pargs p)
 
 pApp      :: Symbol -> [Expr] -> Expr
-pApp p es = F.mkEApp fn (F.EVar p:es)
+pApp p es = F.mkEApp fn (F.EVar (F.AS p):es)
   where
     fn    = F.dummyLoc (F.FS $ pappSym n)
     n     = length es
@@ -1561,7 +1561,7 @@ pappSym n  = F.symbol $ "papp" ++ show n
 --------------------------------------------------------------------------------
 -- | Visitors ------------------------------------------------------------------
 --------------------------------------------------------------------------------
-mapExprReft :: (Symbol -> Expr -> Expr) -> RType c tv RReft -> RType c tv RReft
+mapExprReft :: (F.Symbol LHSymbol -> Expr -> Expr) -> RType c tv RReft -> RType c tv RReft
 mapExprReft f = mapReft g
   where
     g (MkUReft (F.Reft (x, e)) p s) = MkUReft (F.Reft (x, f x e)) p s
@@ -1572,7 +1572,7 @@ isTrivial t = foldReft (\_ r b -> F.isTauto @LHSymbol r && b) True t
 mapReft ::  (r1 -> r2) -> RType c tv r1 -> RType c tv r2
 mapReft f = emapReft (const f) []
 
-emapReft ::  ([Symbol] -> r1 -> r2) -> [Symbol] -> RType c tv r1 -> RType c tv r2
+emapReft ::  ([F.Symbol LHSymbol] -> r1 -> r2) -> [LHSymbol] -> RType c tv r1 -> RType c tv r2
 emapReft f γ (RVar α r)          = RVar  α (f γ r)
 emapReft f γ (RAllT α t)         = RAllT α (emapReft f γ t)
 emapReft f γ (RAllP π t)         = RAllP π (emapReft f γ t)
