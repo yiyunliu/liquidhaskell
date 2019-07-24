@@ -117,5 +117,3 @@ uniqueHash i = hashWithSalt i . getKey . getUnique
 -- instance FixSymbolic Class where
 --   symbol = symbol . getName
 
--- instance FixSymbolic Name where
---   symbol = symbol . qualifiedNameSymbol

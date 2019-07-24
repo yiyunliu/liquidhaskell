@@ -244,15 +244,15 @@ replacePredsWithRefs (p, r) (MkUReft (F.Reft(v, rs)) (Pr ps) s)
   = MkUReft (F.Reft (v, rs'')) (Pr ps2) s
   where
     rs''             = mconcat $ rs : rs'
-    rs'              = r . (v,) . pargs <$> ps1
+    rs'              = r . (v,) . fmap (\(x,s,e) -> (x,F.AS . LHRefSym $ s,e))  . pargs <$> ps1
     (ps1, ps2)       = L.partition (== p) ps
 
 pVartoRConc :: PVar t -> (F.Symbol LHSymbol, [(a, b, F.Expr LHSymbol)]) -> F.Expr LHSymbol
 pVartoRConc p (v, args) | length args == length (pargs p)
-  = pApp (pname p) $ F.EVar v : (thd3 <$> args)
+  = pApp (F.AS . LHRefSym $ pname p) $ F.EVar v : (thd3 <$> args)
 
 pVartoRConc p (v, args)
-  = pApp (pname p) $ F.EVar v : args'
+  = pApp (F.AS . LHRefSym $ pname p) $ F.EVar v : args'
   where
     args' = (thd3 <$> args) ++ (drop (length args) (thd3 <$> pargs p))
 
@@ -458,7 +458,7 @@ freeArgsPs p (RRTy env r _ t)
   = L.nub $ concatMap (freeArgsPs p) (snd <$> env) ++ freeArgsPsRef p r ++ freeArgsPs p t
 
 freeArgsPsRef :: PVar t1 -> UReft t -> [F.Symbol LHSymbol]
-freeArgsPsRef p (MkUReft _ (Pr ps) _) = [x | (_, x, w) <- (concatMap pargs ps'),  (F.EVar x) == w]
+freeArgsPsRef p (MkUReft _ (Pr ps) _) = [F.AS . LHRefSym $ x | (_, x, w) <- (concatMap pargs ps'),  (F.EVar (F.AS . LHRefSym $ x)) == w]
   where
    ps' = f <$> filter (uPVar p ==) ps
    f q = q {pargs = pargs q ++ drop (length (pargs q)) (pargs $ uPVar p)}
@@ -477,9 +477,9 @@ meetListWithPSubsRef πs ss r1 r2 = L.foldl' ((meetListWithPSubRef ss) r1) r2 π
 
 meetListWithPSub ::  (F.Reftable LHSymbol r, PPrint t) => [(F.Symbol LHSymbol, RSort)]-> r -> r -> PVar t -> r
 meetListWithPSub ss r1 r2 π
-  | all (\(_, x, F.EVar y) -> x == y) (pargs π)
+  | all (\(_, x, F.EVar y) -> x == y) ((\(x,s,e) -> (x,F.AS . LHRefSym $ s,e)) <$> pargs π)
   = F.meet @LHSymbol r2 r1
-  | all (\(_, x, F.EVar y) -> x /= y) (pargs π)
+  | all (\(_, x, F.EVar y) -> x /= y) ((\(x,s,e) -> (x,F.AS . LHRefSym $ s,e)) <$> pargs π)
   = F.meet @LHSymbol r2 (F.subst su r1)
   | otherwise
   = panic Nothing $ "PredType.meetListWithPSub partial application to " ++ showpp π
@@ -497,9 +497,9 @@ meetListWithPSubRef _ (RProp _ (RHole _)) _ _ -- TODO: Is this correct?
 meetListWithPSubRef _ _ (RProp _ (RHole _)) _
   = panic Nothing "PredType.meetListWithPSubRef called with invalid input"
 meetListWithPSubRef ss (RProp s1 r1) (RProp s2 r2) π
-  | all (\(_, x, F.EVar y) -> x == y) (pargs π)
+  | all (\(_, x, F.EVar y) -> x == y) (fmap (\(x,s,e) -> (x,F.AS . LHRefSym $ s,e)) $ pargs π)
   = RProp s1 $ F.meet @LHSymbol (F.subst su' r2) r1
-  | all (\(_, x, F.EVar y) -> x /= y) (pargs π)
+  | all (\(_, x, F.EVar y) -> x /= y) (fmap (\(x,s,e) -> (x,F.AS . LHRefSym $ s,e)) $ pargs π)
   = RProp s2 $ F.meet @LHSymbol r2 (F.subst su r1)
   | otherwise
   = panic Nothing $ "PredType.meetListWithPSubRef partial application to " ++ showpp π

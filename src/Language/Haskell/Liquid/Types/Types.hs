@@ -445,10 +445,10 @@ data TargetVars = AllVars | Only ![Var]
 --------------------------------------------------------------------
 
 data PVar t = PV
-  { pname :: !Symbol
+  { pname :: !F.FixSymbol
   , ptype :: !(PVKind t)
-  , parg  :: !Symbol
-  , pargs :: ![(t, Symbol, Expr)]
+  , parg  :: !F.FixSymbol
+  , pargs :: ![(t, F.FixSymbol, Expr)]
   } deriving (Generic, Data, Typeable, Show, Functor)
 
 instance Eq (PVar t) where
@@ -515,7 +515,7 @@ pvars :: Predicate -> [UsedPVar]
 pvars (Pr pvs) = pvs
 
 instance F.Subable LHSymbol UsedPVar where
-  syms pv         = [ y | (_, x, F.EVar y) <- pargs pv, x /= y ]
+  syms pv         = [ ay | (_, x, F.EVar ay@(F.AS (LHRefSym y))) <- pargs pv, x /= y ]
   subst s pv      = pv { pargs = mapThd3 (F.subst s)  <$> pargs pv }
   substf f pv     = pv { pargs = mapThd3 (F.substf f) <$> pargs pv }
   substa f pv     = pv { pargs = mapThd3 (F.substa f) <$> pargs pv }
@@ -562,7 +562,7 @@ instance NFData   RTyVar
 -- tyVarUniqueSymbol tv = F.symbol $ show (getName tv) ++ "_" ++ show (varUnique tv)
 
 data BTyCon = BTyCon
-  { btc_tc    :: !(F.LocSymbol LHSymbol)    -- ^ TyCon name with location information
+  { btc_tc    :: !(F.Located F.FixSymbol)    -- ^ TyCon name with location information
   , btc_class :: !Bool           -- ^ Is this a class type constructor?
   , btc_prom  :: !Bool           -- ^ Is Promoted Data Con?
   }
@@ -590,7 +590,7 @@ instance NFData RTyCon
 rtyVarType :: RTyVar -> Type
 rtyVarType (RTV v) = TyVarTy v
 
-mkBTyCon :: F.LocSymbol LHSymbol -> BTyCon
+mkBTyCon :: F.Located F.FixSymbol -> BTyCon
 mkBTyCon x = BTyCon x False False
 
 
@@ -951,6 +951,21 @@ type OkRT c tv r = ( TyConable c
 -- | TyConable Instances -------------------------------------------------------
 -------------------------------------------------------------------------------
 
+instance TyConable F.FixSymbol where
+  isFun   s = F.funConName == s
+  isList  s = F.listConName == s
+  isTuple s = F.tupConName == s
+  ppTycon   = text . F.symbolString
+
+
+instance TyConable (F.Located F.FixSymbol) where
+  isFun   = isFun   . F.val
+  isList  = isList  . F.val
+  isTuple = isTuple . F.val
+  ppTycon = ppTycon . F.val
+
+
+
 instance TyConable LHSymbol where
   -- isFun    :: c -> Bool
   isFun _ = False
@@ -1085,7 +1100,7 @@ instance F.Loc BTyCon where
 data RInstance t = RI
   { riclass :: BTyCon
   , ritype  :: [t]
-  , risigs  :: [(F.LocSymbol LHSymbol, RISig t)]
+  , risigs  :: [(F.Located F.FixSymbol, RISig t)]
   } deriving (Generic, Functor, Data, Typeable, Show)
 
 data RILaws ty = RIL
@@ -1114,7 +1129,7 @@ instance (B.Binary t) => B.Binary (RInstance t)
 instance (B.Binary t) => B.Binary (RISig t)
 instance (B.Binary t) => B.Binary (RILaws t)
 
-newtype DEnv x ty = DEnv (M.HashMap x (M.HashMap Symbol (RISig ty)))
+newtype DEnv x ty = DEnv (M.HashMap x (M.HashMap F.FixSymbol (RISig ty)))
                     deriving (Semigroup, Monoid, Show, Functor)
 
 type RDEnv = DEnv Var SpecType
@@ -1540,14 +1555,14 @@ instance F.Reftable LHSymbol Predicate where
            | not (ppPs ppEnv) = d
            | otherwise        = d <-> (angleBrackets $ F.pprint r)
 
-  toReft (Pr ps@(p:_))        = F.Reft (parg p, F.pAnd $ pToRef <$> ps)
+  toReft (Pr ps@(p:_))        = F.Reft (F.AS . LHRefSym $ parg p, F.pAnd $ pToRef <$> ps)
   toReft _                    = mempty
   params                      = todo Nothing "TODO: instance of params for Predicate"
 
   ofReft = todo Nothing "TODO: Predicate.ofReft"
 
 pToRef :: PVar a -> F.Expr LHSymbol
-pToRef p = pApp (pname p) $ (F.EVar $ parg p) : (thd3 <$> pargs p)
+pToRef p = pApp (F.AS . LHRefSym $ pname p) $ (F.EVar . F.AS . LHRefSym $ parg p) : (thd3 <$> pargs p)
 
 pApp      :: Symbol -> [Expr] -> Expr
 pApp p es = F.mkEApp fn (F.EVar p:es)
@@ -1931,7 +1946,7 @@ instance F.PPrint (PVar a) where
 ppr_pvar :: PVar a -> Doc
 ppr_pvar (PV s _ _ xts) = F.pprint s <+> hsep (F.pprint <$> dargs xts)
   where
-    dargs               = map thd3 . takeWhile (\(_, x, y) -> F.EVar x /= y)
+    dargs               = map thd3 . takeWhile (\(_, x, y) -> F.EVar (F.AS (LHRefSym x)) /= y)
 
 
 instance F.PPrint Predicate where

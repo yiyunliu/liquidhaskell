@@ -33,14 +33,15 @@ import qualified Data.HashMap.Strict                       as M
 
 
 
-makeDictionaries :: [RInstance LocSpecType] -> DEnv F.Symbol LocSpecType
+makeDictionaries :: [RInstance LocSpecType] -> DEnv F.FixSymbol LocSpecType
 makeDictionaries = DEnv . M.fromList . map makeDictionary
 
 
-makeDictionary :: RInstance LocSpecType -> (F.Symbol, M.HashMap F.Symbol (RISig LocSpecType))
-makeDictionary (RI c ts xts) = (makeDictionaryName (btc_tc c) ts, M.fromList (mapFst val <$> xts))
+makeDictionary :: RInstance LocSpecType -> (F.FixSymbol, M.HashMap F.FixSymbol (RISig LocSpecType))
+makeDictionary (RI c ts xts) = (makeDictionaryName (btc_tc c) ts, M.fromList (mapFst val <$>
+                                                                              xts))
 
-makeDictionaryName :: LocSymbol -> [LocSpecType] -> F.Symbol
+makeDictionaryName :: F.Located F.FixSymbol -> [LocSpecType] -> F.FixSymbol
 makeDictionaryName t ts
   = F.notracepp _msg $ F.symbol ("$f" ++ F.symbolString (val t) ++ concatMap mkName ts)
   where
@@ -54,7 +55,7 @@ makeDictionaryName t ts
 
 makeDicTypeName :: Ghc.SrcSpan -> SpecType -> String
 makeDicTypeName _ (RFun _ _ _ _)   = "(->)"
-makeDicTypeName _ (RApp c _ _ _)   = F.symbolString . GM.dropModuleNamesCorrect . F.symbol . rtc_tc $ c
+makeDicTypeName _ (RApp c _ _ _)   = F.symbolString . GM.dropModuleNamesCorrect . F.symbol . getName . rtc_tc $ c
 makeDicTypeName _ (RVar (RTV a) _) = show (getName a)      
 makeDicTypeName sp t               = panic (Just sp) ("makeDicTypeName: called with invalid type " ++ show t)
 
@@ -65,7 +66,7 @@ dropUniv t = t' where (_,_,_,t') = bkUniv t
 -- | Dictionary Environment ----------------------------------------------------
 --------------------------------------------------------------------------------
 
-dfromList :: [(Var, M.HashMap F.Symbol (RISig t))] -> DEnv Var t
+dfromList :: [(Var, M.HashMap F.FixSymbol (RISig t))] -> DEnv Var t
 dfromList = DEnv . M.fromList
 
 dmapty :: (a -> b) -> DEnv v a -> DEnv v b
@@ -83,15 +84,15 @@ dmap :: (v1 -> v2) -> M.HashMap k v1 -> M.HashMap k v2
 dmap f xts = M.map f xts
 
 dinsert :: (Eq x, Hashable x)
-        => DEnv x ty -> x -> M.HashMap F.Symbol (RISig ty) -> DEnv x ty
+        => DEnv x ty -> x -> M.HashMap F.FixSymbol (RISig ty) -> DEnv x ty
 dinsert (DEnv denv) x xts = DEnv $ M.insert x xts denv
 
 dlookup :: (Eq k, Hashable k)
-        => DEnv k t -> k -> Maybe (M.HashMap F.Symbol (RISig t))
+        => DEnv k t -> k -> Maybe (M.HashMap F.FixSymbol (RISig t))
 dlookup (DEnv denv) x     = M.lookup x denv
 
 
-dhasinfo :: (F.Symbolic a1, Show a) => Maybe (M.HashMap F.Symbol a) -> a1 -> Maybe a
+dhasinfo :: (F.FixSymbolic a1, Show a) => Maybe (M.HashMap F.FixSymbol a) -> a1 -> Maybe a
 dhasinfo Nothing _    = Nothing
 dhasinfo (Just xts) x = M.lookup x' xts
   where

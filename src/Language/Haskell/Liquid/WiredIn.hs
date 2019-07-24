@@ -37,6 +37,7 @@ import qualified Language.Fixpoint.Types as F
 import qualified Data.HashSet as S 
 
 import BasicTypes
+import Name (getName)
 -- import DataCon
 -- import TyCon
 import TysWiredIn
@@ -50,10 +51,10 @@ import CoreSyn hiding (mkTyArg)
 --   *do not* correspond to GHC Vars and
 --   *should not* be resolved to GHC Vars.
 
-isWiredIn :: LHSymbol -> Bool
-isWiredIn x = isWiredInLoc x  || isWiredInName (val x) || isWiredInShape x
+isWiredIn :: F.Located LHSymbol -> Bool
+isWiredIn x = isWiredInLoc x  || isWiredInName (val x) || isWiredInShape (val x)
 
-isWiredInLoc :: LHSymbol -> Bool
+isWiredInLoc :: F.Located LHSymbol -> Bool
 isWiredInLoc x  = l == l' && l == 0 && c == c' && c' == 0
   where
     (l , c)  = spe (loc x)
@@ -64,10 +65,11 @@ isWiredInName :: LHSymbol -> Bool
 isWiredInName x = x `S.member` wiredInNames
 
 wiredInNames :: S.HashSet LHSymbol
-wiredInNames = S.fromList [ "head", "tail", "fst", "snd", "len" ]
+wiredInNames = S.fromList . fmap LHRefSym $ [ "head", "tail", "fst", "snd", "len" ]
 
 isWiredInShape :: LHSymbol -> Bool
-isWiredInShape x = any (`F.isPrefixOfSym` (val x)) [F.anfPrefix, F.tempPrefix, dcPrefix]
+isWiredInShape (LHRefSym x) = any (`F.isPrefixOfSym` x) [F.anfPrefix, F.tempPrefix, dcPrefix]
+isWiredInShape _ = False
   -- where s        = val x
         -- dcPrefix = "lqdc"
 
@@ -124,8 +126,8 @@ wiredTyDataCons = (concat tcs, dummyLoc <$> concat dcs)
 
 listTyDataCons :: ([TyConP] , [DataConP])
 listTyDataCons   = ( [(TyConP l0 c [RTV tyv] [p] [] [Covariant] [Covariant] (Just fsize))]
-                   , [(DataConP l0 nilDataCon  [RTV tyv] [p] [] [] []    lt False wiredInName l0)
-                     ,(DataConP l0 consDataCon [RTV tyv] [p] [] [] cargs lt False wiredInName l0)])
+                   , [(DataConP l0 nilDataCon  [RTV tyv] [p] [] [] []    lt False (F.AS . LHRefSym $ wiredInName) l0)
+                     ,(DataConP l0 consDataCon [RTV tyv] [p] [] [] cargs lt False (F.AS . LHRefSym $ wiredInName) l0)])
     where
       l0         = F.dummyPos "LH.Bare.listTyDataCons"
       c          = listTyCon
@@ -134,7 +136,7 @@ listTyDataCons   = ( [(TyConP l0 c [RTV tyv] [p] [] [Covariant] [Covariant] (Jus
       fld        = "fldList"
       xHead      = "head"
       xTail      = "tail"
-      p          = PV "p" (PVProp t) (F.vv Nothing) [(t, fld, F.EVar fld)]
+      p          = PV "p" (PVProp t) (F.vv Nothing) [(t, fld, F.EVar . F.AS . LHRefSym $ fld)]
       px         = pdVarReft $ PV "p" (PVProp t) (F.vv Nothing) [(t, fld, F.EVar xHead)]
       lt         = rApp c [xt] [rPropP [] $ pdVarReft p] mempty
       xt         = rVar tyv
@@ -147,7 +149,8 @@ wiredInName = "WiredIn"
 
 tupleTyDataCons :: Int -> ([TyConP] , [DataConP])
 tupleTyDataCons n = ( [(TyConP   l0 c  (RTV <$> tyvs) ps [] tyvarinfo pdvarinfo Nothing)]
-                    , [(DataConP l0 dc (RTV <$> tyvs) ps [] []  cargs  lt False wiredInName l0)])
+                    , [(DataConP l0 dc (RTV <$> tyvs) ps [] []  cargs  lt False
+                        (F.AS . LHRefSym $ wiredInName) l0)])
   where
     tyvarinfo     = replicate n     Covariant
     pdvarinfo     = replicate (n-1) Covariant
@@ -159,12 +162,15 @@ tupleTyDataCons n = ( [(TyConP   l0 c  (RTV <$> tyvs) ps [] tyvarinfo pdvarinfo 
     flds          = mks "fld_Tuple"
     fld           = "fld_Tuple"
     x1:xs         = mks ("x_Tuple" ++ show n)
-    ps            = mkps pnames (ta:ts) ((fld, F.EVar fld) : zip flds (F.EVar <$> flds))
+    fldSym        = F.AS . LHRefSym $ fld
+    fldsSym       = F.AS . LHRefSym <$> flds
+    x1Sym:xsSym   = F.AS . LHRefSym <$> x1:xs
+    ps            = mkps pnames (ta:ts) ((fld, F.EVar fldSym) : zip flds (F.EVar <$> fldsSym))
     ups           = uPVar <$> ps
-    pxs           = mkps pnames (ta:ts) ((fld, F.EVar x1) : zip flds (F.EVar <$> xs))
+    pxs           = mkps pnames (ta:ts) ((fld, F.EVar x1Sym) : zip flds (F.EVar <$> xsSym))
     lt            = rApp c (rVar <$> tyvs) (rPropP [] . pdVarReft <$> ups) mempty
     xts           = zipWith (\v p -> RVar (RTV v) (pdVarReft p)) tvs pxs
-    cargs         = reverse $ (x1, rVar tv) : zip xs xts
+    cargs         = reverse $ (x1Sym, rVar tv) : zip xsSym xts
     pnames        = mks_ "p"
     mks  x        = (\i -> F.symbol (x++ show i)) <$> [1..n]
     mks_ x        = (\i -> F.symbol (x++ show i)) <$> [2..n]
@@ -184,7 +190,9 @@ mkps_ :: [F.FixSymbol]
 mkps_ []     _       _          _    ps = ps
 mkps_ (n:ns) (t:ts) ((f, x):xs) args ps = mkps_ ns ts xs (a:args) (p:ps)
   where
-    p                                   = PV n (PVProp t) (F.vv Nothing) args
+    p                                   = PV n (PVProp t)
+                                          (F.vv Nothing)
+                                          args
     a                                   = (t, f, x)
 mkps_ _     _       _          _    _ = panic Nothing "Bare : mkps_"
 
@@ -195,7 +203,7 @@ isDerivedInstance :: Ghc.ClsInst -> Bool
 isDerivedInstance i = F.notracepp ("IS-DERIVED: " ++ F.showpp classSym) 
                     $ S.member classSym derivingClasses 
   where 
-    classSym        = F.symbol . Ghc.is_cls $ i
+    classSym        = F.symbol . getName . Ghc.is_cls $ i
   
 derivingClasses :: S.HashSet F.FixSymbol 
 derivingClasses = S.fromList 

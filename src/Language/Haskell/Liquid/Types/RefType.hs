@@ -844,7 +844,7 @@ mkRTProp pv (RProp ss t)
   = RProp (pvArgs pv) t
 
 pvArgs :: PVar t -> [(Symbol LHSymbol, t)]
-pvArgs pv = [(s, t) | (t, s, _) <- pargs pv]
+pvArgs pv = [(F.AS . LHRefSym $ s, t) | (t, s, _) <- pargs pv]
 
 {- | [NOTE:FamInstPredVars] related to [NOTE:FamInstEmbeds]
      See tests/datacon/pos/T1446.hs 
@@ -955,7 +955,7 @@ isNumeric tce c = mySort == FTC F.intFTyCon || mySort == F.FInt
   where
     -- mySort      = M.lookupDefault def rc tce
     mySort      = maybe def fst (F.tceLookup rc tce)
-    def         = FTC . symbolFTycon . dummyLoc . tyConName $ rc
+    def         = FTC . symbolFTycon . dummyLoc . F.AS . LHRefSym . tyConName $ rc
     rc          = rtc_tc c
 
 addNumSizeFun :: RTyCon -> RTyCon
@@ -1656,7 +1656,7 @@ tyConFTyCon tce c ts = case tceLookup c tce of
                          Just (t, NoArgs)   -> fApp t ts  
                          Nothing            -> fApp (fTyconSort niTc) ts 
   where
-    niTc             = symbolNumInfoFTyCon (dummyLoc $ tyConName c) (isNumCls c) (isFracCls c)
+    niTc             = symbolNumInfoFTyCon (dummyLoc . F.AS . LHRefSym $ tyConName c) (isNumCls c) (isFracCls c)
     -- oldRes           = F.notracepp _msg $ M.lookupDefault def c tce
     -- _msg             = "tyConFTyCon c = " ++ show c ++ "default " ++ show (def, TC.isFamInstTyCon c)
 
@@ -1676,11 +1676,12 @@ typeSortForAll tce τ  = genSort $ typeSort tce tbody
     n                 = length as
 
 -- RJ: why not make this the Symbolic instance?
-tyConName :: TyCon -> Symbol LHSymbol
-tyConName = F.AS . LHName . getName
-  -- | listTyCon == c    = listConName
-  -- | TC.isTupleTyCon c = tupConName
-  -- | otherwise         = symbol c
+tyConName :: TyCon -> F.FixSymbol
+tyConName c
+  | listTyCon == c    = listConName
+  | TC.isTupleTyCon c = tupConName
+  -- YL: Made the symbolic conversion explicit since it is no longer desirable in some cases
+  | otherwise         = symbol . getName $ c
 
 typeSortFun :: TCEmb LHSymbol TyCon -> Type -> Sort LHSymbol
 typeSortFun tce t = mkFFunc 0 sos

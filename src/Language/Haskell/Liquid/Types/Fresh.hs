@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -19,6 +20,7 @@ module Language.Haskell.Liquid.Types.Fresh
   )
   where
 
+import           Var
 import           Data.Maybe                    (catMaybes) -- , fromJust, isJust)
 import           Data.Bifunctor
 import qualified Data.List                      as L
@@ -37,6 +39,7 @@ import qualified Language.Fixpoint.Types as F
 -- import           Language.Fixpoint.Types.Visitor (kvars)
 import           Language.Haskell.Liquid.Misc  (single)
 import           Language.Haskell.Liquid.Types.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 import           Language.Haskell.Liquid.Types.RefType
 
 
@@ -48,23 +51,27 @@ class (Applicative m, Monad m) => Freshable m a where
   refresh = return
 
 
-instance (Freshable m Integer, Monad m, Applicative m) => Freshable m F.Symbol where
+instance (Freshable m Integer, Monad m, Applicative m) => Freshable m F.FixSymbol where
   fresh = F.tempSymbol "x" <$> fresh
 
-instance (Freshable m Integer, Monad m, Applicative m) => Freshable m F.Expr where
+instance (Freshable m Integer, Monad m, Applicative m) => Freshable m (F.Expr LHSymbol) where
   fresh  = kv <$> fresh
     where
       kv = (`F.PKVar` mempty) . F.intKvar
 
-instance (Freshable m Integer, Monad m, Applicative m) => Freshable m [F.Expr] where
+instance (Freshable m Integer, Monad m, Applicative m) => Freshable m [F.Expr LHSymbol] where
   fresh = single <$> fresh
 
-instance (Freshable m Integer, Monad m, Applicative m) => Freshable m F.Reft where
+instance (Freshable m Integer, Monad m, Applicative m) => Freshable m (F.Reft LHSymbol) where
   fresh                  = panic Nothing "fresh Reft"
   true    (F.Reft (v,_)) = return $ F.Reft (v, mempty)
   refresh (F.Reft (_,_)) = (F.Reft .) . (,) <$> freshVV <*> fresh
     where
-      freshVV            = F.vv . Just <$> fresh
+      freshVV            = F.AS . LHRefSym . F.vv . Just <$> fresh
+
+instance (Freshable m Integer, Monad m, Applicative m) => Freshable m (F.Symbol LHSymbol) where
+  fresh = F.AS . LHRefSym . F.tempSymbol "x" <$> fresh
+
 
 instance Freshable m Integer => Freshable m RReft where
   fresh             = panic Nothing "fresh RReft"
@@ -78,13 +85,13 @@ instance Freshable m Integer => Freshable m Strata where
   refresh [] = fresh
   refresh s  = return s
 
-instance (Freshable m Integer, Freshable m r, F.Reftable r ) => Freshable m (RRType r) where
+instance (Freshable m Integer, Freshable m r, F.Reftable LHSymbol r ) => Freshable m (RRType r) where
   fresh   = panic Nothing "fresh RefType"
   refresh = refreshRefType
   true    = trueRefType
 
 -----------------------------------------------------------------------------------------------
-trueRefType :: (Freshable m Integer, Freshable m r, F.Reftable r) => RRType r -> m (RRType r)
+trueRefType :: (Freshable m Integer, Freshable m r, F.Reftable LHSymbol r) => RRType r -> m (RRType r)
 -----------------------------------------------------------------------------------------------
 trueRefType (RAllT α t)
   = RAllT α <$> true t
@@ -131,14 +138,14 @@ trueRefType t@(RHole _)
 trueRefType (RAllS _ t)
   = RAllS <$> fresh <*> true t
 
-trueRef :: (F.Reftable r, Freshable f r, Freshable f Integer)
+trueRef :: (F.Reftable LHSymbol r, Freshable f r, Freshable f Integer)
         => Ref τ (RType RTyCon RTyVar r) -> f (Ref τ (RRType r))
 trueRef (RProp _ (RHole _)) = panic Nothing "trueRef: unexpected RProp _ (RHole _))"
 trueRef (RProp s t) = RProp s <$> trueRefType t
 
 
 -----------------------------------------------------------------------------------------------
-refreshRefType :: (Freshable m Integer, Freshable m r, F.Reftable r) => RRType r -> m (RRType r)
+refreshRefType :: (Freshable m Integer, Freshable m r, F.Reftable LHSymbol r) => RRType r -> m (RRType r)
 -----------------------------------------------------------------------------------------------
 refreshRefType (RAllT α t)
   = RAllT α <$> refresh t
@@ -147,11 +154,13 @@ refreshRefType (RAllP π t)
   = RAllP π <$> refresh t
 
 refreshRefType (RImpF b t t' _)
-  | b == F.dummySymbol = rImpF <$> fresh <*> refresh t <*> refresh t'
+  | F.AS (LHRefSym bfix) <- b
+  , bfix == F.dummySymbol = rImpF <$> fresh <*> refresh t <*> refresh t'
   | otherwise          = rImpF     b     <$> refresh t <*> refresh t'
 
 refreshRefType (RFun b t t' _)
-  | b == F.dummySymbol = rFun <$> fresh <*> refresh t <*> refresh t'
+  | F.AS (LHRefSym bfix) <- b
+  , bfix == F.dummySymbol = rFun <$> fresh <*> refresh t <*> refresh t'
   | otherwise          = rFun     b     <$> refresh t <*> refresh t'
 
 refreshRefType (RApp rc ts _ _) | isClass rc
@@ -178,7 +187,7 @@ refreshRefType (RRTy e o r t)
 refreshRefType t
   = return t
 
-refreshRef :: (F.Reftable r, Freshable f r, Freshable f Integer)
+refreshRef :: (F.Reftable LHSymbol r, Freshable f r, Freshable f Integer)
            => Ref τ (RType RTyCon RTyVar r) -> f (Ref τ (RRType r))
 refreshRef (RProp _ (RHole _)) = panic Nothing "refreshRef: unexpected (RProp _ (RHole _))"
 refreshRef (RProp s t) = RProp <$> mapM freshSym s <*> refreshRefType t
@@ -249,7 +258,7 @@ refreshArgs t = fst <$> refreshArgsSub t
 
 
 -- NV TODO: this does not refresh args if they are wrapped in an RRTy
-refreshArgsSub :: (FreshM m) => SpecType -> m (SpecType, F.Subst)
+refreshArgsSub :: (FreshM m) => SpecType -> m (SpecType, F.Subst LHSymbol)
 refreshArgsSub t
   = do ts     <- mapM refreshArgs ts_u
        xs'    <- mapM (const fresh) xs
@@ -277,21 +286,25 @@ refreshPs = mapPropM go
       return $ RProp [(x, t) | (x, (_, t)) <- zip xs s] $ F.subst su t'
 
 --------------------------------------------------------------------------------
-refreshHoles :: (F.Symbolic t, F.Reftable r, TyConable c, Freshable f r)
-             => [(t, RType c tv r)] -> f ([F.Symbol], [(t, RType c tv r)])
+-- refreshHoles :: (F.Symbolic t, F.Reftable r, TyConable c, Freshable f r)
+--              => [(t, RType c tv r)] -> f ([F.Symbol], [(t, RType c tv r)])
+refreshHoles :: (F.Reftable LHSymbol r, TyConable c, Freshable f r)
+             => [(Var, RType c tv r)] -> f ([F.Symbol LHSymbol], [(Var, RType c tv r)])
 refreshHoles vts = first catMaybes . unzip . map extract <$> mapM refreshHoles' vts
   where
   --   extract :: (t, t1, t2) -> (t, (t1, t2))
     extract (a,b,c) = (a,(b,c))
 
-refreshHoles' :: (F.Symbolic a, F.Reftable r, TyConable c, Freshable m r)
-              => (a, RType c tv r) -> m (Maybe F.Symbol, a, RType c tv r)
+-- refreshHoles' :: (F.FixSymbolic a, F.Reftable r, TyConable c, Freshable m r)
+--               => (a, RType c tv r) -> m (Maybe F.Symbol, a, RType c tv r)
+refreshHoles' :: (F.Reftable LHSymbol r, TyConable c, Freshable m r)
+              => (Var, RType c tv r) -> m (Maybe (F.Symbol LHSymbol), Var, RType c tv r)
 refreshHoles' (x,t)
   | noHoles t = return (Nothing, x, t)
-  | otherwise = (Just $ F.symbol x,x,) <$> mapReftM tx t
+  | otherwise = (Just . F.AS . LHVar $ x,x,) <$> mapReftM tx t
   where
     tx r | hasHole r = refresh r
          | otherwise = return r
 
-noHoles :: (F.Reftable r, TyConable c) => RType c tv r -> Bool
+noHoles :: (F.Reftable LHSymbol r, TyConable c) => RType c tv r -> Bool
 noHoles = and . foldReft (\_ r bs -> not (hasHole r) : bs) []

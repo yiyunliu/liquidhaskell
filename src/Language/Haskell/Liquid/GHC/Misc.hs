@@ -65,8 +65,8 @@ import           TyCoRep
 import           Var
 import           IdInfo
 import qualified TyCon                                      as TC
-import           Data.Char                                  (isLower, isSpace)
-import           Data.Maybe                                 (isJust, fromMaybe)
+import           Data.Char                                  (isLower, isSpace, isUpper)
+import           Data.Maybe                                 (isJust, fromMaybe, fromJust)
 import           Data.Hashable
 import qualified Data.HashSet                               as S
 
@@ -496,8 +496,8 @@ qualifiedNameSymbol n = concatFS [modFS, occFS, uniqFS]
     | otherwise
     = fsLit ""
 
--- instance FixSymbolic FastString where
---   symbol = symbol . fastStringText
+instance FixSymbolic FastString where
+  symbol = symbol . fastStringText
 
 fastStringText :: FastString -> T.Text
 fastStringText = T.decodeUtf8With TE.lenientDecode . fastStringToByteString
@@ -519,6 +519,9 @@ noTyVars c =  (TC.isPrimTyCon c || isFunTyCon c || TC.isPromotedDataCon c)
 -- | Symbol Instances
 --------------------------------------------------------------------------------
 
+
+instance FixSymbolic Name where
+  symbol = symbol . qualifiedNameSymbol
 
 -- | [NOTE:REFLECT-IMPORTS] we **eschew** the `unique` suffix for exported vars,
 -- to make it possible to lookup names from symbols _across_ modules;
@@ -546,22 +549,22 @@ noTyVars c =  (TC.isPrimTyCon c || isFunTyCon c || TC.isPromotedDataCon c)
 
 
 
--- dropModuleNames  :: Symbol -> Symbol
--- dropModuleNames = dropModuleNamesCorrect 
+dropModuleNames  :: FixSymbol -> FixSymbol
+dropModuleNames = dropModuleNamesCorrect 
 -- {- 
 -- dropModuleNames = mungeNames lastName sepModNames "dropModuleNames: "
 --  where
 --    lastName msg = symbol . safeLast msg
 -- -}
 
--- dropModuleNamesCorrect  :: Symbol -> Symbol
--- dropModuleNamesCorrect = F.symbol . go . F.symbolText
---   where
---     go s = case T.uncons s of
---              Just (c,tl) -> if isUpper c  && T.any (== '.') tl
---                               then go $ snd $ fromJust $ T.uncons $ T.dropWhile (/= '.') s
---                               else s
---              Nothing -> s
+dropModuleNamesCorrect  :: FixSymbol -> FixSymbol
+dropModuleNamesCorrect = F.symbol . go . F.symbolText
+  where
+    go s = case T.uncons s of
+             Just (c,tl) -> if isUpper c  && T.any (== '.') tl
+                              then go $ snd $ fromJust $ T.uncons $ T.dropWhile (/= '.') s
+                              else s
+             Nothing -> s
 
 -- takeModuleNames  :: Symbol -> Symbol
 -- takeModuleNames  = F.symbol . go [] . F.symbolText
