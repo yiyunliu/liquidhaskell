@@ -1469,9 +1469,9 @@ dataConReft c xs
   where
     dcValue
       | null xs && null (dataConUnivTyVars c)
-      = EVar . F.AS . LHName $ getName c
+      = EVar . F.AS . LHDataCon $ c
       | otherwise
-      = mkEApp (dummyLoc . F.AS . LHName $ getName c) (eVar <$> xs)
+      = mkEApp (dummyLoc . F.AS . LHDataCon $ c) (eVar <$> xs)
 
 isBaseDataCon :: DataCon -> Bool
 isBaseDataCon c = and $ isBaseTy <$> dataConOrigArgTys c ++ dataConRepArgTys c

@@ -11,4 +11,4 @@ lenLocSymbol :: Located (Symbol LHSymbol)
 lenLocSymbol = dummyLoc . FS $ symbol ("autolen" :: String)
 
 anyTypeSymbol :: Symbol LHSymbol
-anyTypeSymbol = AS . LHName . getName $ anyTyCon
+anyTypeSymbol = AS . LHTyCon $ anyTyCon

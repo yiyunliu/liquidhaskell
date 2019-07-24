@@ -24,26 +24,33 @@ import           Outputable                                 ()
 import           Data.Binary
 import           Var
 import           Control.DeepSeq
-import           Data.Data
+import           Data.Data                                  (Data)
+import           DataCon
+import           TyCon
 
 -----------------------------------------------------------------------------
 -- | GHC Specific Symbol
 -----------------------------------------------------------------------------
 
 data LHSymbol =
-    LHName Name -- ^ placeholder
+    LHDataCon DataCon
+  | LHTyCon TyCon
   | LHVar Var -- ^ placeholder
   | LHRefSym FixSymbol -- ^ placeholder
-  deriving (Eq, Ord, Generic, Data)
+  deriving (Eq, Generic, Data)
 
+instance Ord LHSymbol where
+  compare = undefined
 
-instance Hashable LHSymbol
+instance Hashable LHSymbol where
+  hashWithSalt = undefined
 
 instance PPrint LHSymbol where
-  pprintTidy op (LHName name)  = pprintTidy op name
   pprintTidy op (LHVar var)  = pprintTidy op var
+  pprintTidy _ _ = undefined
 
-instance NFData LHSymbol
+instance NFData LHSymbol where
+  rnf = undefined
 
 
 instance Binary Name where
@@ -54,7 +61,9 @@ instance Binary Var where
   put = undefined
   get = undefined
 
-instance Binary LHSymbol
+instance Binary LHSymbol where
+  put = undefined
+  get = undefined
 
 -- should be defined based on Name
 instance SMTLIB2 LHSymbol LHSymbol where
@@ -63,8 +72,8 @@ instance SMTLIB2 LHSymbol LHSymbol where
   smt2 _ _  = undefined
 
 instance Fixpoint LHSymbol where
-  toFix (LHName name) = toFix name
   toFix (LHVar var) = toFix var
+  toFix _ = undefined
 
 instance Show LHSymbol where
   show = undefined

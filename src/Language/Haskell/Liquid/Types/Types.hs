@@ -340,8 +340,8 @@ type Symbol    = F.Symbol LHSymbol
 -- hacky corner cases.
 
 data LogicMap = LM
-  { lmSymDefs  :: M.HashMap Symbol LMap        -- ^ Map from symbols to equations they define
-  , lmVarSyms  :: M.HashMap Var (Maybe Symbol) -- ^ Map from (lifted) Vars to `Symbol`; see:
+  { lmSymDefs  :: M.HashMap F.FixSymbol LMap        -- ^ Map from symbols to equations they define
+  , lmVarSyms  :: M.HashMap Var (Maybe F.FixSymbol) -- ^ Map from (lifted) Vars to `Symbol`; see:
                                               --   NOTE:LIFTED-VAR-SYMBOLS and NOTE:REFLECT-IMPORTs
   } deriving (Show)
 
@@ -353,27 +353,27 @@ instance Semigroup LogicMap where
   LM x1 x2 <> LM y1 y2 = LM (M.union x1 y1) (M.union x2 y2)
 
 data LMap = LMap
-  { lmVar  :: F.LocSymbol LHSymbol
-  , lmArgs :: [Symbol]
+  { lmVar  :: F.Located F.FixSymbol
+  , lmArgs :: [F.FixSymbol]
   , lmExpr :: Expr
   }
 
 instance Show LMap where
   show (LMap x xs e) = show x ++ " " ++ show xs ++ "\t |-> \t" ++ show e
 
-toLogicMap :: [(F.LocSymbol LHSymbol, [Symbol], Expr)] -> LogicMap
+toLogicMap :: [(F.Located F.FixSymbol, [F.FixSymbol], Expr)] -> LogicMap
 toLogicMap ls = mempty {lmSymDefs = M.fromList $ map toLMap ls}
   where
     toLMap (x, ys, e) = (F.val x, LMap {lmVar = x, lmArgs = ys, lmExpr = e})
 
-eAppWithMap :: LogicMap -> F.Located Symbol -> [Expr] -> Expr -> Expr
+eAppWithMap :: LogicMap -> F.Located F.FixSymbol -> [Expr] -> Expr -> Expr
 eAppWithMap lmap f es def
   | Just (LMap _ xs e) <- M.lookup (F.val f) (lmSymDefs lmap)
   , length xs == length es
-  = F.subst (F.mkSubst $ zip xs es) e
+  = F.subst (F.mkSubst $ zip (F.AS . LHRefSym <$> xs) es) e
   | Just (LMap _ xs e) <- M.lookup (F.val f) (lmSymDefs lmap)
   , isApp e
-  = F.subst (F.mkSubst $ zip xs es) $ dropApp e (length xs - length es)
+  = F.subst (F.mkSubst $ zip (F.AS . LHRefSym <$> xs) es) $ dropApp e (length xs - length es)
   | otherwise
   = def
 
@@ -896,8 +896,8 @@ type LocBareType = F.Located BareType
 type LocSpecType = F.Located SpecType
 
 type SpecRTEnv   = RTEnv RTyVar SpecType 
-type BareRTEnv   = RTEnv Symbol BareType 
-type BareRTAlias = RTAlias Symbol BareType 
+type BareRTEnv   = RTEnv F.FixSymbol BareType 
+type BareRTAlias = RTAlias F.FixSymbol BareType 
 type SpecRTAlias = RTAlias RTyVar SpecType
 
 
@@ -970,15 +970,15 @@ instance TyConable LHSymbol where
   -- isFun    :: c -> Bool
   isFun _ = False
   -- isList   :: c -> Bool
-  isList (LHName name) = getName listTyCon == name
+  isList (LHTyCon tycon) = listTyCon == tycon
   isList _ = False
   -- isTuple  :: c -> Bool
   isTuple _ = False
   -- ppTycon  :: c -> Doc
   ppTycon = F.pprintTidy F.Lossy 
   -- isClass  :: c -> Bool
-  isClass (LHName name) = isTyConName name
   isClass (LHVar  name) = isTyConName (getName name)
+  isClass _ = undefined
   -- isEqual  :: c -> Bool
 
   -- isNumCls  :: c -> Bool
@@ -1028,15 +1028,14 @@ instance TyConable Symbol where
   isFun _ = False
   
   isList (F.FS s) = F.listConName == s
-  isList (F.AS (LHName name)) = getName listTyCon == name
+  isList (F.AS (LHTyCon tycon)) = listTyCon == tycon
   isList _ = False
   
   isTuple (F.FS s) = F.tupConName == s
-  isTuple (F.AS (LHName _)) = undefined
-  isTuple _ = False
+  isTuple _ = undefined
   
   ppTycon (F.FS s) = text . F.symbolString $ s
-  ppTycon (F.AS (LHName name)) = F.pprintTidy F.Lossy name
+  ppTycon _ = undefined
 
 instance TyConable (F.LocSymbol LHSymbol) where
   isFun   = isFun   . F.val
@@ -1303,9 +1302,9 @@ dataNameSymbol (DnCon  z) = z
 -- | Refinement Type Aliases
 --------------------------------------------------------------------------------
 data RTAlias x a = RTA
-  { rtName  :: Symbol             -- ^ name of the alias
+  { rtName  :: F.FixSymbol             -- ^ name of the alias
   , rtTArgs :: [x]                -- ^ type parameters
-  , rtVArgs :: [Symbol]           -- ^ value parameters
+  , rtVArgs :: [F.FixSymbol]           -- ^ value parameters
   , rtBody  :: a                  -- ^ what the alias expands to
   -- , rtMod   :: !ModName           -- ^ module where alias was defined
   } deriving (Data, Typeable, Generic, Functor)
@@ -1316,7 +1315,7 @@ instance (B.Binary x, B.Binary a) => B.Binary (RTAlias x a)
 mapRTAVars :: (a -> b) -> RTAlias a ty -> RTAlias b ty
 mapRTAVars f rt = rt { rtTArgs = f <$> rtTArgs rt }
 
-lmapEAlias :: LMap -> F.Located (RTAlias Symbol Expr)
+lmapEAlias :: LMap -> F.Located (RTAlias F.FixSymbol Expr)
 lmapEAlias (LMap v ys e) = F.atLoc v (RTA (F.val v) [] ys e) -- (F.loc v) (F.loc v)
 
 

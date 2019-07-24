@@ -324,8 +324,8 @@ class NamedLocSymbol a where
 instance NamedLocSymbol Var where
   namedLocSymbol v = F.AS . LHVar <$> locNamedThing v
 
-instance (NamedThing a, LocVar a ~ Name) => NamedLocSymbol a where
-  namedLocSymbol v = F.AS . LHName . getName <$> locNamedThing v
+-- instance (NamedThing a, LocVar a ~ Name) => NamedLocSymbol a where
+--   namedLocSymbol v = F.AS . LHName . getName <$> locNamedThing v
 
 locNamedThing :: NamedThing a => a -> F.Located a
 locNamedThing x = F.Loc l lE x
@@ -689,9 +689,7 @@ ignoreCoreBinds vs cbs
 
 
 findVarDef :: Symbol LHSymbol -> [CoreBind] -> Maybe (Var, CoreExpr)
--- YL : seems unreliable to look up symbol in this way
 findVarDef (FS _) _ = Nothing
-findVarDef (AS (LHName _)) _ = Nothing
 findVarDef (AS (LHVar x)) cbs = case xCbs of
                      (NonRec v def   : _ ) -> Just (v, def)
                      (Rec [(v, def)] : _ ) -> Just (v, def)
@@ -700,6 +698,7 @@ findVarDef (AS (LHVar x)) cbs = case xCbs of
     xCbs            = [ cb | cb <- concatMap unRec cbs, x `elem` binders cb]
     unRec (Rec xes) = [NonRec x es | (x,es) <- xes]
     unRec nonRec    = [nonRec]
+findVarDef (AS _) _ = Nothing
 
 
 

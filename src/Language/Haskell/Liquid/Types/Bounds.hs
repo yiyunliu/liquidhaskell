@@ -103,9 +103,9 @@ makeBoundType penv (q:qs) xts = go xts
     go [(x, t)]      = [(F.dummySymbol, tp t x), (F.dummySymbol, tq t x)]
     go ((x, t):xtss) = (val x, mkt t x) : go xtss
 
-    mkt t x = ofRSort t `strengthen` ofUReft (MkUReft (F.Reft (val x, mempty))
+    mkt t x = ofRSort t `strengthen` ofUReft (MkUReft (F.Reft (F.AS . LHRefSym . val $ x, mempty))
                                                 (Pr $ M.lookupDefault [] (val x) ps) mempty)
-    tp t x  = ofRSort t `strengthen` ofUReft (MkUReft (F.Reft (val x, F.pAnd rs))
+    tp t x  = ofRSort t `strengthen` ofUReft (MkUReft (F.Reft (F.AS . LHRefSym . val $ x, F.pAnd rs))
                                                 (Pr $ M.lookupDefault [] (val x) ps) mempty)
     tq t x  = ofRSort t `strengthen` makeRef penv x q
 
@@ -122,7 +122,7 @@ partitionPs penv qs = Misc.mapFst makeAR $ partition (isPApp penv) qs
     makeAR ps       = M.fromListWith (++) $ map (toUsedPVars penv) ps
 
 isPApp :: [(F.FixSymbol, a)] -> F.Expr LHSymbol -> Bool
-isPApp penv (F.EApp (F.EVar p) _)  = isJust $ lookup p penv
+isPApp penv (F.EApp (F.EVar (F.AS (LHRefSym p))) _)  = isJust . lookup p $ penv
 isPApp penv (F.EApp e _)         = isPApp penv e
 isPApp _    _                  = False
 
@@ -130,17 +130,17 @@ toUsedPVars :: [(F.FixSymbol, F.FixSymbol)] -> F.Expr LHSymbol -> (F.FixSymbol, 
 toUsedPVars penv q@(F.EApp _ e) = (x, [toUsedPVar penv q])
   where
     -- NV : TODO make this a better error
-    x = case {- unProp -} e of {F.EVar x -> x; e -> todo Nothing ("Bound fails in " ++ show e) }
+    x = case {- unProp -} e of {F.EVar (F.AS (LHRefSym x)) -> x; e -> todo Nothing ("Bound fails in " ++ show e) }
 toUsedPVars _ _ = impossible Nothing "This cannot happen"
 
 toUsedPVar :: [(F.FixSymbol, F.FixSymbol)] -> F.Expr LHSymbol -> PVar ()
 toUsedPVar penv ee@(F.EApp _ _)
   = PV q (PVProp ()) e (((), F.dummySymbol,) <$> es')
    where
-     F.EVar e = {- unProp $ -} last es
+     F.EVar (F.AS (LHRefSym e)) = {- unProp $ -} last es
      es'    = init es
      Just q = lookup p penv
-     (F.EVar p, es) = F.splitEApp ee
+     (F.EVar (F.AS (LHRefSym p)), es) = F.splitEApp ee
 
 toUsedPVar _ _ = impossible Nothing "This cannot happen"
 

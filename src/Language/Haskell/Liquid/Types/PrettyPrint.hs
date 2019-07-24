@@ -362,8 +362,7 @@ ppr_pvar_kind _ _ (PVHProp)   = panic Nothing "TODO: ppr_pvar_kind:hprop" -- ppr
 
 ppr_name :: F.Symbol LHSymbol -> Doc
 ppr_name (F.FS fs)               = text . F.symbolString $ fs
-ppr_name (F.AS (LHName name))    = text . show $ name
-ppr_name (F.AS (LHVar name))     = text . show $ name
+ppr_name _                       = text $ "define ppr properly"
 
 ppr_pvar_sort :: (OkRT c tv ()) => PPEnv -> Prec -> RType c tv () -> Doc
 ppr_pvar_sort bb p t = ppr_rtype bb p t
