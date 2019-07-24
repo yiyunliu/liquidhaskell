@@ -65,7 +65,7 @@ makeMeasureDefinition tycEnv lmap cbs x =
     Nothing       -> Ex.throw $ errHMeas x "Cannot extract measure from haskell function"
     Just (v, def) -> Ms.mkM vx vinfo mdef MsLifted (makeUnSorted (Ghc.varType v) mdef) 
                      where 
-                       vx           = F.atLoc x (F.symbol v)
+                       vx           = F.atLoc x (F.AS . LHVar $ v)
                        mdef         = coreToDef' tycEnv lmap vx v def
                        vinfo        = GM.varLocInfo logicType v
 

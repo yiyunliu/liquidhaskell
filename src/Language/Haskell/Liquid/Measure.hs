@@ -44,24 +44,25 @@ import           Language.Haskell.Liquid.Types.Types    -- hiding (GhcInfo(..), 
 import           Language.Haskell.Liquid.Types.RefType
 -- import           Language.Haskell.Liquid.Types.Variance
 -- import           Language.Haskell.Liquid.Types.Bounds
-import           Language.Haskell.Liquid.Types.Specs 
+import           Language.Haskell.Liquid.Types.Specs
+import           Language.Haskell.Liquid.Types.LHSymbol
 import           Language.Haskell.Liquid.UX.Tidy
 
 
-mkM ::  LocSymbol -> ty -> [Def ty bndr] -> MeasureKind -> UnSortedExprs -> Measure ty bndr
+mkM ::  Located (Symbol LHSymbol) -> ty -> [Def ty bndr] -> MeasureKind -> UnSortedExprs -> Measure ty bndr
 mkM name typ eqns kind u
   | all ((name ==) . measure) eqns
   = M name typ eqns kind u
   | otherwise
   = panic Nothing $ "invalid measure definition for " ++ show name
 
-mkMSpec' :: Symbolic ctor => [Measure ty ctor] -> MSpec ty ctor
+mkMSpec' :: FixSymbolic ctor => [Measure ty ctor] -> MSpec ty ctor
 mkMSpec' ms = MSpec cm mm M.empty []
   where
     cm     = groupMap (symbol . ctor) $ concatMap msEqns ms
     mm     = M.fromList [(msName m, m) | m <- ms ]
 
-mkMSpec :: [Measure t LocSymbol] -> [Measure t ()] -> [Measure t LocSymbol] -> MSpec t LocSymbol
+mkMSpec :: [Measure t (Located FixSymbol)] -> [Measure t ()] -> [Measure t (Located FixSymbol)] -> MSpec t (Located FixSymbol)
 mkMSpec ms cms ims = MSpec cm mm cmm ims
   where
     cm     = groupMap (val . ctor) $ concatMap msEqns (ms'++ims)
@@ -170,13 +171,13 @@ instance Monoid (Spec ty bndr) where
            , defs       = M.empty
            }
 
-dataConTypes :: MSpec (RRType Reft) DataCon -> ([(Var, RRType Reft)], [(LocSymbol, RRType Reft)])
+dataConTypes :: MSpec (RRType (Reft LHSymbol)) DataCon -> ([(Var, RRType (Reft LHSymbol))], [(LocSymbol LHSymbol, RRType (Reft LHSymbol))])
 dataConTypes  s = (ctorTys, measTys)
   where
     measTys     = [(msName m, msSort m) | m <- M.elems (measMap s) ++ imeas s]
     ctorTys     = concatMap makeDataConType (notracepp "HOHOH" . snd <$> M.toList (ctorMap s))
 
-makeDataConType :: [Def (RRType Reft) DataCon] -> [(Var, RRType Reft)]
+makeDataConType :: [Def (RRType (Reft LHSymbol)) DataCon] -> [(Var, RRType (Reft LHSymbol))]
 makeDataConType []
   = []
 makeDataConType ds | Mb.isNothing (dataConWrapId_maybe dc)
@@ -215,9 +216,9 @@ makeDataConType ds
 
 
 extend :: SourcePos
-       -> RType RTyCon RTyVar Reft
-       -> RRType Reft
-       -> RType RTyCon RTyVar Reft
+       -> RType RTyCon RTyVar (Reft LHSymbol)
+       -> RRType (Reft LHSymbol)
+       -> RType RTyCon RTyVar (Reft LHSymbol)
 extend lc t1' t2
   | Just su <- mapArgumens lc t1 t2
   = t1 `strengthenResult` subst su (Mb.fromMaybe mempty (stripRTypeBase $ resultTy t2))
@@ -230,7 +231,7 @@ extend lc t1' t2
 resultTy :: RType c tv r -> RType c tv r
 resultTy = ty_res . toRTypeRep
 
-strengthenResult :: Reftable r => RType c tv r -> r -> RType c tv r
+strengthenResult :: Reftable LHSymbol r => RType c tv r -> r -> RType c tv r
 strengthenResult t r = fromRTypeRep $ rep {ty_res = ty_res rep `strengthen` r}
   where
     rep              = toRTypeRep t
@@ -247,7 +248,7 @@ noDummySyms t
     xs' = zipWith (\_ i -> symbol ("x" ++ show i)) (ty_binds rep) [1..]
     su  = mkSubst $ zip (ty_binds rep) (EVar <$> xs')
 
-combineDCTypes :: String -> Type -> [RRType Reft] -> RRType Reft
+combineDCTypes :: String -> Type -> [RRType (Reft LHSymbol)] -> RRType (Reft LHSymbol)
 combineDCTypes _msg t ts = L.foldl' strengthenRefTypeGen (ofType t) ts
 
 mapArgumens :: SourcePos -> RRType Reft -> RRType Reft -> Maybe Subst
@@ -293,7 +294,7 @@ stitchArgs :: (Monoid t1, PPrint a)
            -> a
            -> [(Symbol, Maybe (RRType Reft))]
            -> [Type]
-           -> [(Symbol, RRType Reft, t1)]
+           -> [(Symbol, RRType (Reft LHSymbol), t1)]
 stitchArgs sp dc allXs allTs
   | nXs == nTs         = (g (dummySymbol, Nothing) . ofType <$> pts)
                       ++ zipWith g xs (ofType <$> ts)
@@ -320,10 +321,10 @@ panicDataCon sp dc d
 
 refineWithCtorBody :: Outputable a
                    => a
-                   -> LocSymbol
+                   -> Located FixSymbol
                    -> Body
-                   -> RType c tv Reft
-                   -> RType c tv Reft
+                   -> RType c tv (Reft LHSymbol)
+                   -> RType c tv (Reft LHSymbol)
 refineWithCtorBody dc f body t =
   case stripRTypeBase t of
     Just (Reft (v, _)) ->
@@ -332,7 +333,7 @@ refineWithCtorBody dc f body t =
       panic Nothing $ "measure mismatch " ++ showpp f ++ " on con " ++ showPpr dc
 
 
-bodyPred ::  Expr -> Body -> Expr
+bodyPred ::  Expr LHSymbol -> Body -> Expr LHSymbol
 bodyPred fv (E e)    = PAtom Eq fv e
 bodyPred fv (P p)    = PIff  fv p
 bodyPred fv (R v' p) = subst1 p (v', fv)

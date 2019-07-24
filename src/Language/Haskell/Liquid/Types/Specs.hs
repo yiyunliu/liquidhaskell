@@ -68,7 +68,7 @@ data GhcSpec = SP
   , gsTerm   :: !GhcSpecTerm 
   , gsRefl   :: !GhcSpecRefl   
   , gsLaws   :: !GhcSpecLaws 
-  , gsImps   :: ![(F.Symbol, F.Sort)]  -- ^ Imported Environment          
+  , gsImps   :: ![(F.FixSymbol, F.Sort LHSymbol)]  -- ^ Imported Environment          
   , gsConfig :: !Config                       
   , gsLSpec  :: !BareSpec               -- ^ Lifted specification for the target module
   }
@@ -167,9 +167,9 @@ data Spec ty bndr  = Spec
   , sigs       :: ![(F.Located F.FixSymbol, ty)]            -- ^ Imported functions and types
   , localSigs  :: ![(F.Located F.FixSymbol, ty)]            -- ^ Local type signatures
   , reflSigs   :: ![(F.Located F.FixSymbol, ty)]            -- ^ Reflected type signatures
-  , invariants :: ![(Maybe F.Located F.FixSymbol, ty)]      -- ^ Data type invariants; the Maybe is the generating measure
+  , invariants :: ![(Maybe (F.Located F.FixSymbol), ty)]      -- ^ Data type invariants; the Maybe is the generating measure
   , ialiases   :: ![(ty, ty)]                     -- ^ Data type invariants to be checked
-  , imports    :: ![F.Symbol]                     -- ^ Loaded spec module names
+  , imports    :: ![F.FixSymbol]                     -- ^ Loaded spec module names
   , dataDecls  :: ![DataDecl]                     -- ^ Predicated data definitions
   , newtyDecls :: ![DataDecl]                     -- ^ Predicated new type definitions
   , includes   :: ![FilePath]                     -- ^ Included qualifier files
@@ -192,14 +192,14 @@ data Spec ty bndr  = Spec
   , imeasures  :: ![Measure ty bndr]              -- ^ Mappings from (measure,type) -> measure
   , classes    :: ![RClass ty]                    -- ^ Refined Type-Classes
   , claws      :: ![RClass ty]                    -- ^ Refined Type-Classe Laws
-  , termexprs  :: ![(F.Located F.FixSymbol, [F.Located F.Expr])] -- ^ Terminating Conditions for functions
+  , termexprs  :: ![(F.Located F.FixSymbol, [F.Located (F.Expr LHSymbol)])] -- ^ Terminating Conditions for functions
   , rinstance  :: ![RInstance ty]
   , ilaws      :: ![RILaws ty]
   , dvariance  :: ![(F.Located F.FixSymbol, [Variance])]         -- ^ ? Where do these come from ?!
   , bounds     :: !(RRBEnv ty)
-  , defs       :: !(M.HashMap F.Located F.FixSymbol F.Symbol)    -- ^ Temporary (?) hack to deal with dictionaries in specifications
+  , defs       :: !(M.HashMap (F.Located F.FixSymbol) F.FixSymbol)    -- ^ Temporary (?) hack to deal with dictionaries in specifications
                                                        --   see tests/pos/NatClass.hs
-  , axeqs      :: ![F.Equation]                        -- ^ Equalities used for Proof-By-Evaluation
+  , axeqs      :: ![F.Equation LHSymbol]                        -- ^ Equalities used for Proof-By-Evaluation
   } deriving (Generic, Show)
 
 instance (Show ty, Show bndr, F.PPrint ty, F.PPrint bndr) => F.PPrint (Spec ty bndr) where
