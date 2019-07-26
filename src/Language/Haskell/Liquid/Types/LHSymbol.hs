@@ -52,7 +52,6 @@ instance PPrint LHSymbol where
 instance NFData LHSymbol where
   rnf = undefined
 
-
 instance Binary Name where
   put = undefined
   get = undefined

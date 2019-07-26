@@ -104,7 +104,7 @@ data GhcSpecSig = SpSig
 
 data GhcSpecData = SpData 
   { gsCtors      :: ![(Var, LocSpecType)]         -- ^ Data Constructor Measure Sigs
-  , gsMeas       :: ![(F.FixSymbol, LocSpecType)]    -- ^ Measure Types eg.  len :: [a] -> Int
+  , gsMeas       :: ![(F.Symbol LHSymbol, LocSpecType)]    -- ^ Measure Types eg.  len :: [a] -> Int
   , gsInvariants :: ![(Maybe Var, LocSpecType)]   -- ^ Data type invariants from measure definitions, e.g forall a. {v: [a] | len(v) >= 0}
   , gsIaliases   :: ![(LocSpecType, LocSpecType)] -- ^ Data type invariant aliases 
   , gsMeasures   :: ![Measure SpecType DataCon]   -- ^ Measure definitions

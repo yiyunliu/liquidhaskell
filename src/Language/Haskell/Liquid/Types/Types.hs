@@ -1325,11 +1325,11 @@ lmapEAlias (LMap v ys e) = F.atLoc v (RTA (F.val v) [] ys e) -- (F.loc v) (F.loc
 data RTypeRep c tv r = RTypeRep
   { ty_vars   :: [RTVar tv (RType c tv ())]
   , ty_preds  :: [PVar (RType c tv ())]
-  , ty_labels :: [Symbol]
-  , ty_ebinds  :: [Symbol]
+  , ty_labels :: [F.FixSymbol]
+  , ty_ebinds  :: [F.FixSymbol]
   , ty_erefts  :: [r]
   , ty_eargs   :: [RType c tv r]
-  , ty_binds  :: [Symbol]
+  , ty_binds  :: [F.FixSymbol]
   , ty_refts  :: [r]
   , ty_args   :: [RType c tv r]
   , ty_res    :: (RType c tv r)
@@ -2110,6 +2110,7 @@ data Def ty ctor = Def
   } deriving (Show, Data, Typeable, Generic, Eq, Functor)
 
 data Measure ty ctor = M
+  -- YL: F.LocSymbol LHSymbol -> Located LHSymbol
   { msName :: F.LocSymbol LHSymbol
   , msSort :: ty
   , msEqns :: [Def ty ctor]
@@ -2418,9 +2419,9 @@ liquidEnd :: String
 liquidEnd = ['@', '-', '}']
 
 data MSpec ty ctor = MSpec
-  { ctorMap  :: M.HashMap Symbol [Def ty ctor]
-  , measMap  :: M.HashMap (F.LocSymbol LHSymbol) (Measure ty ctor)
-  , cmeasMap :: M.HashMap (F.LocSymbol LHSymbol) (Measure ty ())
+  { ctorMap  :: M.HashMap F.FixSymbol [Def ty ctor]
+  , measMap  :: M.HashMap (F.Located F.FixSymbol) (Measure ty ctor)
+  , cmeasMap :: M.HashMap (F.Located F.FixSymbol) (Measure ty ())
   , imeas    :: ![Measure ty ctor]
   } deriving (Data, Typeable, Generic, Functor)
 

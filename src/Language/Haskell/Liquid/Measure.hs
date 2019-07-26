@@ -60,14 +60,14 @@ mkMSpec' :: FixSymbolic ctor => [Measure ty ctor] -> MSpec ty ctor
 mkMSpec' ms = MSpec cm mm M.empty []
   where
     cm     = groupMap (symbol . ctor) $ concatMap msEqns ms
-    mm     = M.fromList [(msName m, m) | m <- ms ]
+    mm     = M.fromList [(symbol <$> msName m, m) | m <- ms ]
 
 mkMSpec :: [Measure t (Located FixSymbol)] -> [Measure t ()] -> [Measure t (Located FixSymbol)] -> MSpec t (Located FixSymbol)
 mkMSpec ms cms ims = MSpec cm mm cmm ims
   where
     cm     = groupMap (val . ctor) $ concatMap msEqns (ms'++ims)
-    mm     = M.fromList [(msName m, m) | m <- ms' ]
-    cmm    = M.fromList [(msName m, m) | m <- cms ]
+    mm     = M.fromList [(symbol <$> msName m, m) | m <- ms' ]
+    cmm    = M.fromList [(symbol <$> msName m, m) | m <- cms ]
     ms'    = checkDuplicateMeasure ms
 
 
@@ -251,7 +251,7 @@ noDummySyms t
 combineDCTypes :: String -> Type -> [RRType (Reft LHSymbol)] -> RRType (Reft LHSymbol)
 combineDCTypes _msg t ts = L.foldl' strengthenRefTypeGen (ofType t) ts
 
-mapArgumens :: SourcePos -> RRType Reft -> RRType Reft -> Maybe Subst
+mapArgumens :: SourcePos -> RRType (Reft LHSymbol) -> RRType (Reft LHSymbol) -> Maybe (Subst LHSymbol)
 mapArgumens lc t1 t2 = go xts1' xts2'
   where
     xts1 = zip (ty_binds rep1) (ty_args rep1)
@@ -272,7 +272,7 @@ mapArgumens lc t1 t2 = go xts1' xts2'
           ++ show t1 ++ "\n" ++ show t2 )
 
 -- should constructors have implicits? probably not
-defRefType :: Type -> Def (RRType Reft) DataCon -> RRType Reft
+defRefType :: Type -> Def (RRType (Reft LHSymbol)) DataCon -> RRType (Reft LHSymbol)
 defRefType tdc (Def f dc mt xs body)
                     = generalize $ mkArrow as [] [] [] xts t'
   where
@@ -292,11 +292,11 @@ splitType t  = (αs, ts, tr)
 stitchArgs :: (Monoid t1, PPrint a)
            => SrcSpan
            -> a
-           -> [(Symbol, Maybe (RRType Reft))]
+           -> [(Symbol LHSymbol, Maybe (RRType (Reft LHSymbol)))]
            -> [Type]
-           -> [(Symbol, RRType (Reft LHSymbol), t1)]
+           -> [(Symbol LHSymbol, RRType (Reft LHSymbol), t1)]
 stitchArgs sp dc allXs allTs
-  | nXs == nTs         = (g (dummySymbol, Nothing) . ofType <$> pts)
+  | nXs == nTs         = (g (AS . LHRefSym $ dummySymbol, Nothing) . ofType <$> pts)
                       ++ zipWith g xs (ofType <$> ts)
   | otherwise          = panicFieldNumMismatch sp dc nXs nTs
     where
