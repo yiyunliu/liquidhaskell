@@ -68,7 +68,8 @@ import qualified Language.Haskell.Liquid.GHC.Misc      as GM
 import qualified Language.Haskell.Liquid.Misc          as Misc 
 import qualified Language.Haskell.Liquid.Types.RefType as RT
 import qualified Language.Haskell.Liquid.Types.Errors  as Errors 
-import           Language.Haskell.Liquid.Types.Types   
+import           Language.Haskell.Liquid.Types.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 import           Language.Haskell.Liquid.Types.Specs 
 import           Language.Haskell.Liquid.Types.Visitors 
 import           Language.Haskell.Liquid.Bare.Types 
@@ -99,7 +100,7 @@ makeEnv cfg src lmap specs = RE
     syms        = [ (F.symbol v, v) | v <- vars ] 
     vars        = srcVars src
 
-getGlobalSyms :: (ModName, BareSpec) -> [F.Symbol]
+getGlobalSyms :: (ModName, BareSpec) -> [F.Symbol LHSymbol]
 getGlobalSyms (_, spec) 
   = filter (not . GM.isQualifiedSym) 
        $ (mbName <$> measures  spec) 

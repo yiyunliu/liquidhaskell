@@ -5,11 +5,12 @@ module Gradual.GUI.Types where
 
 import Language.Haskell.HsColour.Classify (TokenType)
 import Language.Haskell.Liquid.GHC.Misc   (Loc(..))
+import Language.Haskell.Liquid.Types.LHSymbol
 
 import qualified Data.HashMap.Strict       as M
 import Language.Fixpoint.Types.Refinements hiding (L)
 import Language.Fixpoint.Types.Spans hiding (Loc(..))
-import Language.Fixpoint.Types (symbolString, Symbol) 
+import Language.Fixpoint.Types (symbolString, FixSymbol(..), Symbol(..)) 
 import qualified Data.List as L 
 import qualified Data.Char as C 
 import Data.Maybe (fromJust, fromMaybe)
@@ -19,12 +20,12 @@ import Gradual.Types
 import Gradual.PrettyPrinting 
 
 
-data Unique  = Unique {uId :: Int, uLoc :: SrcSpan, uName :: Symbol} 
+data Unique  = Unique {uId :: Int, uLoc :: SrcSpan, uName :: Symbol LHSymbol} 
 type LocTokens = [(TokenType, String, Loc)]
 type Deps      = Dependencies () --  [(Int, [SrcSpan])] 
 type SDeps     = Dependencies String
 type Dependencies val = [(Unique, [(Unique,val)])]
-type PKeys    = [[KVar]]
+type PKeys    = [[KVar LHSymbol]]
 
 makePKeys :: [[GSub a]] -> PKeys 
 makePKeys sols = M.keys <$> head <$> sols
@@ -32,7 +33,7 @@ makePKeys sols = M.keys <$> head <$> sols
 instance Show Unique where
   show u = show (uLoc u)
 
-kVarId :: Dependencies v -> KVar -> (Int, Int)
+kVarId :: Dependencies v -> KVar LHSymbol -> (Int, Int)
 kVarId deps k = fromMaybe (0,0) $ L.lookup (kv k) 
                   [(uName x,(uId ui, uId x)) | (ui, xs) <- deps, (x,_) <- xs]
 
@@ -51,10 +52,10 @@ gSpanToDeps sol gm = [(Unique i (kVarSpan $ kv k) (kv k), mapValues ks)
 
 
 
-kVarSpan :: Symbol -> SrcSpan
-kVarSpan k = SS lc lc
+kVarSpan :: Symbol LHSymbol -> SrcSpan
+kVarSpan a@(FS k) = SS lc lc
   where
-    L (l, c) = symbolLoc k
+    L (l, c) = symbolLoc a
     fn  = takeFileName $ symbolString k
     lc = toSourcePos (fn, l, c) 
 
@@ -62,8 +63,8 @@ takeFileName :: String -> String
 takeFileName ('$':xs) = takeWhile (/= ' ') xs 
 takeFileName _ = ""
 
-symbolLoc :: Symbol -> Loc
-symbolLoc x = L (read line, read col)
+symbolLoc :: Symbol LHSymbol -> Loc
+symbolLoc (FS x) = L (read line, read col)
   where
     (line, rest) = spanAfter C.isDigit "line " (symbolString x)
     (col, _)     = spanAfter C.isDigit "column " rest

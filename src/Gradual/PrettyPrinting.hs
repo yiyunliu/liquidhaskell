@@ -15,8 +15,11 @@ instance Pretty (Expr LHSymbol) where
 instance Pretty (KVar LHSymbol) where
   pretty (KV x) = pretty x  
 
-instance Pretty (Symbol LHSymbol) where
+instance Pretty FixSymbol where
   pretty = show . dropModuleNames. tidySymbol
+
+instance Pretty (Symbol LHSymbol) where
+  pretty = undefined
 
 instance (Pretty a, Pretty b) => Pretty (a, b) where 
   pretty (x,y) = pretty x ++ " |-> " ++ pretty y 
@@ -29,7 +32,7 @@ simplifyExpr = go
   where
     go (ECst e _)   = go e
     go (EApp e1 e2) 
-      | EVar x <- go e1 
+      | EVar (FS x) <- go e1 
       , x `elem` [applyName, toIntName, setToIntName, bitVecToIntName, mapToIntName, realToIntName] 
       = go e2 
     go (EApp e1 e2)
@@ -47,5 +50,5 @@ simplifyExpr = go
     go (PExist a e) = PExist a (go e)
     go (ETApp e a) = ETApp (go e) a
     go (ELam a e) = ELam a (go e)
-    go (EVar x)   = EVar (dropModuleNames $ tidySymbol x)
+    go (EVar (FS x))   = EVar (FS $ dropModuleNames $ tidySymbol x)
     go e            = e 

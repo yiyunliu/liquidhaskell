@@ -245,7 +245,7 @@ noDummySyms t
   = t
   where
     rep = toRTypeRep t
-    xs' = zipWith (\_ i -> symbol ("x" ++ show i)) (ty_binds rep) [1..]
+    xs' = zipWith (\_ i -> AS . LHRefSym $ symbol ("x" ++ show i)) (ty_binds rep) [1..]
     su  = mkSubst $ zip (ty_binds rep) (EVar <$> xs')
 
 combineDCTypes :: String -> Type -> [RRType (Reft LHSymbol)] -> RRType (Reft LHSymbol)
@@ -321,7 +321,7 @@ panicDataCon sp dc d
 
 refineWithCtorBody :: Outputable a
                    => a
-                   -> Located FixSymbol
+                   -> LocSymbol LHSymbol
                    -> Body
                    -> RType c tv (Reft LHSymbol)
                    -> RType c tv (Reft LHSymbol)

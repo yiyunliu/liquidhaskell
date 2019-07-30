@@ -7,8 +7,8 @@ module Language.Haskell.Liquid.Bare.Misc
   , vmap
   , runMapTyVars
   , matchKindArgs
-  , symbolRTyVar
-  , simpleSymbolVar
+  -- , symbolRTyVar
+  -- , simpleSymbolVar
   , hasBoolResult
   , isKind
   ) where
@@ -36,6 +36,7 @@ import qualified Language.Fixpoint.Types as F
 import           Language.Haskell.Liquid.GHC.Misc
 import           Language.Haskell.Liquid.Types.RefType
 import           Language.Haskell.Liquid.Types.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 
 -- import           Language.Haskell.Liquid.Bare.Env
 
@@ -59,12 +60,12 @@ makeSymbols f vs xs
 
 -} 
 
-freeSymbols :: (F.Reftable r, F.Reftable r1, F.Reftable r2, TyConable c, TyConable c1, TyConable c2)
-            => [F.Symbol]
+freeSymbols :: (F.Reftable LHSymbol r, F.Reftable LHSymbol r1, F.Reftable LHSymbol r2, TyConable c, TyConable c1, TyConable c2)
+            => [F.Symbol LHSymbol]
             -> [(a1, Located (RType c2 tv2 r2))]
             -> [(a, Located (RType c1 tv1 r1))]
             -> [(Located (RType c tv r))]
-            -> [LocSymbol]
+            -> [LocSymbol LHSymbol]
 freeSymbols xs' xts yts ivs =  [ lx | lx <- Misc.sortNub $ zs ++ zs' ++ zs'' , not (M.member (val lx) knownM) ]
   where
     knownM                  = M.fromList [ (x, ()) | x <- xs' ]
@@ -74,7 +75,7 @@ freeSymbols xs' xts yts ivs =  [ lx | lx <- Misc.sortNub $ zs ++ zs' ++ zs'' , n
 
 
 
-freeSyms :: (F.Reftable r, TyConable c) => Located (RType c tv r) -> [LocSymbol]
+freeSyms :: (F.Reftable LHSymbol r, TyConable c) => Located (RType c tv r) -> [LocSymbol LHSymbol]
 freeSyms ty    = [ F.atLoc ty x | x <- tySyms ]
   where
     tySyms     = Misc.sortNub $ concat $ efoldReft (\_ _ -> True) (\_ _ -> []) (\_ -> []) (const ()) f (const id) F.emptySEnv [] (val ty)
@@ -158,13 +159,13 @@ matchKindArgs ts1 ts2 = reverse $ go (reverse ts1) (reverse ts2)
     go ts      []       = ts
     go _       ts       = ts
 
-mkVarExpr :: Id -> F.Expr
+mkVarExpr :: Id -> F.Expr LHSymbol
 mkVarExpr v
   | isFunVar v = F.mkEApp (varFunSymbol v) []
-  | otherwise  = F.eVar v -- EVar (symbol v)
+  | otherwise  = F.EVar (F.AS . LHVar $ v) -- EVar (symbol v)
 
-varFunSymbol :: Id -> Located F.Symbol
-varFunSymbol = dummyLoc . F.symbol . idDataCon
+varFunSymbol :: Id -> Located (F.Symbol LHSymbol)
+varFunSymbol = dummyLoc . F.AS . LHDataCon . idDataCon
 
 isFunVar :: Id -> Bool
 isFunVar v   = isDataConId v && not (null αs) && Mb.isNothing tf
@@ -180,8 +181,8 @@ joinVar vs (v,s,t) = case L.find ((== showPpr v) . showPpr) vs of
                        Just v' -> (v',s,t)
                        Nothing -> (v,s,t)
 
-simpleSymbolVar :: Var -> F.Symbol
-simpleSymbolVar  = dropModuleNames . F.symbol . showPpr . getName
+-- simpleSymbolVar :: Var -> (F.Symbol LHSymbol)
+-- simpleSymbolVar  = dropModuleNames . F.symbol . showPpr . getName
 
 hasBoolResult :: Type -> Bool
 hasBoolResult (ForAllTy _ t) = hasBoolResult t

@@ -1325,11 +1325,11 @@ lmapEAlias (LMap v ys e) = F.atLoc v (RTA (F.val v) [] ys e) -- (F.loc v) (F.loc
 data RTypeRep c tv r = RTypeRep
   { ty_vars   :: [RTVar tv (RType c tv ())]
   , ty_preds  :: [PVar (RType c tv ())]
-  , ty_labels :: [F.FixSymbol]
-  , ty_ebinds  :: [F.FixSymbol]
+  , ty_labels :: [F.Symbol LHSymbol]
+  , ty_ebinds  :: [F.Symbol LHSymbol]
   , ty_erefts  :: [r]
   , ty_eargs   :: [RType c tv r]
-  , ty_binds  :: [F.FixSymbol]
+  , ty_binds  :: [F.Symbol LHSymbol]
   , ty_refts  :: [r]
   , ty_args   :: [RType c tv r]
   , ty_res    :: (RType c tv r)
