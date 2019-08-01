@@ -541,11 +541,11 @@ instance FixSymbolic Name where
 -- | Manipulating Symbols ------------------------------------------------------
 --------------------------------------------------------------------------------
 
--- splitModuleName :: Symbol -> (Symbol, Symbol)
--- splitModuleName x = (takeModuleNames x, dropModuleNamesAndUnique x)
+splitModuleName :: FixSymbol -> (FixSymbol, FixSymbol)
+splitModuleName x = undefined -- (takeModuleNames x, dropModuleNamesAndUnique x)
 
--- dropModuleNamesAndUnique :: Symbol -> Symbol
--- dropModuleNamesAndUnique = dropModuleUnique . dropModuleNames
+dropModuleNamesAndUnique :: FixSymbol -> FixSymbol
+dropModuleNamesAndUnique = undefined -- dropModuleUnique . dropModuleNames
 
 
 
@@ -566,25 +566,26 @@ dropModuleNamesCorrect = F.symbol . go . F.symbolText
                               else s
              Nothing -> s
 
--- takeModuleNames  :: Symbol -> Symbol
--- takeModuleNames  = F.symbol . go [] . F.symbolText
---   where
---     go acc s = case T.uncons s of
---                 Just (c,tl) -> if isUpper c && T.any (== '.') tl
---                                  then go (getModule s:acc) $ snd $ fromJust $ T.uncons $ T.dropWhile (/= '.') s
---                                  else T.intercalate "." (reverse acc) 
---                 Nothing -> T.intercalate "." (reverse acc) 
---     getModule s = T.takeWhile (/= '.') s
+takeModuleNames  :: FixSymbol -> FixSymbol
+takeModuleNames  = F.symbol . go [] . F.symbolText
+  where
+    go acc s = case T.uncons s of
+                Just (c,tl) -> if isUpper c && T.any (== '.') tl
+                                 then go (getModule s:acc) $ snd $ fromJust $ T.uncons $ T.dropWhile (/= '.') s
+                                 else T.intercalate "." (reverse acc) 
+                Nothing -> T.intercalate "." (reverse acc) 
+    getModule s = T.takeWhile (/= '.') s
 
 {- 
 takeModuleNamesOld  = mungeNames initName sepModNames "takeModuleNames: "
   where
     initName msg = symbol . T.intercalate "." . safeInit msg
 -}
--- dropModuleUnique :: Symbol LHSymbol -> Symbol LHSymbol
+dropModuleUnique :: Symbol LHSymbol -> Symbol LHSymbol
 -- dropModuleUnique = mungeNames headName sepUnique   "dropModuleUnique: "
 --   where
 --     headName msg = symbol . safeHead msg
+dropModuleUnique = undefined
 
 
 sepModNames :: T.Text
@@ -605,8 +606,8 @@ sepUnique = "#"
 --   | isParened x    = symbol (wrapParens (m `mappend` "." `mappend` stripParens x))
 --   | otherwise      = symbol (m `mappend` "." `mappend` x)
 
--- isQualifiedSym :: Symbol LHSymbol -> Bool
--- isQualifiedSym (symbolText -> x) = isQualified x 
+isQualifiedSym :: Symbol LHSymbol -> Bool
+isQualifiedSym _ = undefined
 
 isQualified :: T.Text -> Bool
 isQualified y = "." `T.isInfixOf` y
@@ -638,8 +639,8 @@ stripParens t = fromMaybe t (strip t)
   where
     strip = T.stripPrefix "(" >=> T.stripSuffix ")"
 
--- stripParensSym :: Symbol LHSymbol -> Symbol LHSymbol
--- stripParensSym (symbolText -> t) = symbol (stripParens t)
+stripParensSym :: Symbol LHSymbol -> Symbol LHSymbol
+stripParensSym _ = undefined
 
 desugarModule :: TypecheckedModule -> Ghc DesugaredModule
 desugarModule tcm = do
