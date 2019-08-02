@@ -5,18 +5,25 @@
 {-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE TemplateHaskell       #-}
 
 
 
 
 module Language.Haskell.Liquid.Types.LHSymbol
   ( LHSymbol (..)
+  , lhrefBind
+  , substSymbolS
+  , lhRefSym
+  , lhVar
+  , lhTyCon
+  , lhDataCon
   ) where
 
 import           Name
 import           GHC.Generics              (Generic)
 import           Language.Fixpoint.Smt.Types
-import           Language.Fixpoint.Types   (Symbol(..), PPrint(..), Fixpoint(..), FixSymbol(..))
+import           Language.Fixpoint.Types   (Symbol(..), PPrint(..), Fixpoint(..), FixSymbol(..), Expr(..))
 import qualified Language.Fixpoint.Smt.Theories as Thy
 import           Language.Haskell.Liquid.Types.PrettyPrint.Instances ()
 import           Data.Hashable
@@ -27,17 +34,35 @@ import           Control.DeepSeq
 import           Data.Data                                  (Data)
 import           DataCon
 import           TyCon
+import           Lens.Micro.Platform
 
 -----------------------------------------------------------------------------
 -- | GHC Specific Symbol
 -----------------------------------------------------------------------------
 
 data LHSymbol =
-    LHDataCon DataCon
-  | LHTyCon TyCon
-  | LHVar Var -- ^ placeholder
-  | LHRefSym FixSymbol -- ^ placeholder
+    LHDataCon {_lhDataCon :: DataCon} 
+  | LHTyCon {_lhTyCon :: TyCon}
+  | LHVar {_lhVar :: Var} -- ^ placeholder
+  | LHRefSym {_lhRefSym :: FixSymbol} -- ^ placeholder
   deriving (Eq, Generic, Data)
+
+
+makeLenses ''LHSymbol
+
+-- YL: Shouldn't generalize too soon. Think about what information a lens/function knows about 
+-- encoding the knowledge of going to the "default" expression
+-- LHSymbol -> Symbol LHSymbol -> Wrapped in EVar
+-- | ignoring the AS branch
+substSymbolS :: Traversal (Symbol LHSymbol) (Expr LHSymbol) FixSymbol (Expr LHSymbol)
+substSymbolS f (AS (LHRefSym s)) = f s
+substSymbolS _ t = pure (EVar t)
+
+
+
+lhrefBind :: Traversal LHSymbol LHSymbol FixSymbol LHSymbol
+lhrefBind f (LHRefSym s) = f s
+lhrefBind _ s            = pure s
 
 instance Ord LHSymbol where
   compare = undefined
@@ -75,7 +100,8 @@ instance Fixpoint LHSymbol where
   toFix _ = undefined
 
 instance Show LHSymbol where
-  show = undefined
+  show (LHRefSym x) = show x
+  show _ = undefined
 
 
   

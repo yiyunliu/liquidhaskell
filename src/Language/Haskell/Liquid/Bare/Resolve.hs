@@ -55,6 +55,7 @@ module Language.Haskell.Liquid.Bare.Resolve
   ) where 
 
 import qualified Control.Exception                 as Ex 
+import           Lens.Micro.Platform               
 import qualified Data.List                         as L 
 import qualified Data.HashSet                      as S 
 import qualified Data.Maybe                        as Mb
@@ -268,7 +269,7 @@ srcVars src = filter Ghc.isId .  fmap Misc.thd3 . Misc.fstByRank $ concat
   , key "SRC-VAR-THN" 4 <$> [ x | Ghc.AnId x <- gsTyThings src ]
   ]
   where 
-    key :: String -> Int -> Ghc.Var -> (Int, F.Symbol, Ghc.Var)
+    key :: String -> Int -> Ghc.Var -> (Int, F.FixSymbol, Ghc.Var)
     key _ i x  = (i, F.symbol x, {- dump s -} x) 
     _dump msg x = fst . myTracepp msg $ (x, RT.ofType (Ghc.expandTypeSynonyms (Ghc.varType x)) :: SpecType)
 
@@ -322,9 +323,9 @@ instance Qualify (F.Equation s) where
 instance Qualify F.FixSymbol where
   data Qualified F.FixSymbol = Symbol LHSymbol
   qualify env name l bs x = qualifySymbol env name l bs x 
-
+  
 -- YL: should return a different type of symbol.
-qualifySymbol :: Env -> ModName -> F.SourcePos -> [F.FixSymbol] -> F.FixSymbol -> F.FixSymbol                                                   
+qualifySymbol :: Env -> ModName -> F.SourcePos -> [F.FixSymbol] -> F.FixSymbol -> LHSymbol                                                   
 qualifySymbol env name l bs x
   | isSpl     = x 
   | otherwise = case resolveLocSym env name "Symbol" (F.Loc l l x) of 
@@ -426,7 +427,9 @@ instance Qualify (F.Qualifier s)  where
     where 
       bs'                 = bs ++ (F.qpSym <$> F.qParams q)
 
-substEnv :: (F.Subable a) => Env -> ModName -> F.SourcePos -> [F.FixSymbol] -> a -> a 
+
+-- YL: 
+substEnv :: (F.Subable LHSymbol a) => Env -> ModName -> F.SourcePos -> [F.FixSymbol] -> a -> a 
 substEnv env name l bs = F.substa (qualifySymbol env name l bs) 
 
 instance Qualify SpecType where 
@@ -436,7 +439,7 @@ instance Qualify BareType where
   qualify = substFreeEnv 
 
 -- Do not substitute variables bound e.g. by function types
-substFreeEnv :: (F.Subable a) => Env -> ModName -> F.SourcePos -> [F.FixSymbol] -> a -> a 
+substFreeEnv :: (F.Subable LHSymbol a) => Env -> ModName -> F.SourcePos -> [F.FixSymbol] -> a -> a 
 substFreeEnv env name l bs = F.substf (F.EVar . qualifySymbol env name l bs) 
 
 -------------------------------------------------------------------------------
@@ -733,10 +736,10 @@ fixReftTyVars bt  = coSubRReft coSub
     tvs           = RT.allTyVars bt
     specTvSymbol  = F.symbol . RT.bareRTyVar
 
-coSubRReft :: F.CoSub -> RReft -> RReft 
+coSubRReft :: F.CoSub s -> RReft -> RReft 
 coSubRReft su r = r { ur_reft = coSubReft su (ur_reft r) } 
 
-coSubReft :: F.CoSub -> F.Reft -> F.Reft 
+coSubReft :: F.CoSub s -> F.Reft s -> F.Reft s 
 coSubReft su (F.Reft (x, e)) = F.Reft (x, F.applyCoSub su e)
 
 
@@ -753,7 +756,7 @@ ofBPVar env name l = fmap (ofBSort env name l)
 txParam :: F.SourcePos -> ((UsedPVar -> UsedPVar) -> t) -> [UsedPVar] -> RType c tv r -> t
 txParam l f πs t = f (txPvar l (predMap πs t))
 
-txPvar :: F.SourcePos -> M.HashMap F.Symbol UsedPVar -> UsedPVar -> UsedPVar
+txPvar :: F.SourcePos -> M.HashMap F.FixSymbol UsedPVar -> UsedPVar -> UsedPVar
 txPvar l m π = π { pargs = args' }
   where
     args' | not (null (pargs π)) = zipWith (\(_,x ,_) (t,_,y) -> (t, x, y)) (pargs π') (pargs π)
@@ -762,7 +765,7 @@ txPvar l m π = π { pargs = args' }
     err   = uError $ ErrUnbPred sp (pprint π)
     sp    = GM.sourcePosSrcSpan l 
 
-predMap :: [UsedPVar] -> RType c tv r -> M.HashMap F.Symbol UsedPVar
+predMap :: [UsedPVar] -> RType c tv r -> M.HashMap F.FixSymbol UsedPVar
 predMap πs t = M.fromList [(pname π, π) | π <- πs ++ rtypePredBinds t]
 
 rtypePredBinds :: RType c tv r -> [UsedPVar]
@@ -776,7 +779,7 @@ type Expandable s r = ( PPrint r
                     , SubsTy RTyVar (RType RTyCon RTyVar ()) r
                     , F.Reftable s (RTProp RTyCon RTyVar r))
 
-ofBRType :: (Expandable r) => Env -> ModName -> ([F.Symbol] -> r -> r) -> F.SourcePos -> BRType r 
+ofBRType :: (Expandable LHSymbol r) => Env -> ModName -> ([F.FixSymbol] -> r -> r) -> F.SourcePos -> BRType r 
          -> Either UserError (RRType r)
 ofBRType env name f l t  = go [] t 
   where
@@ -828,7 +831,7 @@ ofBRType env name f l t  = go [] t
 
 -}
 
-matchTyCon :: Env -> ModName -> LocSymbol -> Int -> Either UserError Ghc.TyCon
+matchTyCon :: Env -> ModName -> F.Located F.FixSymbol -> Int -> Either UserError Ghc.TyCon
 matchTyCon env name lc@(Loc _ _ c) arity
   | isList c && arity == 1  = Right Ghc.listTyCon
   | isTuple c               = Right tuplTc 
@@ -838,7 +841,7 @@ matchTyCon env name lc@(Loc _ _ c) arity
     tuplTc                  = Ghc.tupleTyCon Ghc.Boxed arity 
 
 
-bareTCApp :: (Expandable r) 
+bareTCApp :: (Expandable r LHSymbol) 
           => r
           -> Located Ghc.TyCon
           -> [RTProp RTyCon RTyVar r]
@@ -868,7 +871,9 @@ bareTCApp r (Loc _ _ c) rs ts
   = RT.rApp c ts rs r
 
 
-tyApp :: F.Reftable s r => RType c tv r -> [RType c tv r] -> [RTProp c tv r] -> r 
+
+-- YL: Should be s, but R already contains info about s
+tyApp :: F.Reftable LHSymbol r => RType c tv r -> [RType c tv r] -> [RTProp c tv r] -> r 
       -> RType c tv r
 tyApp (RApp c ts rs r) ts' rs' r' = RApp c (ts ++ ts') (rs ++ rs') (F.meet @LHSymbol r r')
 tyApp t                []  []  r  = t `RT.strengthen` r
@@ -945,7 +950,11 @@ addSymSortRef' _ _ _ _ (RProp s (RHole r))
 addSymSortRef' _ _ _ p (RProp s t)
   = RProp xs t
     where
-      xs = spliceArgs "addSymSortRef 2" s p
+      -- YL : RProp is the only constructor of Ref
+      -- Symbol should be replaced by FixSymbol
+      -- RProp is resolved in this function
+      xs = undefined
+      -- xs = spliceArgs "addSymSortRef 2" s p
 
 spliceArgs :: String  -> [(F.FixSymbol, b)] -> PVar t -> [(F.FixSymbol, t)]
 spliceArgs msg s p = go (fst <$> s) (pargs p)
@@ -962,7 +971,7 @@ spliceArgs msg s p = go (fst <$> s) (pargs p)
 --   source variables that are visible at that at non-top-level scope. 
 --   e.g. tests-names-pos-local02.hs  
 ---------------------------------------------------------------------------------
-resolveLocalBinds :: Env -> [(Ghc.Var, LocBareType, Maybe [Located (F.Expr void)])] 
+resolveLocalBinds :: Env -> [(Ghc.Var, LocBareType, Maybe [Located (F.Expr LHSymbol)])] 
                   -> [(Ghc.Var, LocBareType, Maybe [Located (F.Expr LHSymbol)])]
 ---------------------------------------------------------------------------------
 resolveLocalBinds env xtes = [ (x,t,es) | (x, (t, es)) <- topTs ++ replace locTs ]
@@ -981,7 +990,7 @@ replaceVisitor = CoreVisitor
 
 addBind :: SymMap -> Ghc.Var -> SymMap 
 addBind env v = case localKey v of 
-  Just vx -> M.insert vx (F.symbol v) env 
+  Just vx -> M.insert vx (F.AS . LHVar $ v) env 
   Nothing -> env
     
 updSigMap :: SymMap -> SigMap -> Ghc.Var -> SigMap
@@ -989,18 +998,22 @@ updSigMap env m v = case M.lookup v m of
   Nothing  -> m 
   Just tes -> M.insert v (myTracepp ("UPD-LOCAL-SIG " ++ GM.showPpr v) $ renameLocalSig env tes) m
 
-renameLocalSig :: SymMap -> (LocBareType, Maybe [Located (F.Expr void)]) 
+
+-- YL: LocBareType shouldn't use LHSymbol in the first place
+renameLocalSig :: SymMap -> (LocBareType, Maybe [Located (F.Expr LHSymbol)]) 
                -> (LocBareType, Maybe [Located (F.Expr LHSymbol)])  
-renameLocalSig env (t, es) = (F.substf tSub t, F.substf esSub es) 
+renameLocalSig env (t, es) = (F.substf (over substSymbolS tSub) t, F.substf @LHSymbol esSub es) 
   where 
-    tSub                   = F.EVar . qualifySymMap env 
-    esSub                  = tSub `F.substfExcept` xs
+    tSub                   = F.EVar . qualifySymMap env
+    -- YL: Use lens to define this map
+    esSub                  = undefined -- tSub `F.substfExcept` xs
     xs                     = ty_binds (toRTypeRep (F.val t)) 
 
-qualifySymMap :: SymMap -> F.Symbol LHSymbol -> F.Symbol LHSymbol
-qualifySymMap env x = M.lookupDefault x x env 
+qualifySymMap :: SymMap -> F.FixSymbol -> F.Symbol LHSymbol
+qualifySymMap env x = M.lookupDefault (F.AS . LHRefSym $ x) x env 
 
 type SigMap = M.HashMap Ghc.Var  (LocBareType, Maybe [Located (F.Expr LHSymbol)])
+-- YL: output should be LHSymbol
 type SymMap = M.HashMap F.FixSymbol (F.Symbol LHSymbol)
 
 ---------------------------------------------------------------------------------
