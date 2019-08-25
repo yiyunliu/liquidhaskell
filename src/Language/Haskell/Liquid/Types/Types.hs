@@ -1170,6 +1170,8 @@ instance Show (Axiom Var Type CoreExpr) where
 --------------------------------------------------------------------------------
 -- | Data type refinements
 --------------------------------------------------------------------------------
+-- bare version for this as well?
+-- since dataconp contains datacon, dataname should always contain fixsymbol?
 data DataDecl   = DataDecl
   { tycName   :: DataName              -- ^ Type  Constructor Name
   , tycTyVars :: [Symbol]              -- ^ Tyvar Parameters
@@ -2101,6 +2103,7 @@ data Body
   | R Symbol Expr   -- ^ Measure Refinement: {v | p}
   deriving (Show, Data, Typeable, Generic, Eq)
 
+-- bare def?
 data Def ty ctor = Def
   { measure :: (F.LocSymbol LHSymbol)
   , ctor    :: ctor

@@ -160,6 +160,7 @@ type SpecMeasure   = Measure LocSpecType DataCon
 instance B.Binary BareSpec
 
 data Spec ty bndr  = Spec
+  -- bare measure vs resolved measure. one extra parameter
   { measures   :: ![Measure ty bndr]              -- ^ User-defined properties for ADTs
   , impSigs    :: ![(F.FixSymbol, F.Sort LHSymbol)]           -- ^ Imported variables types
   , expSigs    :: ![(F.FixSymbol, F.Sort LHSymbol)]           -- ^ Exported variables types

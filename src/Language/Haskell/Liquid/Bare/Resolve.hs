@@ -58,6 +58,7 @@ import qualified Control.Exception                 as Ex
 import           Lens.Micro.Platform               
 import qualified Data.List                         as L 
 import qualified Data.HashSet                      as S 
+import           Data.Hashable
 import qualified Data.Maybe                        as Mb
 import qualified Data.HashMap.Strict               as M
 import qualified Text.PrettyPrint.HughesPJ         as PJ 
@@ -101,12 +102,13 @@ makeEnv cfg src lmap specs = RE
   } 
   where 
     globalSyms  = concatMap getGlobalSyms specs
-    syms        = [ (F.symbol v, v) | v <- vars ] 
+    syms        = [ (undefined v, v) | v <- vars ] 
     vars        = srcVars src
 
-getGlobalSyms :: (ModName, BareSpec) -> [F.Symbol LHSymbol]
-getGlobalSyms (_, spec) 
-  = filter (not . GM.isQualifiedSym) 
+getGlobalSyms :: (ModName, BareSpec) -> [F.FixSymbol]
+getGlobalSyms (_, spec)
+  -- bare spec contains bare measure
+  = undefined (not . GM.isQualifiedSym) 
        $ (mbName <$> measures  spec) 
       ++ (mbName <$> cmeasures spec)
       ++ (mbName <$> imeasures spec)
@@ -148,23 +150,25 @@ localKey   :: Ghc.Var -> Maybe F.FixSymbol
 localKey v 
   | isLocal m = Just x 
   | otherwise = Nothing
-  where 
-    (m, x)    = splitModuleNameExact . GM.dropModuleUnique . F.symbol $ v 
+  where
+    -- keep it
+    (m, x)    = undefined -- splitModuleNameExact . GM.dropModuleUnique . F.symbol $ v 
 
 
 -- YL: Symbol s -> Expr s 
 -- Should we resolve it into GHC Var?
 -- further investigation required
--- UNUSED!!!!
--- makeVarSubst :: GhcSrc -> F.Subst LHSymbol 
--- makeVarSubst src = F.mkSubst unqualSyms 
---   where 
---     unqualSyms   = [ (x, mkVarExpr v) 
---                        | (x, mxs) <- M.toList       (makeSymMap src) 
---                        , v        <- Mb.maybeToList (okUnqualified me mxs) 
---                        , not (isWiredInName x)
---                    ] 
---     me           = F.symbol (giTargetMod src) 
+-- should be polymorphic
+-- F.Subst : bare version
+makeVarSubst :: GhcSrc -> F.Subst LHSymbol
+makeVarSubst src = F.mkSubst unqualSyms 
+  where 
+    unqualSyms   = [ (undefined x, mkVarExpr v) 
+                       | (x, mxs) <- M.toList       (makeSymMap src) 
+                       , v        <- Mb.maybeToList (okUnqualified me mxs) 
+                       , not (undefined x)
+                   ] 
+    me           = undefined (giTargetMod src) 
 
 -- | @okUnqualified mod mxs@ takes @mxs@ which is a list of modulenames-var 
 --   pairs all of which have the same unqualified symbol representation. 
@@ -172,21 +176,19 @@ localKey v
 --   1. that list is a singleton i.e. there is a UNIQUE unqualified version, OR
 --   2. there is a version whose module equals @me@.
 
--- YL: Unused
--- okUnqualified :: F.FixSymbol -> [(F.FixSymbol, a)] -> Maybe a 
--- okUnqualified _ [(_, x)] = Just x 
--- okUnqualified me mxs     = go mxs 
---   where 
---     go []                = Nothing 
---     go ((m,x) : rest)    
---       | me == m          = Just x 
---       | otherwise        = go rest 
+okUnqualified :: F.FixSymbol -> [(F.FixSymbol, a)] -> Maybe a 
+okUnqualified _ [(_, x)] = Just x 
+okUnqualified me mxs     = go mxs 
+  where 
+    go []                = Nothing 
+    go ((m,x) : rest)    
+      | me == m          = Just x 
+      | otherwise        = go rest 
 
--- YL: Unused
--- makeSymMap :: GhcSrc -> M.HashMap F.Symbol [(F.Symbol, Ghc.Var)]
--- makeSymMap src = Misc.group [ (sym, (m, x)) 
---                                 | x           <- srcVars src
---                                 , let (m, sym) = qualifiedSymbol x ]
+makeSymMap :: GhcSrc -> M.HashMap F.FixSymbol [(F.FixSymbol, Ghc.Var)]
+makeSymMap src = Misc.group [ (sym, (m, x)) 
+                                | x           <- srcVars src
+                                , let (m, sym) = undefined x ]
 
 makeTyThingMap :: GhcSrc -> TyThingMap 
 makeTyThingMap src =
@@ -197,14 +199,14 @@ makeTyThingMap src =
              ] 
 
 tyThingSymbol :: Ghc.TyThing -> Maybe F.FixSymbol 
-tyThingSymbol (Ghc.AnId     x) = Just (F.symbol x)
-tyThingSymbol (Ghc.ATyCon   c) = Just (F.symbol c)
+tyThingSymbol (Ghc.AnId     x) = Just undefined -- (F.symbol x)
+tyThingSymbol (Ghc.ATyCon   c) = Just undefined -- (F.symbol c)
 tyThingSymbol (Ghc.AConLike d) = conLikeSymbol d 
 tyThingSymbol _tt              = Nothing -- panic Nothing ("TODO: tyThingSymbol" ++ showPpr tt)
 
 
 conLikeSymbol :: Ghc.ConLike -> Maybe F.FixSymbol 
-conLikeSymbol (Ghc.RealDataCon d) = Just (F.symbol d) 
+conLikeSymbol (Ghc.RealDataCon d) = Just undefined -- (F.symbol d) 
 conLikeSymbol _z                   = Nothing -- panic Nothing ("TODO: conLikeSymbol -- " ++ showPpr z)
 
 
@@ -270,7 +272,7 @@ srcVars src = filter Ghc.isId .  fmap Misc.thd3 . Misc.fstByRank $ concat
   ]
   where 
     key :: String -> Int -> Ghc.Var -> (Int, F.FixSymbol, Ghc.Var)
-    key _ i x  = (i, F.symbol x, {- dump s -} x) 
+    key _ i x  = (i, undefined  x, {- dump s -} x) 
     _dump msg x = fst . myTracepp msg $ (x, RT.ofType (Ghc.expandTypeSynonyms (Ghc.varType x)) :: SpecType)
 
 dataConVars :: [Ghc.DataCon] -> [Ghc.Var]
@@ -311,7 +313,7 @@ instance Qualify TyConP where
 
 instance Qualify SizeFun where
   data Qualified SizeFun = SizeFun
-  qualify env name _ bs (SymSizeFun lx) = SymSizeFun (qualify env name (F.loc lx) bs lx)
+  qualify env name _ bs (SymSizeFun lx) = undefined -- SymSizeFun (qualify env name (F.loc lx) bs lx)
   qualify _   _    _ _  sf              = sf
 
 instance Qualify (F.Equation s) where
@@ -322,14 +324,14 @@ instance Qualify (F.Equation s) where
 
 instance Qualify F.FixSymbol where
   data Qualified F.FixSymbol = Symbol LHSymbol
-  qualify env name l bs x = qualifySymbol env name l bs x 
+  qualify env name l bs x = undefined -- qualifySymbol env name l bs x 
   
 -- YL: should return a different type of symbol.
 qualifySymbol :: Env -> ModName -> F.SourcePos -> [F.FixSymbol] -> F.FixSymbol -> LHSymbol                                                   
 qualifySymbol env name l bs x
-  | isSpl     = x 
-  | otherwise = case resolveLocSym env name "Symbol" (F.Loc l l x) of 
-                  Left  _ -> x 
+  | isSpl     = undefined x 
+  | otherwise = case undefined env name "Symbol" (F.Loc l l x) of 
+                  Left  _ -> undefined x 
                   Right v -> v 
   where 
     isSpl     = isSplSymbol env bs x
@@ -362,7 +364,7 @@ instance Qualify RTyCon where
 
 instance Qualify (Measure SpecType Ghc.DataCon) where 
   qualify env name _ bs m = m -- FIXME substEnv env name bs $ 
-    { msName = qualify env name l bs     lname 
+    { msName = undefined 
     , msEqns = qualify env name l bs <$> msEqns m 
     }
     where 
@@ -372,7 +374,7 @@ instance Qualify (Measure SpecType Ghc.DataCon) where
 
 instance Qualify (Def ty ctor) where 
   qualify env name l bs d = d 
-    { body  = qualify env name l (bs ++ bs') (body d) } 
+    { body  = qualify env name l (bs ++ undefined bs') (body d) } 
     where 
       bs'   = fst <$> binds d
 
@@ -417,20 +419,21 @@ qualifyBareSpec env name l bs sp = sp
   where f      = qualify env name l bs 
 
 instance Qualify (F.Expr s) where 
-  qualify = substEnv 
+  qualify = undefined 
 
 instance Qualify RReft where 
   qualify = substEnv
 
 instance Qualify (F.Qualifier s)  where 
   qualify env name _ bs q = q { F.qBody = qualify env name (F.qPos q) bs' (F.qBody q) } 
-    where 
-      bs'                 = bs ++ (F.qpSym <$> F.qParams q)
+    where
+      -- bare exprs?
+      bs'                 = bs ++ (undefined F.qpSym <$> F.qParams q)
 
 
--- YL: 
+-- YL: type mismatch. substEnv on Bare?
 substEnv :: (F.Subable LHSymbol a) => Env -> ModName -> F.SourcePos -> [F.FixSymbol] -> a -> a 
-substEnv env name l bs = F.substa (qualifySymbol env name l bs) 
+substEnv env name l bs = undefined -- F.substa (qualifySymbol env name l bs) 
 
 instance Qualify SpecType where 
   qualify = substFreeEnv           
@@ -440,14 +443,15 @@ instance Qualify BareType where
 
 -- Do not substitute variables bound e.g. by function types
 substFreeEnv :: (F.Subable LHSymbol a) => Env -> ModName -> F.SourcePos -> [F.FixSymbol] -> a -> a 
-substFreeEnv env name l bs = F.substf (F.EVar . qualifySymbol env name l bs) 
+substFreeEnv env name l bs = undefined -- F.substf (F.EVar . undefined qualifySymbol env name l bs) 
 
 -------------------------------------------------------------------------------
 lookupGhcNamedVar :: (Ghc.NamedThing a, F.FixSymbolic a) => Env -> ModName -> a -> Maybe Ghc.Var
 -------------------------------------------------------------------------------
 lookupGhcNamedVar env name z = maybeResolveSym  env name "Var" lx
-  where 
-    lx                       = GM.namedLocSymbol z
+  where
+    -- redefine namedLocSymbol
+    lx                       = undefined -- GM.namedLocSymbol z
 
 lookupGhcVar :: Env -> ModName -> String -> Located F.FixSymbol -> Ghc.Var 
 lookupGhcVar env name kind lx = 
@@ -483,12 +487,16 @@ lookupGhcDnTyCon :: Env -> ModName -> String -> DataName -> Maybe Ghc.TyCon
 lookupGhcDnTyCon env name msg = failMaybe env name . lookupGhcDnTyConE env name msg
 
 lookupGhcDnTyConE :: Env -> ModName -> String -> DataName -> Either UserError Ghc.TyCon
+-- should be a bare DnCon
 lookupGhcDnTyConE env name msg (DnCon  s) 
-  = lookupGhcDnCon env name msg s
+  = lookupGhcDnCon env name msg (undefined s)
 lookupGhcDnTyConE env name msg (DnName s) 
-  = case resolveLocSym env name msg s of 
+  = case -- resolveLocSym env name msg s
+    undefined of 
       Right r -> Right r 
-      Left  e -> case lookupGhcDnCon  env name msg s of 
+      Left  e -> case -- lookupGhcDnCon  env name msg s
+        undefined
+        of 
                    Right r -> Right r 
                    Left  _ -> Left  e
 
@@ -603,7 +611,7 @@ lookupTyThing env name lsym = [ (k, t) | (k, ts) <- ordMatches, t <- ts]
                                            , k      <- myTracepp msg $ mm nameSym m mods ]
     msg                    = "lookupTyThing: " ++ F.showpp (lsym, x, mods)
     (x, mods)              = symbolModules env (F.val lsym)
-    nameSym                = F.symbol name
+    nameSym                = undefined -- F.symbol name
     allowExt               = allowExtResolution env lsym 
     mm name m mods         = myTracepp ("matchMod: " ++ F.showpp (lsym, name, m, mods, allowExt)) $ 
                                matchMod env name m allowExt mods 
@@ -628,7 +636,8 @@ allowExtResolution env lx = case fileMb of
 
 lookupThings :: Env -> F.FixSymbol -> [(F.FixSymbol, Ghc.TyThing)] 
 lookupThings env x = myTracepp ("lookupThings: " ++ F.showpp x) 
-                   $ Misc.fromFirstMaybes [] (get <$> [x, GM.stripParensSym x])
+                   $ Misc.fromFirstMaybes [] (get <$> [x, undefined -- GM.stripParensSym x
+                                                      ])
   where 
     get z          = M.lookup z (_reTyThings env)
 
@@ -679,14 +688,14 @@ matchImp env defName i
 --   `mod` is the name of the module, derived from `sym` if qualified.
 unQualifySymbol :: F.FixSymbol -> (Maybe F.FixSymbol, F.FixSymbol)
 unQualifySymbol sym 
-  | GM.isQualifiedSym sym = Misc.mapFst Just (splitModuleNameExact sym) 
+  | GM.isQualifiedSym (undefined sym) = Misc.mapFst Just (splitModuleNameExact sym) 
   | otherwise             = (Nothing, sym) 
 
 splitModuleNameExact :: F.FixSymbol -> (F.FixSymbol, F.FixSymbol)
 splitModuleNameExact x' = myTracepp ("splitModuleNameExact for " ++ F.showpp x) 
-                          (GM.takeModuleNames x, GM.dropModuleNames x)
+                          (GM.takeModuleNames (undefined x), GM.dropModuleNames (undefined x))
   where
-    x = GM.stripParensSym x' 
+    x = GM.stripParensSym (undefined x') 
 
 errResolve :: PJ.Doc -> String -> F.Located F.FixSymbol -> UserError 
 errResolve k msg lx = ErrResolve (GM.fSrcSpan lx) k (F.pprint (F.val lx)) (PJ.text msg) 
@@ -732,14 +741,14 @@ resolveReft env name l ps t bs
 fixReftTyVars :: BareType -> RReft -> RReft 
 fixReftTyVars bt  = coSubRReft coSub 
   where
-    coSub         = M.fromList [ (F.symbol a, F.FObj (specTvSymbol a)) | a <- tvs ]
+    coSub         = M.fromList [ (let BTV b = a in b, F.FObj (F.AS . LHRefSym $ specTvSymbol a)) | a <- tvs ]
     tvs           = RT.allTyVars bt
-    specTvSymbol  = F.symbol . RT.bareRTyVar
+    specTvSymbol  = undefined
 
-coSubRReft :: F.CoSub s -> RReft -> RReft 
+coSubRReft :: F.CoSub LHSymbol -> RReft -> RReft 
 coSubRReft su r = r { ur_reft = coSubReft su (ur_reft r) } 
 
-coSubReft :: F.CoSub s -> F.Reft s -> F.Reft s 
+coSubReft :: (Hashable s, Eq s) => F.CoSub s -> F.Reft s -> F.Reft s 
 coSubReft su (F.Reft (x, e)) = F.Reft (x, F.applyCoSub su e)
 
 
@@ -778,14 +787,14 @@ type Expandable s r = ( PPrint r
                     , F.Reftable s r
                     , SubsTy RTyVar (RType RTyCon RTyVar ()) r
                     , F.Reftable s (RTProp RTyCon RTyVar r))
-
+-- BRType should store only FixSymbol
 ofBRType :: (Expandable LHSymbol r) => Env -> ModName -> ([F.FixSymbol] -> r -> r) -> F.SourcePos -> BRType r 
          -> Either UserError (RRType r)
 ofBRType env name f l t  = go [] t 
   where
     goReft bs r             = return (f bs r) 
-    goRImpF bs x t1 t2 r    = RImpF x <$> (rebind x <$> go bs t1) <*> go (x:bs) t2 <*> goReft bs r
-    goRFun  bs x t1 t2 r    = RFun  x <$> (rebind x <$> go bs t1) <*> go (x:bs) t2 <*> goReft bs r
+    goRImpF bs x t1 t2 r    = RImpF x <$> (rebind x <$> go bs t1) <*> go undefined t2 <*> goReft bs r
+    goRFun  bs x t1 t2 r    = RFun  x <$> (rebind x <$> go bs t1) <*> go undefined t2 <*> goReft bs r
     rebind x t              = F.subst1 t (x, F.EVar $ rTypeValueVar t)
     go bs (RAppTy t1 t2 r)  = RAppTy <$> go bs t1 <*> go bs t2 <*> goReft bs r
     go bs (RApp tc ts rs r) = goRApp bs tc ts rs r 
@@ -798,7 +807,7 @@ ofBRType env name f l t  = go [] t
       where a'              = ofBPVar env name l a 
     go bs (RAllS x t)       = RAllS x  <$> go bs t
     go bs (RAllE x t1 t2)   = RAllE x  <$> go bs t1    <*> go bs t2
-    go bs (REx x t1 t2)     = REx   x  <$> go bs t1    <*> go (x:bs) t2
+    go bs (REx x t1 t2)     = REx   x  <$> go bs t1    <*> go undefined t2
     go bs (RRTy xts r o t)  = RRTy  <$> xts' <*> (goReft bs r) <*> (pure o) <*> go bs t
       where xts'            = mapM (Misc.mapSndM (go bs)) xts
     go bs (RHole r)         = RHole    <$> goReft bs r
@@ -841,7 +850,7 @@ matchTyCon env name lc@(Loc _ _ c) arity
     tuplTc                  = Ghc.tupleTyCon Ghc.Boxed arity 
 
 
-bareTCApp :: (Expandable r LHSymbol) 
+bareTCApp :: (Expandable LHSymbol r) 
           => r
           -> Located Ghc.TyCon
           -> [RTProp RTyCon RTyVar r]
@@ -927,15 +936,16 @@ addSymSortRef sp rc p r i
   = panic Nothing "addSymSortRef: malformed ref application"
               
 addSymSortRef' :: (PPrint s) => Ghc.SrcSpan -> s -> Int -> RPVar -> SpecProp -> SpecProp 
-addSymSortRef' _ _ _ p (RProp s (RVar v r)) | isDummy v
+addSymSortRef' _ _ _ p (RProp s (RVar (RTV v) r)) | isDummy (F.symbol $ Ghc.getName v)
   = RProp xs t
     where
       t  = ofRSort (pvType p) `RT.strengthen` r
-      xs = spliceArgs "addSymSortRef 1" s p
+      xs = undefined -- spliceArgs "addSymSortRef 1" s p
 
 addSymSortRef' sp rc i p (RProp _ (RHole r@(MkUReft _ (Pr [up]) _)))
   | length xs == length ts
-  = RProp xts (RHole r)
+  -- if only we had prisms
+  = RProp (over (mapped . _1) (F.AS . LHRefSym) xts) (RHole r) 
   | otherwise
   = -- Misc.errorP "ZONK" $ F.showpp (rc, pname up, i, length xs, length ts)
     uError $ ErrPartPred sp (pprint rc) (pprint $ pname up) i (length xs) (length ts)

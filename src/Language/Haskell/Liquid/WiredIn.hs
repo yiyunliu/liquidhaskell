@@ -52,7 +52,7 @@ import CoreSyn hiding (mkTyArg)
 --   *should not* be resolved to GHC Vars.
 
 isWiredIn :: F.Located LHSymbol -> Bool
-isWiredIn x = isWiredInLoc x  || isWiredInName (val x) || isWiredInShape (val x)
+isWiredIn x = isWiredInLoc x  || undefined isWiredInName (val x) || isWiredInShape (val x)
 
 isWiredInLoc :: F.Located LHSymbol -> Bool
 isWiredInLoc x  = l == l' && l == 0 && c == c' && c' == 0
@@ -61,11 +61,11 @@ isWiredInLoc x  = l == l' && l == 0 && c == c' && c' == 0
     (l', c') = spe (locE x)
     spe l    = (x, y) where (_, x, y) = F.sourcePosElts l
 
-isWiredInName :: LHSymbol -> Bool
+isWiredInName :: F.FixSymbol -> Bool
 isWiredInName x = x `S.member` wiredInNames
 
-wiredInNames :: S.HashSet LHSymbol
-wiredInNames = S.fromList . fmap LHRefSym $ [ "head", "tail", "fst", "snd", "len" ]
+wiredInNames :: S.HashSet F.FixSymbol
+wiredInNames = S.fromList [ "head", "tail", "fst", "snd", "len" ]
 
 isWiredInShape :: LHSymbol -> Bool
 isWiredInShape (LHRefSym x) = any (`F.isPrefixOfSym` x) [F.anfPrefix, F.tempPrefix, dcPrefix]

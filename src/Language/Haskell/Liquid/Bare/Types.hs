@@ -68,14 +68,14 @@ plugSrc _        = Nothing
 -------------------------------------------------------------------------------
 data Env = RE 
   { reLMap      :: !LogicMap
-  , reSyms      :: ![(F.Symbol LHSymbol, Ghc.Var)]    -- ^ see "syms" in old makeGhcSpec'
+  , reSyms      :: ![(F.FixSymbol, Ghc.Var)]    -- ^ see "syms" in old makeGhcSpec'
   , _reSubst    :: !(F.Subst LHSymbol)                  -- ^ see "su"   in old makeGhcSpec'
   , _reTyThings :: !TyThingMap 
   , reCfg       :: !Config
   , reQualImps  :: !QImports                 -- ^ qualified imports
-  , reAllImps   :: !(S.HashSet (F.Symbol LHSymbol))     -- ^ all imported modules
+  , reAllImps   :: !(S.HashSet F.FixSymbol)     -- ^ all imported modules
   , reLocalVars :: !LocalVars                -- ^ lines at which local variables are defined.
-  , reGlobSyms  :: !(S.HashSet (F.Symbol LHSymbol))     -- ^ global symbols, typically unlifted measures like 'len', 'fromJust'
+  , reGlobSyms  :: !(S.HashSet F.FixSymbol)     -- ^ global symbols, typically unlifted measures like 'len', 'fromJust'
   , reSrc       :: !GhcSrc                   -- ^ all source info
   }
 
@@ -84,13 +84,13 @@ instance HasConfig Env where
 
 -- | @LocalVars@ is a map from names to lists of pairs of @Ghc.Var@ and 
 --   the lines at which they were defined. 
-type LocalVars = M.HashMap (F.Symbol LHSymbol) [(Int, Ghc.Var)]
+type LocalVars = M.HashMap F.FixSymbol [(Int, Ghc.Var)]
 
 -------------------------------------------------------------------------------
 -- | A @TyThingMap@ is used to resolve symbols into GHC @TyThing@ and, 
 --   from there into Var, TyCon, DataCon, etc.
 -------------------------------------------------------------------------------
-type TyThingMap = M.HashMap (F.Symbol LHSymbol) [(F.Symbol LHSymbol, Ghc.TyThing)]
+type TyThingMap = M.HashMap F.FixSymbol [(F.FixSymbol, Ghc.TyThing)]
 
 -------------------------------------------------------------------------------
 -- | A @SigEnv@ contains the needed to process type signatures 
