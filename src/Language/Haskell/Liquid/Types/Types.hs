@@ -403,6 +403,7 @@ instance F.Loc TyConP where
 
 
 -- TODO: just use Located instead of dc_loc, dc_locE
+-- resolved DataCtor?
 data DataConP = DataConP
   { dcpLoc        :: !F.SourcePos
   , dcpCon        :: !DataCon                -- ^ Corresponding GHC DataCon 
@@ -1170,8 +1171,10 @@ instance Show (Axiom Var Type CoreExpr) where
 --------------------------------------------------------------------------------
 -- | Data type refinements
 --------------------------------------------------------------------------------
--- bare version for this as well?
+-- YL: bare version for this as well?
 -- since dataconp contains datacon, dataname should always contain fixsymbol?
+
+-- YL 2 : let's try the bare version first (all fixsymbol) and create a resolved version only if it's really needed (i don't think it is)
 data DataDecl   = DataDecl
   { tycName   :: DataName              -- ^ Type  Constructor Name
   , tycTyVars :: [Symbol]              -- ^ Tyvar Parameters
