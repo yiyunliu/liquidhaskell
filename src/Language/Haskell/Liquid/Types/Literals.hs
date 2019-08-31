@@ -14,6 +14,7 @@ import qualified TyCon  as TC
 
 import Language.Haskell.Liquid.Types.Types
 import Language.Haskell.Liquid.Types.RefType
+import Language.Haskell.Liquid.Types.LHSymbol
 import Language.Haskell.Liquid.Transforms.CoreToLogic (mkLit, mkI, mkS)
 
 import qualified Language.Fixpoint.Types as F

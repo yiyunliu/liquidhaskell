@@ -436,7 +436,7 @@ toLogicApp e = do
 
 makeApp :: Expr LHSymbol -> LogicMap -> Located (Symbol LHSymbol) -> [Expr LHSymbol] -> Expr LHSymbol
 -- YL : please make sure it is consistent. any chance of comparing directly with GHC.Num.negate from tyswiredin?
-makeApp _ _ f [e] | val f == undefined symbol ("GHC.Num.negate" :: String)
+makeApp _ _ f [e] | val f == undefined -- symbol ("GHC.Num.negate" :: String)
   = ENeg e
 
 -- YL : Symbol s -> String coercion
@@ -447,6 +447,8 @@ makeApp def lmap f es
   = eAppWithMap lmap f es def
   -- where msg = "makeApp f = " ++ show f ++ " es = " ++ show es ++ " def = " ++ show def
 
+
+-- YL : opt for string. make conservative changes
 eVarWithMap :: Id -> LogicMap -> LogicM (Expr LHSymbol)
 eVarWithMap x lmap = do
   f'     <- tosymbol' (C.Var x :: C.CoreExpr)
@@ -455,11 +457,11 @@ eVarWithMap x lmap = do
 
 varExpr :: Var -> Expr LHSymbol
 varExpr x
-  | isPolyCst t = mkEApp (dummyLoc s) []
-  | otherwise   = EVar s
+  | isPolyCst t = mkEApp (F.AS . LHRefSym <$> dummyLoc s) []
+  | otherwise   = EVar (F.AS . LHRefSym $ s)
   where
     t           = GM.expandVarType x
-    s           = symbol x
+    s           = undefined -- symbol x
 
 isPolyCst :: Type -> Bool
 isPolyCst (ForAllTy _ t) = isCst t
@@ -502,7 +504,7 @@ splitArgs e = (f, reverse es)
     go f           = (f, [])
 
 tomaybesymbol :: C.CoreExpr -> Maybe (Symbol LHSymbol)
-tomaybesymbol (C.Var x) = Just . LHVar $ x
+tomaybesymbol (C.Var x) = Just . F.AS . LHVar $ x
 tomaybesymbol _         = Nothing
 
 tosymbol :: C.CoreExpr -> LogicM (Located (Symbol LHSymbol))
@@ -512,7 +514,7 @@ tosymbol e
     _      -> throw ("Bad Measure Definition:\n" ++ GM.showPpr e ++ "\t cannot be applied")
 
 tosymbol' :: C.CoreExpr -> LogicM (Located (Symbol LHSymbol))
-tosymbol' (C.Var x) = return $ dummyLoc . LHVar $ x 
+tosymbol' (C.Var x) = return $ dummyLoc . F.AS . LHVar $ x 
 tosymbol' e        = throw ("Bad Measure Definition:\n" ++ GM.showPpr e ++ "\t cannot be applied")
 
 makesub :: C.CoreBind -> LogicM (Symbol LHSymbol, Expr LHSymbol)
@@ -550,9 +552,10 @@ ignoreVar i = simpleSymbolVar i `elem` ["I#", "D#"]
 
 isBangInteger :: [C.CoreAlt] -> Bool 
 isBangInteger [(C.DataAlt s, _, _), (C.DataAlt jp,_,_), (C.DataAlt jn,_,_)] 
-  =  symbol s  == "GHC.Integer.Type.S#" 
-  && symbol jp == "GHC.Integer.Type.Jp#" 
-  && symbol jn == "GHC.Integer.Type.Jn#"  
+  = undefined  -- symbol s  == "GHC.Integer.Type.S#" 
+  -- && symbol jp == "GHC.Integer.Type.Jp#" 
+  -- && symbol jn == "GHC.Integer.Type.Jn#"
+  
 isBangInteger _ = False 
 
 isErasable :: Id -> Bool
