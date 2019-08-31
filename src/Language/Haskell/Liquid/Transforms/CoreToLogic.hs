@@ -3,7 +3,8 @@
 {-# LANGUAGE UndecidableInstances   #-}
 {-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE TupleSections          #-}
-
+-- YL : Probably need to use LHSymbol aggressively. This is exactly where the embedding of Core -> Logic happens
+-- this probably corresponds to the template generation stage?
 module Language.Haskell.Liquid.Transforms.CoreToLogic
   ( coreToDef
   , coreToFun
@@ -51,15 +52,18 @@ import qualified Language.Haskell.Liquid.GHC.Misc      as GM
 
 
 import           Language.Haskell.Liquid.Bare.Types 
-import           Language.Haskell.Liquid.Bare.DataType 
+import           Language.Haskell.Liquid.Bare.DataType
+-- YL: uncomment this and define simpleSymbolVar
 import           Language.Haskell.Liquid.Bare.Misc     (simpleSymbolVar)
 import           Language.Haskell.Liquid.GHC.Play
 import           Language.Haskell.Liquid.Types.Types   --     hiding (GhcInfo(..), GhcSpec (..), LM)
+import           Language.Haskell.Liquid.Types.LHSymbol
 import           Language.Haskell.Liquid.Types.RefType
+import           Lens.Micro.Platform
 
 import qualified Data.HashMap.Strict                   as M
 
-logicType :: (Reftable r) => Type -> RRType r
+logicType :: (Reftable LHSymbol r) => Type -> RRType r
 logicType τ      = fromRTypeRep $ t { ty_binds = bs, ty_args = as, ty_refts = rs}
   where
     t            = toRTypeRep $ ofType τ
@@ -71,14 +75,14 @@ logicType τ      = fromRTypeRep $ t { ty_binds = bs, ty_args = as, ty_refts = r
  -}
 -- formerly: strengthenResult
 inlineSpecType :: Var -> SpecType
-inlineSpecType v = fromRTypeRep $ rep {ty_res = res `strengthen` r , ty_binds = xs}
+inlineSpecType v = fromRTypeRep $ rep {ty_res = res `strengthen` r , ty_binds = F.AS . LHRefSym <$> xs}
   where
-    r              = MkUReft (mkR (mkEApp f (mkA <$> vxs))) mempty mempty
+    r              = MkUReft (mkR (mkEApp f (mkA . (over _1 (F.AS . LHRefSym)) <$> vxs))) mempty mempty
     rep            = toRTypeRep t
     res            = ty_res rep
     xs             = intSymbol (symbol ("x" :: String)) <$> [1..length $ ty_binds rep]
     vxs            = dropWhile (isClassType . snd) $ zip xs (ty_args rep)
-    f              = dummyLoc (symbol v)
+    f              = dummyLoc (F.AS $ LHVar v)
     t              = ofType (GM.expandVarType v) :: SpecType
     mkA            = EVar . fst 
     mkR            = if isBool res then propReft else exprReft 
@@ -96,17 +100,17 @@ measureSpecType v = go mkT [] [1..] t
   where 
     mkR | boolRes   = propReft 
         | otherwise = exprReft  
-    mkT xs          = MkUReft (mkR $ mkEApp f (EVar <$> reverse xs)) mempty mempty
-    f               = dummyLoc (symbol v) 
+    mkT xs          = MkUReft (mkR $ mkEApp f (EVar . F.AS . LHRefSym <$> reverse xs)) mempty mempty
+    f               = dummyLoc (F.AS $ LHVar v) 
     t               = ofType (GM.expandVarType v) :: SpecType
     boolRes         =  isBool $ ty_res $ toRTypeRep t 
-
+    -- YL : args consist of strings 
     go f args i (RAllT a t)      = RAllT a $ go f args i t
     go f args i (RAllP p t)      = RAllP p $ go f args i t
     go f args i (RFun x t1 t2 r)
      | isClassType t1           = RFun x t1 (go f args i t2) r
     go f args i t@(RFun _ t1 t2 r)
-     | hasRApps t               = RFun x' t1 (go f (x':args) (tail i) t2) r
+     | hasRApps t               = RFun (F.AS . LHRefSym $ x') t1 (go f (x':args) (tail i) t2) r
                                        where x' = intSymbol (symbol ("x" :: String)) (head i)
     go f args _ t                = t `strengthen` f args
 
@@ -129,14 +133,14 @@ weakenResult v t = F.notracepp msg t'
     vE           = mkEApp vF xs
     xs           = EVar . fst <$> dropWhile (isClassType . snd) xts 
     xts          = zip (ty_binds rep) (ty_args rep)
-    vF           = dummyLoc (symbol v)
+    vF           = dummyLoc (F.AS $ LHVar v)
 
 type LogicM = ExceptT Error (StateT LState Identity)
 
 data LState = LState
   { lsSymMap  :: LogicMap
   , lsError   :: String -> Error
-  , lsEmb     :: TCEmb TyCon
+  , lsEmb     :: TCEmb LHSymbol TyCon
   , lsBools   :: [Var]
   , lsDCMap   :: DataConMap
   }
@@ -150,12 +154,12 @@ getState :: LogicM LState
 getState = get
 
 runToLogic
-  :: TCEmb TyCon -> LogicMap -> DataConMap -> (String -> Error)
+  :: TCEmb LHSymbol TyCon -> LogicMap -> DataConMap -> (String -> Error)
   -> LogicM t -> Either Error t
 runToLogic = runToLogicWithBoolBinds []
 
 runToLogicWithBoolBinds
-  :: [Var] -> TCEmb TyCon -> LogicMap -> DataConMap -> (String -> Error)
+  :: [Var] -> TCEmb LHSymbol TyCon -> LogicMap -> DataConMap -> (String -> Error)
   -> LogicM t -> Either Error t
 runToLogicWithBoolBinds xs tce lmap dm ferror m
   = evalState (runExceptT m) $ LState
@@ -165,10 +169,14 @@ runToLogicWithBoolBinds xs tce lmap dm ferror m
       , lsBools  = xs
       , lsDCMap  = dm
       }
-
-coreAltToDef :: (Reftable r) => LocSymbol -> Var -> [Var] -> Var -> Type -> [C.CoreAlt] 
+-- YL: what is a core alt? case split alt? pattern matching? one branch?
+-- see https://hackage.haskell.org/package/ghc-lib-parser-8.8.1/docs/CoreSyn.html#t:AltCon
+coreAltToDef :: (Reftable LHSymbol r) => LocSymbol LHSymbol -> Var -> [Var] -> Var -> Type -> [C.CoreAlt] 
              -> LogicM [Def (Located (RRType r)) DataCon]
-coreAltToDef x z zs y t alts  
+coreAltToDef x z zs y t alts
+-- YL: A literal: case e of { 1 -> ... } Invariant: always an
+-- *unlifted* literal See Note [Literal alternatives]
+
   | not (null litAlts) = measureFail x "Cannot lift definition with literal alternatives" 
   | otherwise          = do 
       d1s <- F.notracepp "coreAltDefs-1" <$> mapM (mkAlt x cc myArgs z) dataAlts 
@@ -184,10 +192,11 @@ coreAltToDef x z zs y t alts
 
     -- mkAlt :: LocSymbol -> (Expr -> Body) -> [Var] -> Var -> (C.AltCon, [Var], C.CoreExpr)
     mkAlt x ctor _args dx (C.DataAlt d, xs, e)
-      = Def x {- (toArgs id args) -} d (Just $ varRType dx) (toArgs Just xs) 
-      . ctor 
-      . (`subst1` (F.symbol dx, F.mkEApp (GM.namedLocSymbol d) (F.eVar <$> xs))) 
-     <$> coreToLg e
+    -- YL : Def type is messed up. The expression is correct but does not typecheck until Def is fixed.
+      = undefined -- Def x {- (toArgs id args) -} d (Just $ varRType dx) (toArgs Just xs) 
+     --  . ctor 
+     --  . (`subst1` (F.symbol dx, F.mkEApp (GM.namedLocSymbol d) (F.eVar <$> xs))) 
+     -- <$> coreToLg e
     mkAlt _ _ _ _ alt 
       = throw $ "Bad alternative" ++ GM.showPpr alt
 
@@ -195,21 +204,27 @@ coreAltToDef x z zs y t alts
       eDef   <- ctor <$> coreToLg e
       -- let ys  = toArgs id args
       let dxt = Just (varRType dx)
-      return  [ Def x {- ys -} d dxt (defArgs x ts) eDef | (d, ts) <- dtss ]
+      return  [ Def x {- ys -} d dxt undefined -- (defArgs x ts) 
+                eDef | (d, ts) <- dtss ]
     
     mkDef _ _ _ _ _ _ = 
       return [] 
 
-toArgs :: Reftable r => (Located (RRType r) -> b) -> [Var] -> [(Symbol, b)]
-toArgs f args = [(symbol x, f $ varRType x) | x <- args]
+-- YL: all these coreToDef .... are for measures
+-- YL 2 : to binders [(head, a), (tail, [a])]
+toArgs :: Reftable LHSymbol r => (Located (RRType r) -> b) -> [Var] -> [(FixSymbol, b)]
+toArgs f args = [(symbol . getName $  x, f $ varRType x) | x <- args]
 
-defArgs :: Monoid r => LocSymbol -> [Type] -> [(Symbol, Maybe (Located (RRType r)))]
+defArgs :: Monoid r => LocSymbol LHSymbol -> [Type] -> [(FixSymbol, Maybe (Located (RRType r)))]
 defArgs x     = zipWith (\i t -> (defArg i, defRTyp t)) [0..] 
   where 
-    defArg    = tempSymbol (val x)
+    defArg    = tempSymbol (symbol $ val x)
     defRTyp   = Just . F.atLoc x . ofType
 
-coreToDef :: Reftable r => LocSymbol -> Var -> C.CoreExpr
+-- YL: the expression passed in is the body of the measure (probably)
+-- LocSymbol can be a GHC Symbol!!!
+-- or maybe LHSymbol?
+coreToDef :: Reftable LHSymbol r => LocSymbol LHSymbol -> Var -> C.CoreExpr
           -> LogicM [Def (Located (RRType r)) DataCon]
 coreToDef x _ e                   = go [] $ inlinePreds $ simplify e
   where
@@ -222,7 +237,8 @@ coreToDef x _ e                   = go [] $ inlinePreds $ simplify e
 
     inlinePreds   = inline (eqType boolTy . GM.expandVarType)
 
-measureFail       :: LocSymbol -> String -> a
+-- YL : Test if this is the one that gets outputted
+measureFail       :: LocSymbol LHSymbol -> String -> a
 measureFail x msg = panic sp e 
   where 
     sp            = Just (GM.fSrcSpan x)
@@ -240,10 +256,12 @@ isMeasureArg x
     tcMb                = tyConAppTyCon_maybe t
 
 
-varRType :: (Reftable r) => Var -> Located (RRType r)
+varRType :: (Reftable LHSymbol r) => Var -> Located (RRType r)
 varRType = GM.varLocInfo ofType
 
-coreToFun :: LocSymbol -> Var -> C.CoreExpr ->  LogicM ([Var], Either Expr Expr)
+-- YL : see makeHaskellInlines. creates a bunch of aliases
+-- most functions in the form of coreTo... should return F LHSymbol, where F is a type constructor
+coreToFun :: LocSymbol LHSymbol -> Var -> C.CoreExpr ->  LogicM ([Var], Either (Expr LHSymbol)  (Expr LHSymbol))
 coreToFun _ _v e = go [] $ normalize e
   where
     go acc (C.Lam x e)  | isTyVar    x = go acc e
@@ -256,11 +274,11 @@ coreToFun _ _v e = go [] $ normalize e
 instance Show C.CoreExpr where
   show = GM.showPpr
 
-coreToLogic :: C.CoreExpr -> LogicM Expr
+coreToLogic :: C.CoreExpr -> LogicM (Expr LHSymbol)
 coreToLogic cb = coreToLg (normalize cb)
 
 
-coreToLg :: C.CoreExpr -> LogicM Expr
+coreToLg :: C.CoreExpr -> LogicM (Expr LHSymbol)
 coreToLg (C.Let b e)
   = subst1 <$> coreToLg e <*>  makesub b
 coreToLg (C.Tick _ e)          = coreToLg e
@@ -275,6 +293,8 @@ coreToLg (C.Case e b _ alts)
   | eqType (GM.expandVarType b) boolTy  = checkBoolAlts alts >>= coreToIte e
 coreToLg (C.Lam x e)           = do p     <- coreToLg e
                                     tce   <- lsEmb <$> getState
+                                    -- YL: I think we should use FixSymbol for this one.
+                                    -- ELam goes through multiple stages of renaming
                                     return $ ELam (symbol x, typeSort tce (GM.expandVarType x)) p
 coreToLg (C.Case e b _ alts)   = do p <- coreToLg e
                                     casesToLg b p alts
@@ -289,7 +309,7 @@ coreToLg e                     = throw ("Cannot transform to Logic:\t" ++ GM.sho
 
 
 
-coerceToLg :: Coercion -> LogicM (Sort, Sort)
+coerceToLg :: Coercion -> LogicM (Sort LHSymbol, Sort LHSymbol)
 coerceToLg = typeEqToLg . coercionTypeEq
 
 coercionTypeEq :: Coercion -> (Type, Type)
@@ -298,9 +318,11 @@ coercionTypeEq co
                        coercionKind co
   = (s, t)
 
-typeEqToLg :: (Type, Type) -> LogicM (Sort, Sort)
+typeEqToLg :: (Type, Type) -> LogicM (Sort LHSymbol, Sort LHSymbol)
 typeEqToLg (s, t) = do
   tce   <- gets lsEmb
+  -- YL : expandTypeSynonyms is from GHC
+  -- if we want to keep type information, we'll have to construct lsEmb properly. TycEnv?
   let tx = typeSort tce . expandTypeSynonyms
   return $ F.notracepp "TYPE-EQ-TO-LOGIC" (tx s, tx t)
 
@@ -315,11 +337,11 @@ checkBoolAlts [(C.DataAlt true, [], etrue), (C.DataAlt false, [], efalse)]
 checkBoolAlts alts
   = throw ("checkBoolAlts failed on " ++ GM.showPpr alts)
 
-casesToLg :: Var -> Expr -> [C.CoreAlt] -> LogicM Expr
+casesToLg :: Var -> Expr LHSymbol -> [C.CoreAlt] -> LogicM (Expr LHSymbol)
 casesToLg v e alts = mapM (altToLg e) normAlts >>= go
   where
     normAlts       = normalizeAlts alts
-    go :: [(C.AltCon, Expr)] -> LogicM Expr
+    go :: [(C.AltCon, Expr LHSymbol)] -> LogicM (Expr LHSymbol)
     go [(_,p)]     = return (p `subst1` su)
     go ((d,p):dps) = do c <- checkDataAlt d e
                         e' <- go dps
@@ -327,7 +349,7 @@ casesToLg v e alts = mapM (altToLg e) normAlts >>= go
     go []          = panic (Just (getSrcSpan v)) "Unexpected empty cases in casesToLg"
     su             = (symbol v, e)
 
-checkDataAlt :: C.AltCon -> Expr -> LogicM Expr
+checkDataAlt :: C.AltCon -> Expr LHSymbol -> LogicM (Expr LHSymbol)
 checkDataAlt (C.DataAlt d) e = return $ EApp (EVar (makeDataConChecker d)) e
 checkDataAlt C.DEFAULT     _ = return PTrue
 checkDataAlt (C.LitAlt l)  e 
@@ -341,9 +363,10 @@ normalizeAlts alts      = ctorAlts ++ defAlts
     (defAlts, ctorAlts) = L.partition isDefault alts 
     isDefault (c,_,_)   = c == C.DEFAULT 
 
-altToLg :: Expr -> C.CoreAlt -> LogicM (C.AltCon, Expr)
+altToLg :: Expr LHSymbol -> C.CoreAlt -> LogicM (C.AltCon, Expr LHSymbol)
 altToLg de (a@(C.DataAlt d), xs, e) = do 
   p  <- coreToLg e
+  -- YL: dataconmap!
   dm <- gets lsDCMap
   let su = mkSubst $ concat [ dataConProj dm de d x i | (x, i) <- zip xs [1..]]
   return (a, subst su p)
@@ -351,23 +374,24 @@ altToLg de (a@(C.DataAlt d), xs, e) = do
 altToLg _ (a, _, e)
   = (a, ) <$> coreToLg e
 
-dataConProj :: DataConMap -> Expr -> DataCon -> Var -> Int -> [(Symbol, Expr)]
-dataConProj dm de d x i = [(symbol x, t), (GM.simplesymbol x, t)]
-  where
-    t | primDataCon  d  = de 
-      | otherwise       = EApp (EVar $ makeDataConSelector (Just dm) d i) de
+-- YL: used to build a substitution list. should be of the bigger symbol type
+dataConProj :: DataConMap -> Expr LHSymbol -> DataCon -> Var -> Int -> [(Symbol LHSymbol, Expr LHSymbol)]
+dataConProj dm de d x i = undefined -- [(symbol x, t), (GM.simplesymbol x, t)]
+  -- where
+  --   t | primDataCon  d  = de 
+  --     | otherwise       = EApp (EVar $ makeDataConSelector (Just dm) d i) de
 
 primDataCon :: DataCon -> Bool 
 primDataCon d = d == intDataCon
 
-coreToIte :: C.CoreExpr -> (C.CoreExpr, C.CoreExpr) -> LogicM Expr
+coreToIte :: C.CoreExpr -> (C.CoreExpr, C.CoreExpr) -> LogicM (Expr LHSymbol)
 coreToIte e (efalse, etrue)
   = do p  <- coreToLg e
        e1 <- coreToLg efalse
        e2 <- coreToLg etrue
        return $ EIte p e2 e1
 
-toPredApp :: C.CoreExpr -> LogicM Expr
+toPredApp :: C.CoreExpr -> LogicM (Expr LHSymbol)
 toPredApp p = go . Misc.mapFst opSym . splitArgs $ p
   where
     opSym = fmap GM.dropModuleNames . tomaybesymbol
@@ -389,22 +413,24 @@ toPredApp p = go . Misc.mapFst opSym . splitArgs $ p
       = POr  <$> mapM coreToLg es
       | f == symbol ("and" :: String)
       = PAnd <$> mapM coreToLg es
+    -- YL : not interpreted as part of the logic
     go (_, _)
       = toLogicApp p
 
-toLogicApp :: C.CoreExpr -> LogicM Expr
+toLogicApp :: C.CoreExpr -> LogicM (Expr LHSymbol)
 toLogicApp e = do
   let (f, es) = splitArgs e
   case f of
     C.Var _ -> do args <- mapM coreToLg es
                   lmap <- lsSymMap <$> getState
+                  -- YL : probably safe to inject
                   def  <- (`mkEApp` args) <$> tosymbol f
                   ((\x -> makeApp def lmap x args) <$> (tosymbol' f))
     _       -> do fe   <- coreToLg f
                   args <- mapM coreToLg es
                   return $ foldl EApp fe args
 
-makeApp :: Expr -> LogicMap -> Located Symbol-> [Expr] -> Expr
+makeApp :: Expr LHSymbol -> LogicMap -> Located (Symbol LHSymbol) -> [Expr LHSymbol] -> Expr LHSymbol
 makeApp _ _ f [e] | val f == symbol ("GHC.Num.negate" :: String)
   = ENeg e
 
@@ -415,13 +441,13 @@ makeApp def lmap f es
   = eAppWithMap lmap f es def
   -- where msg = "makeApp f = " ++ show f ++ " es = " ++ show es ++ " def = " ++ show def
 
-eVarWithMap :: Id -> LogicMap -> LogicM Expr
+eVarWithMap :: Id -> LogicMap -> LogicM (Expr LHSymbol)
 eVarWithMap x lmap = do
   f'     <- tosymbol' (C.Var x :: C.CoreExpr)
   -- let msg = "eVarWithMap x = " ++ show x ++ " f' = " ++ show f'
   return $ eAppWithMap lmap f' [] (varExpr x)
 
-varExpr :: Var -> Expr
+varExpr :: Var -> Expr LHSymbol
 varExpr x
   | isPolyCst t = mkEApp (dummyLoc s) []
   | otherwise   = EVar s
@@ -439,7 +465,7 @@ isCst (FunTy _ _)    = False
 isCst _              = True
 
 
-brels :: M.HashMap Symbol Brel
+brels :: M.HashMap FixSymbol Brel
 brels = M.fromList [ (symbol ("==" :: String), Eq)
                    , (symbol ("/=" :: String), Ne)
                    , (symbol (">=" :: String), Ge)
@@ -448,7 +474,7 @@ brels = M.fromList [ (symbol ("==" :: String), Eq)
                    , (symbol ("<" :: String) , Lt)
                    ]
 
-bops :: M.HashMap Symbol Bop
+bops :: M.HashMap FixSymbol Bop
 bops = M.fromList [ (numSymbol "+", Plus)
                   , (numSymbol "-", Minus)
                   , (numSymbol "*", Times)
@@ -456,7 +482,7 @@ bops = M.fromList [ (numSymbol "+", Plus)
                   , (numSymbol "%", Mod)
                   ]
   where
-    numSymbol :: String -> Symbol
+    numSymbol :: String -> FixSymbol
     numSymbol =  symbol . (++) "GHC.Num."
 
 splitArgs :: C.Expr t -> (C.Expr t, [C.Arg t])
@@ -469,25 +495,25 @@ splitArgs e = (f, reverse es)
     go (C.App f e) = (f', e:es) where (f', es) = go f
     go f           = (f, [])
 
-tomaybesymbol :: C.CoreExpr -> Maybe Symbol
-tomaybesymbol (C.Var x) = Just $ symbol x
+tomaybesymbol :: C.CoreExpr -> Maybe (Symbol LHSymbol)
+tomaybesymbol (C.Var x) = Just . LHVar $ x
 tomaybesymbol _         = Nothing
 
-tosymbol :: C.CoreExpr -> LogicM (Located Symbol)
+tosymbol :: C.CoreExpr -> LogicM (Located (Symbol LHSymbol))
 tosymbol e
  = case tomaybesymbol e of
     Just x -> return $ dummyLoc x
     _      -> throw ("Bad Measure Definition:\n" ++ GM.showPpr e ++ "\t cannot be applied")
 
-tosymbol' :: C.CoreExpr -> LogicM (Located Symbol)
-tosymbol' (C.Var x) = return $ dummyLoc $ symbol x 
+tosymbol' :: C.CoreExpr -> LogicM (Located (Symbol LHSymbol))
+tosymbol' (C.Var x) = return $ dummyLoc . LHVar $ x 
 tosymbol' e        = throw ("Bad Measure Definition:\n" ++ GM.showPpr e ++ "\t cannot be applied")
 
-makesub :: C.CoreBind -> LogicM (Symbol, Expr)
-makesub (C.NonRec x e) =  (symbol x,) <$> coreToLg e
+makesub :: C.CoreBind -> LogicM (Symbol LHSymbol, Expr LHSymbol)
+makesub (C.NonRec x e) =  (F.AS $ LHVar x,) <$> coreToLg e
 makesub  _             = throw "Cannot make Logical Substitution of Recursive Definitions"
 
-mkLit :: Literal -> Maybe Expr
+mkLit :: Literal -> Maybe (Expr LHSymbol)
 mkLit (LitNumber _ n _) = mkI n
 -- mkLit (MachInt64  n)    = mkI n
 -- mkLit (MachWord   n)    = mkI n
@@ -499,16 +525,16 @@ mkLit (MachStr    s)    = mkS s
 mkLit (MachChar   c)    = mkC c 
 mkLit _                 = Nothing -- ELit sym sort
 
-mkI :: Integer -> Maybe Expr
+mkI :: Integer -> Maybe (Expr LHSymbol)
 mkI = Just . ECon . I
 
-mkR :: Rational -> Maybe Expr
+mkR :: Rational -> Maybe (Expr LHSymbol)
 mkR                    = Just . ECon . F.R . fromRational
 
-mkS :: ByteString -> Maybe Expr
+mkS :: ByteString -> Maybe (Expr LHSymbol)
 mkS                    = Just . ESym . SL  . decodeUtf8With lenientDecode
 
-mkC :: Char -> Maybe Expr
+mkC :: Char -> Maybe (Expr LHSymbol)
 mkC                    = Just . ECon . (`F.L` F.charSort)  . repr 
   where 
     repr               = T.pack . show . Data.Char.ord 

@@ -8,7 +8,7 @@ module Language.Haskell.Liquid.Bare.Misc
   , runMapTyVars
   , matchKindArgs
   -- , symbolRTyVar
-  -- , simpleSymbolVar
+  , simpleSymbolVar
   , hasBoolResult
   , isKind
   ) where
@@ -181,8 +181,8 @@ joinVar vs (v,s,t) = case L.find ((== showPpr v) . showPpr) vs of
                        Just v' -> (v',s,t)
                        Nothing -> (v,s,t)
 
--- simpleSymbolVar :: Var -> (F.Symbol LHSymbol)
--- simpleSymbolVar  = dropModuleNames . F.symbol . showPpr . getName
+simpleSymbolVar :: Var -> F.FixSymbol
+simpleSymbolVar  = dropModuleNames . F.symbol . showPpr . getName
 
 hasBoolResult :: Type -> Bool
 hasBoolResult (ForAllTy _ t) = hasBoolResult t

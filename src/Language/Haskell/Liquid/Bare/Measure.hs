@@ -47,6 +47,7 @@ import qualified Language.Haskell.Liquid.Bare.Expand   as Bare
 import qualified Language.Haskell.Liquid.Bare.DataType as Bare 
 import qualified Language.Haskell.Liquid.Bare.ToBare   as Bare 
 
+-- YL: operates on BareMeasures
 --------------------------------------------------------------------------------
 makeHaskellMeasures :: GhcSrc -> Bare.TycEnv -> LogicMap -> Ms.BareSpec
                     -> [Measure (Located BareType) LocSymbol]
@@ -58,7 +59,7 @@ makeHaskellMeasures src tycEnv lmap spec
     cbs   = nonRecCoreBinds   (giCbs src) 
     mSyms = S.toList (Ms.hmeas spec)
   
-makeMeasureDefinition :: Bare.TycEnv -> LogicMap -> [Ghc.CoreBind] -> LocSymbol 
+makeMeasureDefinition :: Bare.TycEnv -> LogicMap -> [Ghc.CoreBind] -> F.FixSymbol
                       -> Measure LocSpecType Ghc.DataCon
 makeMeasureDefinition tycEnv lmap cbs x = 
   case GM.findVarDef (val x) cbs of

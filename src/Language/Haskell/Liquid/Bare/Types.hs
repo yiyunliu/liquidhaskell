@@ -117,7 +117,9 @@ data TycEnv = TycEnv
   , tcName        :: !ModName
   }
 
-type DataConMap = M.HashMap (F.Symbol LHSymbol, Int) (F.Symbol LHSymbol)
+-- YL : see dataConMap. how is it consumed? are the fields/datacons injected?
+-- YL 2 : consumed by dataConProj, makedataconselector
+type DataConMap = M.HashMap (F.Symbol LHSymbol, Int) F.FixSymbol
 
 -------------------------------------------------------------------------------
 -- | Intermediate representation for Measure information 

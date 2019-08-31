@@ -1635,6 +1635,7 @@ instance (Show tv, Show ty) => Show (RTAlias tv ty) where
 --------------------------------------------------------------------------------
 -- | From Old Fixpoint ---------------------------------------------------------
 --------------------------------------------------------------------------------
+-- YL : converting Ghc Type to fixpoint Sort
 typeSort :: TCEmb LHSymbol TyCon -> Type -> Sort LHSymbol
 typeSort tce = go
   where

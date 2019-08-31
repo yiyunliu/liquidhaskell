@@ -1195,6 +1195,7 @@ data DataName
 
 -- | Data Constructor
 data DataCtor = DataCtor
+  -- YL : everything should be fixsymbol
   { dcName   :: (F.LocSymbol LHSymbol)            -- ^ DataCon name
   , dcTyVars :: [F.Symbol LHSymbol]             -- ^ Type parameters
   , dcTheta  :: [BareType]             -- ^ The GHC ThetaType corresponding to DataCon.dataConSig
@@ -2111,6 +2112,8 @@ data Def ty ctor = Def
   { measure :: (F.LocSymbol LHSymbol)
   , ctor    :: ctor
   , dsort   :: Maybe ty
+  -- YL : FixSymbol. Change them to GHC Symbol later?
+  -- [car :: a, cdr :: [a]]
   , binds   :: [(Symbol, Maybe ty)]    -- measure binders: the ADT argument fields
   , body    :: Body
   } deriving (Show, Data, Typeable, Generic, Eq, Functor)

@@ -689,25 +689,24 @@ ignoreCoreBinds vs cbs
     go (Rec xes)      = [Rec (filter ((`notElem` vs) . fst) xes)]
 
 
-findVarDef :: Symbol LHSymbol -> [CoreBind] -> Maybe (Var, CoreExpr)
-findVarDef (FS _) _ = Nothing
-findVarDef (AS (LHVar x)) cbs = case xCbs of
+findVarDef :: F.FixSymbol -> [CoreBind] -> Maybe (Var, CoreExpr)
+findVarDef x cbs = case xCbs of
                      (NonRec v def   : _ ) -> Just (v, def)
                      (Rec [(v, def)] : _ ) -> Just (v, def)
                      _                     -> Nothing
   where
-    xCbs            = [ cb | cb <- concatMap unRec cbs, x `elem` binders cb]
+    xCbs            = [ cb | cb <- concatMap unRec cbs, x `elem` coreBindSymbols cb]
     unRec (Rec xes) = [NonRec x es | (x,es) <- xes]
     unRec nonRec    = [nonRec]
-findVarDef (AS _) _ = Nothing
 
 
 
--- coreBindSymbols :: CoreBind -> [Symbol LHSymbol]
--- coreBindSymbols = map (dropModuleNames . simplesymbol) . binders
 
--- simplesymbol :: (NamedThing t) => t -> Symbol LHSymbol
--- simplesymbol = symbol . getName
+coreBindSymbols :: CoreBind -> [F.FixSymbol]
+coreBindSymbols = map (dropModuleNames . simplesymbol) . binders
+
+simplesymbol :: (NamedThing t) => t -> F.FixSymbol
+simplesymbol = symbol . getName
 
 binders :: Bind a -> [a]
 binders (NonRec z _) = [z]
