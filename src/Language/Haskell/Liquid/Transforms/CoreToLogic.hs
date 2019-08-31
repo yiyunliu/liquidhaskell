@@ -295,7 +295,8 @@ coreToLg (C.Lam x e)           = do p     <- coreToLg e
                                     tce   <- lsEmb <$> getState
                                     -- YL: I think we should use FixSymbol for this one.
                                     -- ELam goes through multiple stages of renaming
-                                    return $ ELam (symbol x, typeSort tce (GM.expandVarType x)) p
+                                    return $ ELam (F.AS . LHRefSym $ undefined -- symbol x 
+                                                  , typeSort tce (GM.expandVarType x)) p
 coreToLg (C.Case e b _ alts)   = do p <- coreToLg e
                                     casesToLg b p alts
 coreToLg (C.Lit l)             = case mkLit l of
@@ -345,12 +346,14 @@ casesToLg v e alts = mapM (altToLg e) normAlts >>= go
     go [(_,p)]     = return (p `subst1` su)
     go ((d,p):dps) = do c <- checkDataAlt d e
                         e' <- go dps
+
                         return (EIte c p e' `subst1` su)
     go []          = panic (Just (getSrcSpan v)) "Unexpected empty cases in casesToLg"
-    su             = (symbol v, e)
+    -- YL : the definition of su here has to be consistent with the construction of p  (see the helper function "go")
+    su             = (F.AS . LHVar $ v, e)
 
 checkDataAlt :: C.AltCon -> Expr LHSymbol -> LogicM (Expr LHSymbol)
-checkDataAlt (C.DataAlt d) e = return $ EApp (EVar (makeDataConChecker d)) e
+checkDataAlt (C.DataAlt d) e = return $ EApp (EVar (F.AS . LHRefSym $ makeDataConChecker d)) e
 checkDataAlt C.DEFAULT     _ = return PTrue
 checkDataAlt (C.LitAlt l)  e 
   | Just le <- mkLit l       = return (EEq le e)  
@@ -394,7 +397,7 @@ coreToIte e (efalse, etrue)
 toPredApp :: C.CoreExpr -> LogicM (Expr LHSymbol)
 toPredApp p = go . Misc.mapFst opSym . splitArgs $ p
   where
-    opSym = fmap GM.dropModuleNames . tomaybesymbol
+    opSym = fmap (GM.dropModuleNames . symbol) . tomaybesymbol
     go (Just f, [e1, e2])
       | Just rel <- M.lookup f brels
       = PAtom rel <$> coreToLg e1 <*> coreToLg e2
@@ -424,6 +427,7 @@ toLogicApp e = do
     C.Var _ -> do args <- mapM coreToLg es
                   lmap <- lsSymMap <$> getState
                   -- YL : probably safe to inject
+                  -- why converting to strings so eagerly
                   def  <- (`mkEApp` args) <$> tosymbol f
                   ((\x -> makeApp def lmap x args) <$> (tosymbol' f))
     _       -> do fe   <- coreToLg f
@@ -431,10 +435,12 @@ toLogicApp e = do
                   return $ foldl EApp fe args
 
 makeApp :: Expr LHSymbol -> LogicMap -> Located (Symbol LHSymbol) -> [Expr LHSymbol] -> Expr LHSymbol
-makeApp _ _ f [e] | val f == symbol ("GHC.Num.negate" :: String)
+-- YL : please make sure it is consistent. any chance of comparing directly with GHC.Num.negate from tyswiredin?
+makeApp _ _ f [e] | val f == undefined symbol ("GHC.Num.negate" :: String)
   = ENeg e
 
-makeApp _ _ f [e1, e2] | Just op <- M.lookup (val f) bops
+-- YL : Symbol s -> String coercion
+makeApp _ _ f [e1, e2] | Just op <- M.lookup (val f) (undefined bops)
   = EBin op e1 e2
 
 makeApp def lmap f es

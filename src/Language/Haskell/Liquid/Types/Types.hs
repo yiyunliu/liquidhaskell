@@ -339,6 +339,8 @@ type Symbol    = F.Symbol LHSymbol
 -- Ideally, this bandaid should be replaced so we don't have these
 -- hacky corner cases.
 
+-- YL : by looking at makeLogicMap, it shouldn't hold LHSymbol..
+-- but since it's a monoid, it can always be extended.
 data LogicMap = LM
   { lmSymDefs  :: M.HashMap F.FixSymbol LMap        -- ^ Map from symbols to equations they define
   , lmVarSyms  :: M.HashMap Var (Maybe F.FixSymbol) -- ^ Map from (lifted) Vars to `Symbol`; see:
@@ -366,12 +368,13 @@ toLogicMap ls = mempty {lmSymDefs = M.fromList $ map toLMap ls}
   where
     toLMap (x, ys, e) = (F.val x, LMap {lmVar = x, lmArgs = ys, lmExpr = e})
 
-eAppWithMap :: LogicMap -> F.Located F.FixSymbol -> [Expr] -> Expr -> Expr
+-- YL : should be Symbol LHSymbol, according to its invocation in makeApp
+eAppWithMap :: LogicMap -> F.Located (F.Symbol LHSymbol) -> [Expr] -> Expr -> Expr
 eAppWithMap lmap f es def
-  | Just (LMap _ xs e) <- M.lookup (F.val f) (lmSymDefs lmap)
+  | Just (LMap _ xs e) <- M.lookup (undefined F.val f) (lmSymDefs lmap)
   , length xs == length es
   = F.subst (F.mkSubst $ zip (F.AS . LHRefSym <$> xs) es) e
-  | Just (LMap _ xs e) <- M.lookup (F.val f) (lmSymDefs lmap)
+  | Just (LMap _ xs e) <- M.lookup (undefined F.val f) (lmSymDefs lmap)
   , isApp e
   = F.subst (F.mkSubst $ zip (F.AS . LHRefSym <$> xs) es) $ dropApp e (length xs - length es)
   | otherwise
