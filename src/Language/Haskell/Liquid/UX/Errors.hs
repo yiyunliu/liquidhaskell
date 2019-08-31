@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections     #-}
@@ -19,17 +20,19 @@ import           Language.Haskell.Liquid.Types.RefType
 import           Language.Haskell.Liquid.Transforms.Simplify
 import           Language.Haskell.Liquid.UX.Tidy
 import           Language.Haskell.Liquid.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 import qualified Language.Haskell.Liquid.GHC.Misc    as GM 
 import qualified Language.Haskell.Liquid.Misc        as Misc 
 import qualified Language.Fixpoint.Misc              as Misc 
 
 -- import Debug.Trace
 
-type Ctx  = M.HashMap F.Symbol SpecType
-type CtxM = M.HashMap F.Symbol (WithModel SpecType)
+-- YL : need to think twice: should we parameterize them?
+type Ctx  = M.HashMap (F.Symbol LHSymbol) SpecType
+type CtxM = M.HashMap (F.Symbol LHSymbol) (WithModel SpecType)
 
 ------------------------------------------------------------------------
-tidyError :: Config -> F.FixSolution -> Error -> Error
+tidyError :: Config -> F.FixSolution LHSymbol  -> Error -> Error
 ------------------------------------------------------------------------
 tidyError cfg sol
   = fmap (tidySpecType tidy) 
@@ -42,7 +45,7 @@ configTidy cfg
   | shortNames cfg = F.Lossy 
   | otherwise      = F.Full 
 
-tidyErrContext :: F.Tidy -> F.FixSolution -> Error -> Error
+tidyErrContext :: F.Tidy -> F.FixSolution LHSymbol -> Error -> Error
 tidyErrContext k _ e@(ErrSubType {})
   = e { ctx = c', tact = F.subst θ tA, texp = F.subst θ tE }
     where
@@ -71,24 +74,26 @@ tidyErrContext _ _ e
   = e
 
 --------------------------------------------------------------------------------
-tidyCtx       :: F.Tidy -> [F.Symbol] -> Ctx -> (F.Subst, Ctx)
+tidyCtx       :: F.Tidy -> [F.Symbol LHSymbol] -> Ctx -> (F.Subst LHSymbol, Ctx)
 --------------------------------------------------------------------------------
-tidyCtx k xs m = (θ1 `mappend` θ2, M.fromList yts)
-  where
-    yts        = [tBind x (tidySpecType k t) | (x, t) <- xt2s]
-    (θ2, xt2s) = tidyREnv xt1s 
-    (θ1, xt1s) = tidyTemps xts  
-    xts        = sliceREnv xs m 
-    tBind x t  = (x', shiftVV t x') where x' = F.tidySymbol x
+-- YL : we need to define a tidy function for (Symbol LHSymbol). 
+tidyCtx k xs m = undefined -- (θ1 `mappend` θ2, M.fromList yts)
+  -- where
+  --   yts        = [tBind x (tidySpecType k t) | (x, t) <- xt2s]
+  --   (θ2, xt2s) = tidyREnv xt1s 
+  --   (θ1, xt1s) = tidyTemps xts  
+  --   xts        = sliceREnv xs m
+  --   -- YL : probably need a new tidySymbol function defined for Symbol LHSymbol?
+  --   tBind x t  = (x', shiftVV t x') where x' = F.tidySymbol x
 
-tidyCtxM       :: [F.Symbol] -> CtxM -> (F.Subst, CtxM)
-tidyCtxM xs m  = (θ, M.fromList yts)
-  where
-    yts       = [tBind x t | (x, t) <- xts]
-    (θ, xts)  = tidyTemps $ second (fmap stripReft) <$> tidyREnvM xs m
-    tBind x t = (x', fmap (\t -> shiftVV t x') t) where x' = F.tidySymbol x
+tidyCtxM       :: [F.Symbol LHSymbol] -> CtxM -> (F.Subst LHSymbol, CtxM)
+tidyCtxM xs m  = undefined -- (θ, M.fromList yts)
+  -- where
+  --   yts       = [tBind x t | (x, t) <- xts]
+  --   (θ, xts)  = tidyTemps $ second (fmap stripReft) <$> tidyREnvM xs m
+  --   tBind x t = (x', fmap (\t -> shiftVV t x') t) where x' = F.tidySymbol x
 
-tidyREnv :: [(F.Symbol, SpecType)] -> (F.Subst, [(F.Symbol, SpecType)])
+tidyREnv :: [(F.Symbol LHSymbol, SpecType)] -> (F.Subst LHSymbol, [(F.Symbol LHSymbol, SpecType)])
 tidyREnv xts    = (θ, second (F.subst θ) <$> zts)
   where 
     θ           = expandVarDefs yes 
@@ -100,7 +105,7 @@ tidyREnv xts    = (θ, second (F.subst θ) <$> zts)
 --   should return 
 --     [x1 := 'x2 + x3, x5 := (x2 + x3) + 1]
 
-expandVarDefs :: [(F.Symbol, F.Expr)] -> F.Subst 
+expandVarDefs :: [(F.Symbol LHSymbol, F.Expr LHSymbol)] -> F.Subst LHSymbol
 expandVarDefs      = go mempty 
   where 
     go !su xes     
@@ -113,10 +118,10 @@ expandVarDefs      = go mempty
        (yes, zes)  = L.partition (isDef xs . snd) xes 
     isDef xs e     = all (not . (`S.member` xs)) (F.syms e) 
 
-isInline :: (a, SpecType) -> Either (a, F.Expr) (a, SpecType) 
+isInline :: (a, SpecType) -> Either (a, F.Expr LHSymbol) (a, SpecType) 
 isInline (x, t) = either (Left . (x,)) (Right . (x,)) (isInline' t) 
 
-isInline' :: SpecType -> Either F.Expr SpecType 
+isInline' :: SpecType -> Either (F.Expr LHSymbol) SpecType 
 isInline' t = case ro of 
                 Nothing -> Right t' 
                 Just rr -> case F.isSingletonReft (ur_reft rr) of 
@@ -137,14 +142,14 @@ stripRType st = (t', ro)
     ro        = stripRTypeBase  t
     t         = simplifyBounds st
 
-sliceREnv :: [F.Symbol] -> Ctx -> [(F.Symbol, SpecType)]
+sliceREnv :: [F.Symbol LHSymbol] -> Ctx -> [(F.Symbol LHSymbol, SpecType)]
 sliceREnv xs m = [(x, t) | x <- xs', t <- maybeToList (M.lookup x m), ok t]
   where
     xs'       = expandFix deps xs
     deps y    = maybe [] (F.syms . rTypeReft) (M.lookup y m)
     ok        = not . isFunTy
 
-tidyREnvM      :: [F.Symbol] -> CtxM -> [(F.Symbol, WithModel SpecType)]
+tidyREnvM      :: [F.Symbol LHSymbol] -> CtxM -> [(F.Symbol LHSymbol, WithModel SpecType)]
 tidyREnvM xs m = [(x, t) | x <- xs', t <- maybeToList (M.lookup x m), ok t]
   where
     xs'       = expandFix deps xs
@@ -159,7 +164,7 @@ expandFix f               = S.toList . go S.empty
       | x `S.member` seen = go seen xs
       | otherwise         = go (S.insert x seen) (f x ++ xs)
 
-tidyTemps     :: (F.Subable t) => [(F.Symbol, t)] -> (F.Subst, [(F.Symbol, t)])
+tidyTemps     :: (F.Subable LHSymbol t) => [(F.Symbol LHSymbol, t)] -> (F.Subst LHSymbol, [(F.Symbol LHSymbol, t)])
 tidyTemps xts = (θ, [(txB x, txTy t) | (x, t) <- xts])
   where
     txB  x    = M.lookupDefault x x m
@@ -169,8 +174,8 @@ tidyTemps xts = (θ, [(txB x, txTy t) | (x, t) <- xts])
     yzs       = zip ys niceTemps
     ys        = [ x | (x,_) <- xts, GM.isTmpSymbol x]
 
-niceTemps     :: [F.Symbol]
-niceTemps     = mkSymbol <$> xs ++ ys
+niceTemps     :: [F.Symbol LHSymbol]
+niceTemps     = F.AS . LHRefSym . mkSymbol <$> xs ++ ys
   where
     mkSymbol  = F.symbol . ('?' :)
     xs        = Misc.single <$> ['a' .. 'z']

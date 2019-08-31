@@ -7,6 +7,7 @@ module Language.Haskell.Liquid.Types.Equality where
 
 import qualified Language.Fixpoint.Types as F
 import           Language.Haskell.Liquid.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 import qualified Language.Haskell.Liquid.GHC.API as Ghc
 
 import Control.Monad.Writer.Lazy
@@ -66,20 +67,21 @@ compareRType i1 i2 = res && unify vs
     go _t1 _t2 
       = return False 
 
+-- YL : comparing if two refinement types are equal?
 class REq a where 
   (=*=) :: a -> a -> Bool 
 
 instance REq t2 => REq (Ref t1 t2) where
     (RProp _ t1) =*= (RProp _ t2) = t1 =*= t2 
 
-instance REq (UReft F.Reft) where
+instance REq (UReft (F.Reft LHSymbol)) where
   (MkUReft r1 p1 _) =*= (MkUReft r2 p2 _)
      = r1 =*= r2 && p1 == p2
   
-instance REq F.Reft where 
+instance REq (F.Reft LHSymbol) where 
   F.Reft (v1, e1) =*= F.Reft (v2, e2) = F.subst1 e1 (v1, F.EVar v2) =*= e2 
 
-instance REq F.Expr where 
+instance REq (F.Expr LHSymbol) where 
   e1 =*= e2 = go (F.simplify e1) (F.simplify e2)
     where go r1 r2 = F.notracepp ("comparing " ++ showpp (F.toFix r1, F.toFix r2)) $ r1 == r2 
 

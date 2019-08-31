@@ -31,21 +31,21 @@ makeRTypeBase (TyConApp c ts) x
 makeRTypeBase _              _
   = panic Nothing "RefType : makeRTypeBase"
 
-literalFRefType :: Literal -> RType RTyCon RTyVar F.Reft
+literalFRefType :: Literal -> RType RTyCon RTyVar (F.Reft LHSymbol)
 literalFRefType l
   = makeRTypeBase (literalType l) (literalFReft l)
 
-literalFReft :: Literal -> F.Reft
+literalFReft :: Literal -> F.Reft LHSymbol
 literalFReft l = maybe mempty mkReft $ mkLit l
 
-mkReft :: F.Expr -> F.Reft
+mkReft :: F.Expr LHSymbol -> F.Reft LHSymbol
 mkReft = F.exprReft
 
 -- | `literalConst` returns `Nothing` for unhandled lits because
 --    otherwise string-literals show up as global int-constants
 --    which blow up qualifier instantiation.
 
-literalConst :: F.TCEmb TC.TyCon -> Literal -> (F.Sort, Maybe F.Expr)
+literalConst :: F.TCEmb LHSymbol TC.TyCon -> Literal -> (F.Sort LHSymbol, Maybe (F.Expr LHSymbol))
 literalConst tce l = (t, mkLit l)
   where
     t              = typeSort tce $ literalType l

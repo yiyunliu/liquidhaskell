@@ -1,6 +1,7 @@
 module Gradual.GUI (render) where
 
 import Language.Haskell.Liquid.UX.Annotate (tokeniseWithLoc)
+import Language.Haskell.Liquid.Types.LHSymbol
 import Language.Fixpoint.Types (KVar, Expr)
 import Language.Fixpoint.Utils.Files
 
@@ -40,13 +41,13 @@ initSrc deps pkeys sols = unlines
 initValues :: [[GSub a]] -> PKeys -> String 
 initValues sols pkeys = script $ concat $ zipWith go pkeys sols
   where
-   go :: [KVar] -> [GSub a] -> String 
+   go :: [KVar LHSymbol] -> [GSub a] -> String 
    go keys sols = "values.push(" ++ show (go' keys <$> sols) ++ ");\n"
 
-   go' :: [KVar] -> GSub a -> [String] 
+   go' :: [KVar LHSymbol] -> GSub a -> [String] 
    go' keys sol = map (\k -> renderSol $ M.lookup k sol) keys 
 
-   renderSol :: Maybe (a, Expr) -> String 
+   renderSol :: Maybe (a, Expr LHSymbol) -> String 
    renderSol Nothing  = "NA"
    renderSol (Just e) = pretty $ snd e
 

@@ -61,6 +61,7 @@ import           Language.Fixpoint.Types                      hiding (panic, Err
 import           Language.Haskell.Liquid.Misc
 import           Language.Haskell.Liquid.Types.PrettyPrint
 import           Language.Haskell.Liquid.Types.RefType
+import           Language.Haskell.Liquid.Types.LHSymbol
 
 import           Language.Haskell.Liquid.UX.Tidy
 import           Language.Haskell.Liquid.Types                hiding (Located(..), Def(..))
@@ -69,7 +70,7 @@ import           Language.Haskell.Liquid.Types                hiding (Located(..
 
 -- | @output@ creates the pretty printed output
 --------------------------------------------------------------------------------------------
-mkOutput :: Config -> ErrorResult -> FixSolution -> AnnInfo (Annot SpecType) -> Output Doc
+mkOutput :: Config -> ErrorResult -> FixSolution LHSymbol -> AnnInfo (Annot SpecType) -> Output Doc
 --------------------------------------------------------------------------------------------
 mkOutput cfg res sol anna
   = O { o_vars   = Nothing
@@ -108,7 +109,7 @@ doGenerate cfg tplAnnMap typAnnMap annTyp srcF
   = do generateHtml srcF tpHtmlF tplAnnMap
        generateHtml srcF tyHtmlF typAnnMap
        writeFile         vimF  $ vimAnnot cfg annTyp
-       B.writeFile       jsonF $ encode typAnnMap
+       B.writeFile       jsonF $ Data.Aeson.encode typAnnMap
     where
        tyHtmlF    = extFileName Html                   srcF
        tpHtmlF    = extFileName Html $ extFileName Cst srcF
@@ -116,7 +117,7 @@ doGenerate cfg tplAnnMap typAnnMap annTyp srcF
        jsonF      = extFileName Json  srcF
        vimF       = extFileName Vim   srcF
 
-mkBots :: Reftable r => AnnInfo (RType c tv r) -> [GHC.SrcSpan]
+mkBots :: Reftable LHSymbol r => AnnInfo (RType c tv r) -> [GHC.SrcSpan]
 mkBots (AI m) = [ src | (src, (Just _, t) : _) <- sortBy (compare `on` fst) $ M.toList m
                       , isFalse (rTypeReft t) ]
 

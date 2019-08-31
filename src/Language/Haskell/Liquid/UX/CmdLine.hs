@@ -608,7 +608,7 @@ consoleResultFull cfg out _ = do
 consoleResultJson :: t -> t1 -> ACSS.AnnMap -> IO ()
 consoleResultJson _ _ annm = do
   putStrLn "RESULT"
-  B.putStrLn . encode . annErrors $ annm
+  B.putStrLn . Data.Aeson.encode . annErrors $ annm
 
 resultWithContext :: F.FixResult UserError -> IO (FixResult CError)
 resultWithContext (F.Unsafe es)   = F.Unsafe      <$> errorsWithContext es
@@ -618,7 +618,7 @@ resultWithContext (F.Safe)        = return F.Safe
 instance Show (CtxError Doc) where
   show = showpp
 
-writeCheckVars :: Symbolic a => Maybe [a] -> IO ()
+writeCheckVars :: FixSymbolic a => Maybe [a] -> IO ()
 writeCheckVars Nothing     = return ()
 writeCheckVars (Just [])   = colorPhaseLn Loud "Checked Binders: None" ""
 writeCheckVars (Just ns)   = colorPhaseLn Loud "Checked Binders:" "" 

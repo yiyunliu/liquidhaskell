@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+-- YL : is this the step 3 from liquid type paper? 
+
 module Language.Haskell.Liquid.Transforms.RefSplit (
 
         splitXRelatedRefs
@@ -13,19 +15,18 @@ import Data.List (partition)
 import Text.PrettyPrint.HughesPJ
 
 import Language.Haskell.Liquid.Types
+import Language.Haskell.Liquid.Types.LHSymbol
 import Language.Haskell.Liquid.Types.PrettyPrint ()
 
 import Language.Fixpoint.Types hiding (Predicate)
 import Language.Fixpoint.Misc
 
-splitXRelatedRefs :: Symbol -> SpecType -> (SpecType, SpecType)
+splitXRelatedRefs :: Symbol LHSymbol -> SpecType -> (SpecType, SpecType)
 splitXRelatedRefs x t = splitRType x t
 
-
-
-splitRType :: Symbol
-           -> RType c tv (UReft Reft)
-           -> (RType c tv (UReft Reft), RType c tv (UReft Reft))
+splitRType :: Symbol LHSymbol
+           -> RType c tv (UReft (Reft LHSymbol))
+           -> (RType c tv (UReft (Reft LHSymbol)), RType c tv (UReft (Reft LHSymbol)))
 splitRType f (RVar a r) = (RVar a r1, RVar a r2)
   where
         (r1, r2) = splitRef f r
@@ -79,7 +80,7 @@ splitRType f (RHole r) = (RHole r1, RHole r2)
         (r1, r2) = splitRef f r
 
 
-splitUReft :: Symbol -> RTProp c tv (UReft Reft) -> (RTProp c tv (UReft Reft), RTProp c tv (UReft Reft))
+splitUReft :: Symbol LHSymbol -> RTProp c tv (UReft (Reft LHSymbol)) -> (RTProp c tv (UReft (Reft LHSymbol)), RTProp c tv (UReft (Reft LHSymbol)))
 splitUReft x (RProp xs (RHole r)) = (RProp xs (RHole r1), RProp xs (RHole r2))
   where
         (r1, r2) = splitRef x r
@@ -87,13 +88,13 @@ splitUReft x (RProp xs t) = (RProp xs t1, RProp xs t2)
   where
         (t1, t2) = splitRType x t
 
-splitRef :: Symbol -> UReft Reft -> (UReft Reft, UReft Reft)
+splitRef :: Symbol LHSymbol -> UReft (Reft LHSymbol) -> (UReft (Reft LHSymbol), UReft (Reft LHSymbol))
 splitRef f (MkUReft r p s) = (MkUReft r1 p1 s, MkUReft r2 p2 s)
         where
                 (r1, r2) = splitReft f r
                 (p1, p2) = splitPred f p
 
-splitReft :: Symbol -> Reft -> (Reft, Reft)
+splitReft :: Symbol LHSymbol -> Reft LHSymbol -> (Reft LHSymbol, Reft LHSymbol)
 splitReft f (Reft (v, xs)) = (Reft (v, pAnd xs1), Reft (v, pAnd xs2))
   where
     (xs1, xs2)       = partition (isFree f) (unPAnd xs)
@@ -102,7 +103,7 @@ splitReft f (Reft (v, xs)) = (Reft (v, pAnd xs1), Reft (v, pAnd xs2))
     unPAnd p         = [p]
 
 
-splitPred :: Symbol -> Predicate -> (Predicate, Predicate)
+splitPred :: Symbol LHSymbol -> Predicate -> (Predicate, Predicate)
 splitPred f (Pr ps) = (Pr ps1, Pr ps2)
   where
     (ps1, ps2) = partition g ps
@@ -110,10 +111,10 @@ splitPred f (Pr ps) = (Pr ps1, Pr ps2)
 
 
 class IsFree a where
-        isFree :: Symbol -> a -> Bool
+        isFree :: Symbol LHSymbol -> a -> Bool
 
-instance (Subable x) => (IsFree x) where
+instance (Subable LHSymbol x) => (IsFree x) where
         isFree x p = x `elem` syms p
 
-instance Show (UReft Reft) where
+instance Show (UReft (Reft LHSymbol)) where
          show = render . pprint

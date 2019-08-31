@@ -295,6 +295,8 @@ coreToLg (C.Lam x e)           = do p     <- coreToLg e
                                     tce   <- lsEmb <$> getState
                                     -- YL: I think we should use FixSymbol for this one.
                                     -- ELam goes through multiple stages of renaming
+                                    -- However, what if the bound variable uses GHC Symbol?
+                                    -- need to ensure consistency
                                     return $ ELam (F.AS . LHRefSym $ undefined -- symbol x 
                                                   , typeSort tce (GM.expandVarType x)) p
 coreToLg (C.Case e b _ alts)   = do p <- coreToLg e

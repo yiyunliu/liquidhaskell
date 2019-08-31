@@ -14,7 +14,7 @@ simplifyBounds = fmap go
     -- OLD go' (Reft (v, rs)) = Reft(v, filter (not . isBoundLike) rs)
     go' (Reft (v, p)) = Reft(v, dropBoundLike p)
 
-dropBoundLike :: Expr -> Expr
+dropBoundLike :: (Ord s, Fixpoint s) => Expr s -> Expr s
 dropBoundLike p
   | isKvar p          = p
   | isBoundLikePred p = mempty
@@ -22,11 +22,11 @@ dropBoundLike p
   where
     isKvar            = not . null . kvars
 
-isBoundLikePred :: Expr -> Bool
+isBoundLikePred :: Expr s -> Bool
 isBoundLikePred (PAnd ps) = simplifyLen <= length [p | p <- ps, isImp p ]
 isBoundLikePred _         = False
 
-isImp :: Expr -> Bool
+isImp :: Expr s -> Bool
 isImp (PImp _ _) = True
 isImp _          = False
 
