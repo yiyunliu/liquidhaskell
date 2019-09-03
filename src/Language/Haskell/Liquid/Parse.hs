@@ -7,6 +7,9 @@
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
 
+-- YL : this file is mostly commented out for now. It would only make sense to refactor here
+-- when the Types are correctly parameterized
+
 module Language.Haskell.Liquid.Parse
   ( hsSpecificationP
   , specSpecificationP
@@ -41,7 +44,8 @@ import qualified Text.PrettyPrint.HughesPJ              as PJ
 import           Text.PrettyPrint.HughesPJ.Compat       ((<+>)) 
 import           Language.Fixpoint.Types                hiding (panic, SVar, DDecl, DataDecl, DataCtor (..), Error, R, Predicate)
 import           Language.Haskell.Liquid.GHC.Misc
-import           Language.Haskell.Liquid.Types          
+import           Language.Haskell.Liquid.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 import qualified Language.Fixpoint.Misc                 as Misc      
 import qualified Language.Haskell.Liquid.Misc           as Misc
 import qualified Language.Haskell.Liquid.Measure        as Measure
@@ -82,8 +86,8 @@ hsSpecificationP modName specComments specQuotes =
 initPStateWithList :: PState Void
 initPStateWithList
 -- YL : use GHC tyswiredin? i'm worried that it might not work due to the wired in defined in LH
-  = initPState { empList  = Just (EVar ("GHC.Types.[]" :: FixSymbol))
-               , singList = Just (\e -> EApp (EApp (EVar ("GHC.Types.:"  :: FixSymbol)) e) (EVar ("GHC.Types.[]" :: FixSymbol)))
+  = initPState { empList  = Just (EVar $ FS $ ("GHC.Types.[]" :: FixSymbol))
+               , singList = Just (\e -> EApp (EApp (EVar $ FS $ ("GHC.Types.:"  :: FixSymbol)) e) (EVar $ FS $ ("GHC.Types.[]" :: FixSymbol)))
                }
 
 --------------------------------------------------------------------------
@@ -95,7 +99,8 @@ specificationP :: Parser Void (ModName, Measure.BareSpec)
 specificationP = do 
   reserved "module"
   reserved "spec"
-  name   <- symbolP
+  -- YL : liquid-fixpoint: should return FixSymbol
+  FS name   <- symbolP
   reserved "where"
   xs     <- if True then grabs (specP <* whiteSpace) else sepBy specP newline
   return $ mkSpec (ModName SpecImport $ mkModuleName $ symbolString name) xs
@@ -166,7 +171,8 @@ parseSymbolToLogic f = mapRight snd . parseWithError initPStateWithList toLogicP
 
 toLogicP :: Parser Void LogicMap
 toLogicP
-  = toLogicMap <$> many toLogicOneP
+  -- YL : this is getting messy. Expr Void -> Expr s. huge performance cost?
+  = undefined -- toLogicMap <$> many toLogicOneP
 
 toLogicOneP :: Parser Void  (Located FixSymbol, [FixSymbol], Expr Void)
 toLogicOneP
@@ -174,7 +180,8 @@ toLogicOneP
        (x:xs) <- many1 (locParserP symbolP)
        reservedOp "="
        e      <- exprP
-       return (x, val <$> xs, e)
+       -- YL : address the isomorphism mapping
+       undefined -- return (x, val <$> xs, e)
 
 
 defineP :: Parser Void (Located FixSymbol, FixSymbol)
@@ -240,8 +247,9 @@ btP = do
   c@(PC sb _) <- compP
   case sb of
     PcNoSymbol   -> return c
-    PcImplicit b -> parseFun c b
-    PcExplicit b -> parseFun c b
+    -- YL : fix
+    -- PcImplicit b -> parseFun c b
+    -- PcExplicit b -> parseFun c b
   <?> "btP"
   where
     parseFun c@(PC sb t1) b  =
@@ -259,7 +267,7 @@ btP = do
             reservedOp "=>"
             PC _ t2 <- btP
             -- TODO:AZ return an error if s == PcExplicit
-            return $ PC sb $ foldr (rFun dummySymbol) t2 (getClasses t1))
+            return $ PC sb $ foldr (rFun (AS . LHRefSym $ dummySymbol)) t2 (getClasses t1))
          <|> return c)
 
 
@@ -294,11 +302,15 @@ namedCircleP :: Parser Void ParamComp
 namedCircleP = do
   lb <- locParserP lowerIdP
   (do _ <- colon
-      let b = val lb
+      let (FS b) = val lb
+      -- YL : Probably should define some sort of isomorphism between Symbol Void and FixSymbol
+      -- or at least FixSymbolic instance for Symbol Void
       PC (PcExplicit b) <$> bareArgP b
     <|> do
       b <- dummyBindP
-      PC (PcImplicit b) <$> dummyP (lowerIdTail (val lb))
+      -- YL : Fix
+      undefined
+      -- PC (PcImplicit b) <$> dummyP (lowerIdTail (val lb))
     )
 
 unnamedCircleP :: Parser Void ParamComp
@@ -319,38 +331,38 @@ bareTypeP = do
   return v
 
 bareTypeBracesP :: Parser Void ParamComp
-bareTypeBracesP = do
-  t <-  try (braces (
-            (try (do
-               ct <- constraintP
-               return $ Right ct
-                     ))
-           <|>
-            (do
-                    x  <- symbolP
-                    _ <- colon
-                    -- NOSUBST i  <- freshIntP
-                    t  <- bbaseP
-                    reservedOp "|"
-                    ra <- refasHoleP <* spaces
-                    -- xi is a unique var based on the name in x.
-                    -- su replaces any use of x in the balance of the expression with the unique val
-                    -- NOSUBST let xi = intSymbol x i
-                    -- NOSUBST let su v = if v == x then xi else v
-                    return $ Left $ PC (PcExplicit x) $ t (Reft (x, ra)) )
-            )) <|> try (helper holeOrPredsP) <|> helper predP
-  case t of
-    Left l -> return l
-    Right ct -> do
-      PC _sb tt <- btP
-      return $ nullPC $ rrTy ct tt
-  where
-    holeOrPredsP
-      = (reserved "_" >> return hole)
-     <|> try (pAnd <$> brackets (sepBy predP semi))
-    helper p = braces $ do
-      t <- ((RHole . uTop . Reft . ("VV",)) <$> (p <* spaces))
-      return (Left $ nullPC t)
+bareTypeBracesP = undefined -- do
+  -- t <-  try (braces (
+  --           (try (do
+  --              ct <- constraintP
+  --              return $ Right ct
+  --                    ))
+  --          <|>
+  --           (do
+  --                   x  <- symbolP
+  --                   _ <- colon
+  --                   -- NOSUBST i  <- freshIntP
+  --                   t  <- bbaseP
+  --                   reservedOp "|"
+  --                   ra <- refasHoleP <* spaces
+  --                   -- xi is a unique var based on the name in x.
+  --                   -- su replaces any use of x in the balance of the expression with the unique val
+  --                   -- NOSUBST let xi = intSymbol x i
+  --                   -- NOSUBST let su v = if v == x then xi else v
+  --                   return $ Left $ PC (PcExplicit x) $ t (Reft (x, ra)) )
+  --           )) <|> try (helper holeOrPredsP) <|> helper predP
+  -- case t of
+  --   Left l -> return l
+  --   Right ct -> do
+  --     PC _sb tt <- btP
+  --     return $ nullPC $ rrTy ct tt
+  -- where
+  --   holeOrPredsP
+  --     = (reserved "_" >> return hole)
+  --    <|> try (pAnd <$> brackets (sepBy predP semi))
+  --   helper p = braces $ do
+  --     t <- ((RHole . uTop . Reft . ("VV",)) <$> (p <* spaces))
+  --     return (Left $ nullPC t)
 
 
 bareArgP :: FixSymbol -> Parser Void  BareType
@@ -382,53 +394,53 @@ refBindBindP :: Parser Void (Expr Void)
              -> Parser Void (Reft Void -> BareType)
              -> Parser Void BareType
 refBindBindP rp kindP'
-  = braces (
-      ((do
-              x  <- symbolP
-              _ <- colon
-              -- NOSUBST i  <- freshIntP
-              t  <- kindP'
-              reservedOp "|"
-              ra <- rp <* spaces
-              -- xi is a unique var based on the name in x.
-              -- su replaces any use of x in the balance of the expression with the unique val
-              -- NOSUBST let xi = intSymbol x i
-              -- NOSUBST let su v = if v == x then xi else v
-              return $ {- substa su $ NOSUBST -} t (Reft (x, ra)) ))
-     <|> ((RHole . uTop . Reft . ("VV",)) <$> (rp <* spaces))
-     <?> "refBindBindP"
-   )
+  = undefined -- braces (
+   --    ((do
+   --            x  <- symbolP
+   --            _ <- colon
+   --            -- NOSUBST i  <- freshIntP
+   --            t  <- kindP'
+   --            reservedOp "|"
+   --            ra <- rp <* spaces
+   --            -- xi is a unique var based on the name in x.
+   --            -- su replaces any use of x in the balance of the expression with the unique val
+   --            -- NOSUBST let xi = intSymbol x i
+   --            -- NOSUBST let su v = if v == x then xi else v
+   --            return $ {- substa su $ NOSUBST -} t (Reft (x, ra)) ))
+   --   <|> ((RHole . uTop . Reft . ("VV",)) <$> (rp <* spaces))
+   --   <?> "refBindBindP"
+   -- )
 
 
 refDefP :: FixSymbol
         -> Parser Void (Expr Void)
         -> Parser Void (Reft Void -> BareType)
         -> Parser Void BareType
-refDefP vv rp kindP' = braces $ do
-  x       <- optBindP vv
-  -- NOSUBST i       <- freshIntP
-  t       <- try (kindP' <* reservedOp "|") <|> return (RHole . uTop) <?> "refDefP"
-  ra      <- (rp <* spaces)
-  -- xi is a unique var based on the name in x.
-  -- su replaces any use of x in the balance of the expression with the unique val
-  -- NOSUBST let xi   = intSymbol x i
-  -- NOSUBST let su v = if v == x then xi else v
-  return   $ {- substa su $ NOSUBST -} t (Reft (x, ra))
-       -- substa su . t . Reft . (x,) <$> (rp <* spaces))
-      --  <|> ((RHole . uTop . Reft . ("VV",)) <$> (rp <* spaces))
+refDefP vv rp kindP' = undefined -- braces $ do
+  -- x       <- optBindP vv
+  -- -- NOSUBST i       <- freshIntP
+  -- t       <- try (kindP' <* reservedOp "|") <|> return (RHole . uTop) <?> "refDefP"
+  -- ra      <- (rp <* spaces)
+  -- -- xi is a unique var based on the name in x.
+  -- -- su replaces any use of x in the balance of the expression with the unique val
+  -- -- NOSUBST let xi   = intSymbol x i
+  -- -- NOSUBST let su v = if v == x then xi else v
+  -- return   $ {- substa su $ NOSUBST -} t (Reft (x, ra))
+  --      -- substa su . t . Reft . (x,) <$> (rp <* spaces))
+  --     --  <|> ((RHole . uTop . Reft . ("VV",)) <$> (rp <* spaces))
 
 refP :: Parser Void (Reft Void -> BareType) -> Parser Void BareType
 refP = refBindBindP refaP
 
 -- "sym :" or return the devault sym
 optBindP :: FixSymbol -> Parser Void FixSymbol
-optBindP x = try bindP <|> return x
+optBindP x = undefined -- try bindP <|> return x
 
 holeP :: Parser Void BareType
-holeP    = reserved "_" >> spaces >> return (RHole $ uTop $ Reft ("VV", hole))
+holeP    = undefined -- reserved "_" >> spaces >> return (RHole $ uTop $ Reft ("VV", hole))
 
 holeRefP :: Parser Void (Reft Void -> BareType)
-holeRefP = reserved "_" >> spaces >> return (RHole . uTop)
+holeRefP =  undefined -- reserved "_" >> spaces >> return (RHole . uTop)
 
 -- NOPROP refasHoleP :: Parser Void Expr
 -- NOPROP refasHoleP  = try refaP
@@ -436,9 +448,9 @@ holeRefP = reserved "_" >> spaces >> return (RHole . uTop)
 
 refasHoleP :: Parser Void (Expr Void)
 refasHoleP
-  =  (reserved "_" >> return hole)
- <|> refaP
- <?> "refasHoleP"
+  = undefined -- (reserved "_" >> return hole)
+ -- <|> refaP
+ -- <?> "refasHoleP"
 
 -- FIXME: the use of `blanks = oneOf " \t"` here is a terrible and fragile hack
 -- to avoid parsing:
@@ -449,17 +461,17 @@ refasHoleP
 -- as `foo :: a -> b bar`..
 bbaseP :: Parser Void (Reft Void -> BareType)
 bbaseP
-  =  holeRefP  -- Starts with '_'
- <|> liftM2 bLst (brackets (maybeP bareTypeP)) predicatesP
- <|> liftM2 bTup (parens $ sepBy (maybeBind bareTypeP) comma) predicatesP
- <|> try parseHelper  -- starts with lower
- <|> liftM5 bCon bTyConP stratumP predicatesP (sepBy bareTyArgP blanks) mmonoPredicateP
-           -- starts with "'" or upper case char
- <?> "bbaseP"
- where
-   parseHelper = do
-     l <- lowerIdP
-     lowerIdTail l
+  =  undefined -- holeRefP  -- Starts with '_'
+ -- <|> liftM2 bLst (brackets (maybeP bareTypeP)) predicatesP
+ -- <|> liftM2 bTup (parens $ sepBy (maybeBind bareTypeP) comma) predicatesP
+ -- <|> try parseHelper  -- starts with lower
+ -- <|> liftM5 bCon bTyConP stratumP predicatesP (sepBy bareTyArgP blanks) mmonoPredicateP
+ --           -- starts with "'" or upper case char
+ -- <?> "bbaseP"
+ -- where
+ --   parseHelper = do
+ --     l <- lowerIdP
+ --     lowerIdTail l
 
 maybeBind :: Parser Void a -> Parser Void (Maybe FixSymbol, a)
 maybeBind p = do {bd <- maybeP' bbindP; ty <- p ; return (bd, ty)}
@@ -468,15 +480,15 @@ maybeBind p = do {bd <- maybeP' bbindP; ty <- p ; return (bd, ty)}
              <|> return Nothing
 
 lowerIdTail :: FixSymbol -> Parser Void (Reft Void -> BareType)
-lowerIdTail l =
-     (    (liftM2 bAppTy (return $ bTyVar l) (sepBy1 bareTyArgP blanks))
-      <|> (liftM3 bRVar  (return $ bTyVar l) stratumP monoPredicateP))
+lowerIdTail l = undefined
+     -- (    (liftM2 bAppTy (return $ bTyVar l) (sepBy1 bareTyArgP blanks))
+     --  <|> (liftM3 bRVar  (return $ bTyVar l) stratumP monoPredicateP))
 
 bTyConP :: Parser Void BTyCon
 bTyConP
-  =  (reservedOp "'" >> (mkPromotedBTyCon <$> locUpperIdP))
- <|> mkBTyCon <$> locUpperIdP
- <?> "bTyConP"
+  = undefined -- (reservedOp "'" >> (mkPromotedBTyCon <$> locUpperIdP))
+ -- <|> mkBTyCon <$> locUpperIdP
+ -- <?> "bTyConP"
 
 mkPromotedBTyCon :: Located FixSymbol -> BTyCon
 mkPromotedBTyCon x = BTyCon x False True -- (consSym '\'' <$> x) False True
