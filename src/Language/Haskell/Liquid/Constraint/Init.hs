@@ -41,6 +41,7 @@ import           Language.Haskell.Liquid.WiredIn               (dictionaryVar)
 import qualified Language.Haskell.Liquid.GHC.SpanStack         as Sp
 -- import           Language.Haskell.Liquid.GHC.Interface         (isExportedVar)
 import           Language.Haskell.Liquid.Types                 hiding (binds, Loc, loc, freeTyVars, Def)
+import           Language.Haskell.Liquid.Types.LHSymbol
 -- import           Language.Haskell.Liquid.Types.Names
 -- import           Language.Haskell.Liquid.Types.RefType
 -- import           Language.Haskell.Liquid.Types.Visitors        hiding (freeVars)
@@ -119,7 +120,7 @@ makeAutoDecrDataCons dcts specenv dcs
 idTyCon :: Id -> Maybe TyCon
 idTyCon = fmap dataConTyCon . idDataConM
 
-lenOf :: F.Symbol -> F.Expr
+lenOf :: F.Symbol s -> F.Expr s
 lenOf x = F.mkEApp lenLocSymbol [F.EVar x]
 
 makeSizedDataCons :: [(Id, SpecType)] -> DataCon -> Integer -> (RSort, (Id, SpecType))
@@ -133,7 +134,7 @@ makeSizedDataCons dcts x' n = (toRSort $ ty_res trep, (x, fromRTypeRep trep{ty_r
       recarguments = filter (\(t,_) -> (toRSort t == toRSort tres)) (zip (ty_args trep) (ty_binds trep))
       computelen   = foldr (F.EBin F.Plus) (F.ECon $ F.I n) (lenOf .  snd <$> recarguments)
 
-mergeDataConTypes ::  F.TCEmb TyCon -> [(Var, SpecType)] -> [(Var, SpecType)] -> [(Var, SpecType)]
+mergeDataConTypes ::  F.TCEmb LHSymbol TyCon -> [(Var, SpecType)] -> [(Var, SpecType)] -> [(Var, SpecType)]
 mergeDataConTypes tce xts yts = merge (L.sortBy f xts) (L.sortBy f yts)
   where
     f (x,_) (y,_) = compare x y
@@ -166,13 +167,13 @@ predsUnify sp = second (addTyConInfo tce tyi) -- needed to eliminate some @RProp
     tce            = gsTcEmbeds (gsName sp)
     tyi            = gsTyconEnv (gsName sp)
 
-
+-- YL : see where it's called in initEnv to figure out the types. 2, 4-9
 --------------------------------------------------------------------------------
 measEnv :: GhcSpec
-        -> [(F.Symbol, SpecType)]
+        -> [(F.Symbol LHSymbol, SpecType)] -- YL: a bunch of refreshed stuff
         -> [CoreBind]
-        -> [(F.Symbol, F.Sort)]
-        -> [(F.Symbol, F.Sort)]
+        -> [(F.Symbol LHSymbol, F.Sort LHSymbol)]
+        -> [(F.Symbol LHS, F.Sort)]
         -> [(F.Symbol, F.Sort)]
         -> [(F.Symbol, SpecType)]
         -> [(F.Symbol, SpecType)]

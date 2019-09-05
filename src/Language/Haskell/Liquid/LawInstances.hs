@@ -6,6 +6,7 @@ import qualified Data.Maybe                                 as Mb
 import           Text.PrettyPrint.HughesPJ 
 
 import           Language.Haskell.Liquid.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 import           Language.Haskell.Liquid.Types.Equality
 import           Language.Haskell.Liquid.GHC.API            
 import qualified Language.Fixpoint.Types                     as F
@@ -68,7 +69,10 @@ unify mkError c li t1 t2
     (tc1, args1) = splitTypeConstraints $ zip (ty_binds trep1) (ty_args trep1)
     (tc2, args2) = splitTypeConstraints $ zip (ty_binds trep2) (ty_args trep2)
     esubst = F.mkSubst (esubst1
-                 ++  [(F.symbol x, F.EVar (F.symbol y)) | (Left x, (Left y, _)) <- lilEqus li]
+                        -- YL: Here, all it did was using Symbolic instance of y. totally safe to inject
+                 ++  [(undefined -- F.symbol
+                       x, F.EVar undefined -- (F.symbol y)
+                      ) | (Left x, (Left y, _)) <- lilEqus li]
                      )
     esubst1 = zip  (fst <$> args1) ((F.EVar . fst) <$> args2)
 
@@ -86,7 +90,7 @@ unify mkError c li t1 t2
     findTyVars [] = [] 
 
 
-splitTypeConstraints :: [(F.Symbol, SpecType)] -> ([(F.Symbol, SpecType)], [(F.Symbol, SpecType)])
+splitTypeConstraints :: [(F.Symbol LHSymbol, SpecType)] -> ([(F.Symbol LHSymbol, SpecType)], [(F.Symbol LHSymbol, SpecType)])
 splitTypeConstraints = go []  
   where  
     go cs (b@(_x, RApp c _ _ _):ts) 

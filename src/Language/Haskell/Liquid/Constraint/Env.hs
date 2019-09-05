@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TypeSynonymInstances      #-}
@@ -78,6 +79,7 @@ import           Language.Fixpoint.SortCheck (pruneUnsortedReft)
 import           Language.Haskell.Liquid.Types.RefType
 import qualified Language.Haskell.Liquid.GHC.SpanStack as Sp
 import           Language.Haskell.Liquid.Types            hiding (binds, Loc, loc, freeTyVars, Def)
+import           Language.Haskell.Liquid.Types.LHSymbol
 import           Language.Haskell.Liquid.Constraint.Types
 import           Language.Haskell.Liquid.Constraint.Fresh ()
 import           Language.Haskell.Liquid.Transforms.RefSplit
@@ -90,7 +92,7 @@ import qualified Language.Haskell.Liquid.UX.CTags       as Tg
 
 -- updREnvLocal :: REnv -> (_ -> _) -> REnv
 updREnvLocal :: REnv
-             -> (M.HashMap F.Symbol SpecType -> M.HashMap F.Symbol SpecType)
+             -> (M.HashMap (F.Symbol LHSymbol) SpecType -> M.HashMap (F.Symbol LHSymbol) SpecType)
              -> REnv
 updREnvLocal rE f      = rE { reLocal = f (reLocal rE) }
 
@@ -98,23 +100,26 @@ updREnvLocal rE f      = rE { reLocal = f (reLocal rE) }
 filterREnv :: (SpecType -> Bool) -> REnv -> REnv
 filterREnv f rE        = rE `updREnvLocal` (M.filter f)
 
-fromListREnv :: [(F.Symbol, SpecType)] -> [(F.Symbol, SpecType)] -> REnv
+
+-- YL: Why is this made a String -> SpecType map? 
+fromListREnv :: [(F.Symbol LHSymbol, SpecType)] -> [(F.Symbol LHSymbol, SpecType)] -> REnv
 fromListREnv gXts lXts = REnv
   { reGlobal = M.fromList gXts
   , reLocal  = M.fromList lXts
   }
 
 -- RJ: REnv-Split-Bug?
-deleteREnv :: F.Symbol -> REnv -> REnv
+deleteREnv :: F.Symbol LHSymbol -> REnv -> REnv
 deleteREnv x rE = rE `updREnvLocal` (M.delete x)
 
-insertREnv :: F.Symbol -> SpecType -> REnv -> REnv
+insertREnv :: F.Symbol LHSymbol -> SpecType -> REnv -> REnv
 insertREnv x y rE = {- trace ("insertREnv: " ++ show x) $ -} rE `updREnvLocal` (M.insert x y)
 
-lookupREnv :: F.Symbol -> REnv -> Maybe SpecType
+-- YL: I would assume that lookupREnv happens in Expr?
+lookupREnv :: F.Symbol LHSymbol -> REnv -> Maybe SpecType
 lookupREnv x rE = msum $ M.lookup x <$> renvMaps rE
 
-memberREnv :: F.Symbol -> REnv -> Bool
+memberREnv :: F.Symbol LHSymbol -> REnv -> Bool
 memberREnv x rE = or   $ M.member x <$> renvMaps rE
 
 globalREnv :: REnv -> REnv
@@ -122,50 +127,54 @@ globalREnv (REnv gM lM) = REnv gM' M.empty
   where
     gM'  = M.unionWith (\_ t -> t) gM lM
 
-renvMaps :: REnv -> [M.HashMap F.Symbol SpecType]
+renvMaps :: REnv -> [M.HashMap (F.Symbol LHSymbol) SpecType]
 renvMaps rE = [reLocal rE, reGlobal rE]
 
 --------------------------------------------------------------------------------
-localBindsOfType :: RRType r  -> REnv -> [F.Symbol]
+localBindsOfType :: RRType r  -> REnv -> [F.Symbol LHSymbol]
 --------------------------------------------------------------------------------
 localBindsOfType tx γ = fst <$> localsREnv (filterREnv ((== toRSort tx) . toRSort) γ)
 
 -- RJ: REnv-Split-Bug?
-localsREnv :: REnv -> [(F.Symbol, SpecType)]
+-- YL: the local vs global renv is actually used for resolution???
+localsREnv :: REnv -> [(F.Symbol LHSymbol, SpecType)]
 localsREnv = M.toList . reLocal
 
-globalsREnv :: REnv -> [(F.Symbol, SpecType)]
+globalsREnv :: REnv -> [(F.Symbol LHSymbol, SpecType)]
 globalsREnv = M.toList . reGlobal
 
-toListREnv :: REnv -> [(F.Symbol, SpecType)]
+toListREnv :: REnv -> [(F.Symbol LHSymbol, SpecType)]
 toListREnv re = globalsREnv re ++ localsREnv re
 
 --------------------------------------------------------------------------------
 extendEnvWithVV :: CGEnv -> SpecType -> CG CGEnv
 --------------------------------------------------------------------------------
 extendEnvWithVV γ t
-  | F.isNontrivialVV vv && not (vv `memberREnv` (renv γ))
+  -- YL : do a pattern matching
+  | F.isNontrivialVV undefined -- vv
+    && not (vv `memberREnv` (renv γ))
   = γ += ("extVV", vv, t)
   | otherwise
   = return γ
   where
     vv = rTypeValueVar t
 
-addBinders :: CGEnv -> F.Symbol -> [(F.Symbol, SpecType)] -> CG CGEnv
+-- YL : binders could be from Var
+addBinders :: CGEnv -> F.Symbol LHSymbol -> [(F.Symbol LHSymbol, SpecType)] -> CG CGEnv
 addBinders γ0 x' cbs   = foldM (++=) (γ0 -= x') [("addBinders", x, t) | (x, t) <- cbs]
 
-addBind :: SrcSpan -> F.Symbol -> F.SortedReft -> CG ((F.Symbol, F.Sort), F.BindId)
+addBind :: SrcSpan -> F.Symbol LHSymbol -> F.SortedReft LHSymbol -> CG ((F.Symbol LHSymbol, F.Sort LHSymbol), F.BindId)
 addBind l x r = do
   st          <- get
   let (i, bs') = F.insertBindEnv x r (binds st)
   put          $ st { binds = bs' } { bindSpans = M.insert i l (bindSpans st) }
   return ((x, F.sr_sort r), {- traceShow ("addBind: " ++ showpp x) -} i)
 
-addClassBind :: CGEnv -> SrcSpan -> SpecType -> CG [((F.Symbol, F.Sort), F.BindId)]
+addClassBind :: CGEnv -> SrcSpan -> SpecType -> CG [((F.Symbol LHSymbol, F.Sort LHSymbol), F.BindId)]
 addClassBind γ l = mapM (uncurry (addBind l)) . classBinds (emb γ)
 
 {- see tests/pos/polyfun for why you need everything in fixenv -}
-addCGEnv :: (SpecType -> SpecType) -> CGEnv -> (String, F.Symbol, SpecType) -> CG CGEnv
+addCGEnv :: (SpecType -> SpecType) -> CGEnv -> (String, F.Symbol LHSymbol, SpecType) -> CG CGEnv
 addCGEnv tx γ (eMsg, x, REx y tyy tyx) = do
   y' <- fresh
   γ' <- addCGEnv tx γ (eMsg, y', tyy)
@@ -175,7 +184,7 @@ addCGEnv tx γ (eMsg, x, RAllE yy tyy tyx)
   = addCGEnv tx γ (eMsg, x, t)
   where
     xs            = localBindsOfType tyy (renv γ)
-    t             = L.foldl' F.meet ttrue [ tyx' `F.subst1` (yy, F.EVar x) | x <- xs]
+    t             = L.foldl' (F.meet @LHSymbol) ttrue [ tyx' `F.subst1` (yy, F.EVar x) | x <- xs]
     (tyx', ttrue) = splitXRelatedRefs yy tyx
 
 addCGEnv tx γ (_, x, t') = do
@@ -188,8 +197,8 @@ addCGEnv tx γ (_, x, t') = do
   is    <- (:) <$> addBind l x (rTypeSortedReft' γ' tem t) <*> addClassBind γ' l t
   return $ γ' { fenv = insertsFEnv (fenv γ) is }
 
-rTypeSortedReft' :: (PPrint r, F.Reftable r, SubsTy RTyVar RSort r, F.Reftable (RTProp RTyCon RTyVar r))
-                 => CGEnv -> F.Templates -> RRType r -> F.SortedReft
+rTypeSortedReft' :: (PPrint r, F.Reftable LHSymbol r, SubsTy RTyVar RSort r, F.Reftable LHSymbol (RTProp RTyCon RTyVar r))
+                 => CGEnv -> F.Templates LHSymbol -> RRType r -> F.SortedReft LHSymbol
 rTypeSortedReft' γ t 
   = pruneUnsortedReft (feEnv $ fenv γ) t . f
   where
@@ -200,27 +209,32 @@ normalize idx = normalizeVV idx . normalizePds
 
 normalizeVV :: Integer -> SpecType -> SpecType
 normalizeVV idx t@(RApp _ _ _ _)
-  | not (F.isNontrivialVV (rTypeValueVar t))
-  = shiftVV t (F.vv $ Just idx)
+-- YL : pattern match >> shift >> then put it back
+  | not (F.isNontrivialVV undefined -- (rTypeValueVar t)
+        )
+  = undefined -- shiftVV t (F.vv $ Just idx)
 
 normalizeVV _ t
   = t
 
 --------------------------------------------------------------------------------
-(+=) :: CGEnv -> (String, F.Symbol, SpecType) -> CG CGEnv
+(+=) :: CGEnv -> (String, F.Symbol LHSymbol, SpecType) -> CG CGEnv
 --------------------------------------------------------------------------------
 γ += (eMsg, x, r)
-  | x == F.dummySymbol
+  -- YL: comparison, pattern matching
+  | x ==  undefined -- F.dummySymbol
   = return γ
   -- // | x `memberREnv` (renv γ)
   -- // = _dupBindErr x γ
   | otherwise
   =  γ ++= (eMsg, x, r)
 
-_dupBindError :: String -> F.Symbol -> CGEnv -> SpecType -> a
+_dupBindError :: String -> F.Symbol LHSymbol -> CGEnv -> SpecType -> a
 _dupBindError eMsg x γ r = panic Nothing s
   where
-    s = unlines [ eMsg ++ " Duplicate binding for " ++ F.symbolString x
+    -- YL : human readable symbol text. a generic symbolstring function that includes the Symbol s case?
+    
+    s = unlines [ eMsg ++ " Duplicate binding for " ++ undefined -- F.symbolString x
                 , "   New: " ++ showpp r
                 , "   Old: " ++ showpp (x `lookupREnv` (renv γ)) ]
 
@@ -230,17 +244,17 @@ globalize :: CGEnv -> CGEnv
 globalize γ = γ {renv = globalREnv (renv γ)}
 
 --------------------------------------------------------------------------------
-(++=) :: CGEnv -> (String, F.Symbol, SpecType) -> CG CGEnv
+(++=) :: CGEnv -> (String, F.Symbol LHSymbol, SpecType) -> CG CGEnv
 --------------------------------------------------------------------------------
 (++=) γ (eMsg, x, t)
   = addCGEnv (addRTyConInv (M.unionWith mappend (invs γ) (ial γ))) γ (eMsg, x, t)
 
 --------------------------------------------------------------------------------
-addSEnv :: CGEnv -> (String, F.Symbol, SpecType) -> CG CGEnv
+addSEnv :: CGEnv -> (String, F.Symbol LHSymbol, SpecType) -> CG CGEnv
 --------------------------------------------------------------------------------
 addSEnv γ = addCGEnv (addRTyConInv (invs γ)) γ
 
-addEEnv :: CGEnv -> (F.Symbol, SpecType) -> CG CGEnv
+addEEnv :: CGEnv -> (F.Symbol LHSymbol, SpecType) -> CG CGEnv
 addEEnv γ (x,t')= do
   idx   <- fresh
   -- allowHOBinders <- allowHO <$> get
@@ -253,16 +267,16 @@ addEEnv γ (x,t')= do
   return $ γ' { fenv = insertsFEnv (fenv γ) is }
 
 
-(+++=) :: (CGEnv, String) -> (F.Symbol, CoreExpr, SpecType) -> CG CGEnv
+(+++=) :: (CGEnv, String) -> (F.Symbol LHSymbol, CoreExpr, SpecType) -> CG CGEnv
 (γ, _) +++= (x, e, t) = (γ {lcb = M.insert x e (lcb γ) }) += ("+++=", x, t)
 
-(-=) :: CGEnv -> F.Symbol -> CGEnv
+(-=) :: CGEnv -> F.Symbol LHSymbol -> CGEnv
 γ -= x =  γ { renv = deleteREnv x (renv γ)
             , lcb  = M.delete   x (lcb  γ)
             -- , fenv = removeFEnv x (fenv γ)
             }
 
-(?=) :: (?callStack :: CallStack) => CGEnv -> F.Symbol -> Maybe SpecType
+(?=) :: (?callStack :: CallStack) => CGEnv -> F.Symbol LHSymbol -> Maybe SpecType
 γ ?= x  = lookupREnv x (renv γ)
 
 ------------------------------------------------------------------------
@@ -292,7 +306,8 @@ setTRec γ xts  = γ' {trec = Just $ M.fromList xts' `M.union` trec'}
   where
     γ'         = γ `setRecs` (fst <$> xts)
     trec'      = fromMaybe M.empty $ trec γ
-    xts'       = first F.symbol <$> xts
+    -- YL: good Vars
+    xts'       = undefined -- first F.symbol <$> xts
 
 ------------------------------------------------------------------------
 getLocation :: CGEnv -> SrcSpan

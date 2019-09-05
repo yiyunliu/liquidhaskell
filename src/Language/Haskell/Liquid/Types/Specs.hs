@@ -143,6 +143,7 @@ data GhcSpecLaws = SpLaws
   , gsLawInst :: ![LawInstance]
   }
 
+-- YL : what is this?
 data LawInstance = LawInstance
   { lilName   :: Class
   , liSupers  :: [LocSpecType]

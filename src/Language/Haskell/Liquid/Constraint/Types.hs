@@ -3,10 +3,13 @@
 {-# LANGUAGE TupleSections        #-}
 {-# LANGUAGE EmptyDataDecls       #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE TypeApplications     #-}
 {-# LANGUAGE FlexibleInstances    #-}
-
+-- YL : Since we are at CG stage, everything should have been resolved
+-- Symbol LHSymbol is more likely to be used
 
 module Language.Haskell.Liquid.Constraint.Types
+  -- YL : Comments here contain useful information
   ( -- * Constraint Generation Monad
     CG
 
@@ -76,6 +79,7 @@ import           Control.Monad.State
 
 import           Language.Haskell.Liquid.GHC.SpanStack
 import           Language.Haskell.Liquid.Types hiding   (binds)
+import           Language.Haskell.Liquid.Types.LHSymbol
 -- import           Language.Haskell.Liquid.Types.Strata
 import           Language.Haskell.Liquid.Misc           (fourth4)
 -- import           Language.Haskell.Liquid.Types.RefType  (shiftVV, toType)
@@ -90,10 +94,11 @@ type CG = State CGInfo
 data CGEnv = CGE
   { cgLoc    :: !SpanStack         -- ^ Location in original source file
   , renv     :: !REnv              -- ^ SpecTypes for Bindings in scope
-  , syenv    :: !(F.SEnv Var)      -- ^ Map from free Symbols (e.g. datacons) to Var
+  -- YL : still need this?
+  , syenv    :: !(F.SEnv LHSymbol Var)      -- ^ Map from free Symbols (e.g. datacons) to Var
   , denv     :: !RDEnv             -- ^ Dictionary Environment
-  , litEnv   :: !(F.SEnv F.Sort)   -- ^ Global  literals
-  , constEnv :: !(F.SEnv F.Sort)   -- ^ Distinct literals
+  , litEnv   :: !(F.SEnv LHSymbol (F.Sort LHSymbol))   -- ^ Global  literals
+  , constEnv :: !(F.SEnv LHSymbol (F.Sort LHSymbol))   -- ^ Distinct literals
   , fenv   :: !FEnv              -- ^ Fixpoint Environment
   , recs   :: !(S.HashSet Var)   -- ^ recursive defs being processed (for annotations)
   , fargs  :: !(S.HashSet Var)   -- ^ recursive defs being processed (for annotations)
@@ -103,14 +108,14 @@ data CGEnv = CGE
   , grtys  :: !REnv              -- ^ Top-level variables with (assert)-guarantees to verify
   , assms  :: !REnv              -- ^ Top-level variables with assumed types
   , intys  :: !REnv              -- ^ Top-level variables with auto generated internal types
-  , emb    :: F.TCEmb TC.TyCon   -- ^ How to embed GHC Tycons into fixpoint sorts
+  , emb    :: F.TCEmb LHSymbol TC.TyCon   -- ^ How to embed GHC Tycons into fixpoint sorts
   , tgEnv  :: !Tg.TagEnv          -- ^ Map from top-level binders to fixpoint tag
   , tgKey  :: !(Maybe Tg.TagKey)                     -- ^ Current top-level binder
-  , trec   :: !(Maybe (M.HashMap F.Symbol SpecType)) -- ^ Type of recursive function with decreasing constraints
-  , lcb    :: !(M.HashMap F.Symbol CoreExpr)         -- ^ Let binding that have not been checked (c.f. LAZYVARs)
+  , trec   :: !(Maybe (M.HashMap (F.Symbol LHSymbol) SpecType)) -- ^ Type of recursive function with decreasing constraints
+  , lcb    :: !(M.HashMap (F.Symbol LHSymbol) CoreExpr)         -- ^ Let binding that have not been checked (c.f. LAZYVARs)
   , holes  :: !HEnv                                  -- ^ Types with holes, will need refreshing
   , lcs    :: !LConstraint                           -- ^ Logical Constraints
-  , aenv   :: !(M.HashMap Var F.Symbol)              -- ^ axiom environment maps reflected Haskell functions to the logical functions
+  , aenv   :: !(M.HashMap Var (F.Symbol LHSymbol))              -- ^ axiom environment maps reflected Haskell functions to the logical functions
   , cerr   :: !(Maybe (TError SpecType))             -- ^ error that should be reported at the user
   -- , cgCfg  :: !Config                                -- ^ top-level config options
   , cgInfo :: !GhcInfo                               -- ^ top-level GhcInfo
@@ -120,7 +125,7 @@ data CGEnv = CGE
 instance HasConfig CGEnv where
   getConfig = getConfig . cgInfo
 
-data LConstraint = LC [[(F.Symbol, SpecType)]]
+data LConstraint = LC [[(F.Symbol LHSymbol, SpecType)]]
 
 instance Monoid LConstraint where
   mempty  = LC []
@@ -153,8 +158,8 @@ data SubC     = SubC { senv  :: !CGEnv
 data WfC      = WfC  !CGEnv !SpecType
               -- deriving (Data, Typeable)
 
-type FixSubC  = F.SubC Cinfo
-type FixWfC   = F.WfC Cinfo
+type FixSubC  = F.SubC LHSymbol Cinfo
+type FixWfC   = F.WfC LHSymbol Cinfo
 
 
 subVar :: FixSubC -> Maybe Var
@@ -182,7 +187,7 @@ instance SubStratum SubC where
 -- | Generation: Types ---------------------------------------------------------
 --------------------------------------------------------------------------------
 data CGInfo = CGInfo 
-  { fEnv       :: !(F.SEnv F.Sort)             -- ^ top-level fixpoint env
+  { fEnv       :: !(F.SEnv LHSymbol (F.Sort LHSymbol))             -- ^ top-level fixpoint env
   , hsCs       :: ![SubC]                      -- ^ subtyping constraints over RType
   , hsWfs      :: ![WfC]                       -- ^ wellformedness constraints over RType
   , sCs        :: ![SubC]                      -- ^ additional stratum constrains for let bindings
@@ -190,24 +195,25 @@ data CGInfo = CGInfo
   , isBind     :: ![Bool]                      -- ^ tracks constraints that come from let-bindings
   , fixWfs     :: ![FixWfC]                    -- ^ wellformedness constraints over Sort (post-splitting)
   , freshIndex :: !Integer                     -- ^ counter for generating fresh KVars
-  , binds      :: !F.BindEnv                   -- ^ set of environment binders
+  , binds      :: !(F.BindEnv LHSymbol)                    -- ^ set of environment binders
   , ebinds     :: ![F.BindId]                  -- ^ existentials
   , annotMap   :: !(AnnInfo (Annot SpecType))  -- ^ source-position annotation map
   , holesMap   :: !(M.HashMap Var [HoleInfo SpecType])    -- ^ information for ghc hole expressions
   , tyConInfo  :: !TyConMap                    -- ^ information about type-constructors
   , specDecr   :: ![(Var, [Int])]              -- ^ ^ Lexicographic order of decreasing args (DEPRECATED) 
   , newTyEnv   :: !(M.HashMap TC.TyCon SpecType)        -- ^ Mapping of new type type constructors with their refined types.
-  , termExprs  :: !(M.HashMap Var [F.Located F.Expr])   -- ^ Terminating Metrics for Recursive functions
+  , termExprs  :: !(M.HashMap Var [F.Located (F.Expr LHSymbol)])   -- ^ Terminating Metrics for Recursive functions
   , specLVars  :: !(S.HashSet Var)             -- ^ Set of variables to ignore for termination checking
   , specLazy   :: !(S.HashSet Var)             -- ^ "Lazy binders", skip termination checking
   , specTmVars :: !(S.HashSet Var)             -- ^ Binders that FAILED struct termination check that MUST be checked 
   , autoSize   :: !(S.HashSet TC.TyCon)        -- ^ ? FIX THIS
-  , tyConEmbed :: !(F.TCEmb TC.TyCon)          -- ^ primitive Sorts into which TyCons should be embedded
-  , kuts       :: !F.Kuts                      -- ^ Fixpoint Kut variables (denoting "back-edges"/recursive KVars)
-  , kvPacks    :: ![S.HashSet F.KVar]          -- ^ Fixpoint "packs" of correlated kvars
-  , cgLits     :: !(F.SEnv F.Sort)             -- ^ Global symbols in the refinement logic
-  , cgConsts   :: !(F.SEnv F.Sort)             -- ^ Distinct constant symbols in the refinement logic
-  , cgADTs     :: ![F.DataDecl]                -- ^ ADTs extracted from Haskell 'data' definitions
+  , tyConEmbed :: !(F.TCEmb LHSymbol TC.TyCon)          -- ^ primitive Sorts into which TyCons should be embedded
+  -- YL : what is this? KVar? Probably don't need KVar to be 
+  , kuts       :: !(F.Kuts LHSymbol)                      -- ^ Fixpoint Kut variables (denoting "back-edges"/recursive KVars)
+  , kvPacks    :: ![S.HashSet (F.KVar LHSymbol)]          -- ^ Fixpoint "packs" of correlated kvars
+  , cgLits     :: !(F.SEnv LHSymbol (F.Sort LHSymbol))             -- ^ Global symbols in the refinement logic
+  , cgConsts   :: !(F.SEnv LHSymbol (F.Sort LHSymbol))             -- ^ Distinct constant symbols in the refinement logic
+  , cgADTs     :: ![F.DataDecl LHSymbol]                -- ^ ADTs extracted from Haskell 'data' definitions
   , tcheck     :: !Bool                        -- ^ Check Termination (?)
   , scheck     :: !Bool                        -- ^ Check Strata (?)
   , pruneRefs  :: !Bool                        -- ^ prune unsorted refinements
@@ -218,11 +224,11 @@ data CGInfo = CGInfo
   , allowHO    :: !Bool
   , ghcI       :: !GhcInfo
   , dataConTys :: ![(Var, SpecType)]           -- ^ Refined Types of Data Constructors
-  , unsorted   :: !F.Templates                 -- ^ Potentially unsorted expressions
+  , unsorted   :: !(F.Templates LHSymbol)                 -- ^ Potentially unsorted expressions
   }
 
 
-getTemplates :: CG F.Templates
+getTemplates :: CG (F.Templates LHSymbol)
 getTemplates = do 
   fg     <- pruneRefs <$> get
   ts     <- unsorted  <$> get
@@ -256,17 +262,20 @@ pprCGInfo _k _cgi
 -- | Helper Types: HEnv --------------------------------------------------------
 --------------------------------------------------------------------------------
 
-newtype HEnv = HEnv (S.HashSet F.Symbol)
 
-fromListHEnv :: [F.Symbol] -> HEnv
+-- YL : what are hole symbols?
+newtype HEnv = HEnv (S.HashSet F.FixSymbol)
+
+fromListHEnv :: [F.FixSymbol] -> HEnv
 fromListHEnv = HEnv . S.fromList
 
-elemHEnv :: F.Symbol -> HEnv -> Bool
+elemHEnv :: F.FixSymbol -> HEnv -> Bool
 elemHEnv x (HEnv s) = x `S.member` s
 
 --------------------------------------------------------------------------------
 -- | Helper Types: Invariants --------------------------------------------------
 --------------------------------------------------------------------------------
+-- YL : do we still need this?
 data RInv = RInv { _rinv_args :: [RSort]   -- empty list means that the invariant is generic
                                            -- for all type arguments
                  , _rinv_type :: SpecType
@@ -379,22 +388,25 @@ removeInvariant γ cbs
 restoreInvariant :: CGEnv -> RTyConInv -> CGEnv
 restoreInvariant γ is = γ {invs = is}
 
+-- YL : what is a recursive invariant? a set of usable hypotheses in well-founded recursion?
 makeRecInvariants :: CGEnv -> [Var] -> CGEnv
 makeRecInvariants γ [x] = γ {invs = M.unionWith (++) (invs γ) is}
   where
     is  =  M.map (map f . filter (isJust . (varType x `tcUnifyTy`) . toType . _rinv_type)) (rinvs γ)
+    -- YL : if only we had functional dependencies and type families
     f i = i{_rinv_type = guard $ _rinv_type i}
 
     guard (RApp c ts rs r)
       | Just f <- szFun <$> sizeFunction (rtc_info c)
-      = RApp c ts rs (MkUReft (ref f $ F.toReft r) mempty mempty)
+      = RApp c ts rs (MkUReft (ref f $ F.toReft @LHSymbol r) mempty mempty)
       | otherwise
       = RApp c ts rs mempty
     guard t
       = t
 
     ref f (F.Reft(v, rr))
-      = F.Reft (v, F.PImp (F.PAtom F.Lt (f v) (f $ F.symbol x)) rr)
+    -- YL : good Var
+      = undefined -- F.Reft (v, F.PImp (F.PAtom F.Lt (f v) (f $ F.symbol x)) rr)
 
 makeRecInvariants γ _ = γ
 
@@ -404,24 +416,28 @@ makeRecInvariants γ _ = γ
 
 data FEnv = FE
   { feBinds :: !F.IBindEnv        -- ^ Integer Keys for Fixpoint Environment
-  , feEnv   :: !(F.SEnv F.Sort)   -- ^ Fixpoint Environment
-  , feIdEnv :: !(F.SEnv F.BindId) -- ^ Map from Symbol to current BindId
+  , feEnv   :: !(F.SEnv LHSymbol (F.Sort LHSymbol))   -- ^ Fixpoint Environment
+  , feIdEnv :: !(F.SEnv LHSymbol F.BindId) -- ^ Map from Symbol to current BindId
   }
 
-insertFEnv :: FEnv -> ((F.Symbol, F.Sort), F.BindId) -> FEnv
+insertFEnv :: FEnv -> ((F.Symbol LHSymbol, F.Sort LHSymbol), F.BindId) -> FEnv
 insertFEnv (FE benv env ienv) ((x, t), i)
   = FE (F.insertsIBindEnv [i] benv)
        (F.insertSEnv x t      env)
        (F.insertSEnv x i      ienv)
 
-insertsFEnv :: FEnv -> [((F.Symbol, F.Sort), F.BindId)] -> FEnv
+insertsFEnv :: FEnv -> [((F.Symbol LHSymbol, F.Sort LHSymbol), F.BindId)] -> FEnv
 insertsFEnv = L.foldl' insertFEnv
 
-initFEnv :: [(F.Symbol, F.Sort)] -> FEnv
+
+-- YL : How is it initialized?
+initFEnv :: [(F.Symbol LHSymbol, F.Sort LHSymbol)] -> FEnv
 initFEnv xts = FE benv0 env0 ienv0
   where
     benv0    = F.emptyIBindEnv
-    env0     = F.fromListSEnv (wiredSortedSyms ++ xts)
+    -- YL : convert wiredsortedsyms to the appropriate form or simply inject the GHC types
+    -- YL : wiredsortedsyms ; papp?
+    env0     = undefined -- F.fromListSEnv (wiredSortedSyms ++ xts)
     ienv0    = F.emptySEnv
 
 --------------------------------------------------------------------------------

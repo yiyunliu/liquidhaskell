@@ -258,6 +258,7 @@ refreshArgs t = fst <$> refreshArgsSub t
 
 
 -- NV TODO: this does not refresh args if they are wrapped in an RRTy
+-- YL : what exactly is it refreshing?
 refreshArgsSub :: (FreshM m) => SpecType -> m (SpecType, F.Subst LHSymbol)
 refreshArgsSub t
   = do ts     <- mapM refreshArgs ts_u

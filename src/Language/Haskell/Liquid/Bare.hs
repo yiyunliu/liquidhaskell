@@ -703,6 +703,7 @@ makeSpecData src env sigEnv measEnv sig specs = SpData
                        | (x, t) <- Bare.meDataCons measEnv
                        , let tt  = Bare.plugHoles sigEnv name (Bare.LqTV x) t 
                    ]
+  -- YL : Ghc Var!!!
   , gsMeas       = [ (F.symbol x, uRType <$> t) | (x, t) <- measVars ] 
   , gsMeasures   = Bare.qualifyTopDummy env name <$> (ms1 ++ ms2)
   , gsInvariants = Misc.nubHashOn (F.loc . snd) invs 

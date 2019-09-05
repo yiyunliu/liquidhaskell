@@ -93,12 +93,12 @@ mkSpecDecs _ =
 
 -- Symbol to TH Name -----------------------------------------------------------
 
-symbolName :: Symbolic s => s -> Name
+symbolName :: FixSymbolic s => s -> Name
 symbolName = mkName . symbolString . symbol
 
 -- BareType to TH Type ---------------------------------------------------------
 
-simplifyBareType :: LocSymbol -> BareType -> Either UserError Type
+simplifyBareType :: Located FixSymbol -> BareType -> Either UserError Type
 simplifyBareType s t = case simplifyBareType' t of
   Simplified t' ->
     Right t'
@@ -115,7 +115,8 @@ simplifyBareType' = simplifyBareType'' ([], [])
 simplifyBareType'' :: ([BTyVar], [BareType]) -> BareType -> Simpl Type
 
 simplifyBareType'' ([], []) (RVar v _) =
-  return $ VarT $ symbolName v
+  -- YL : need to get the instance back
+  return $ VarT $ undefined -- symbolName v
 simplifyBareType'' ([], []) (RAppTy t1 t2 _) =
   AppT <$> simplifyBareType' t1 <*> simplifyBareType' t2
 simplifyBareType'' ([], []) (RFun _ i o _) =
@@ -150,10 +151,11 @@ simplifyBareType'' (tvs, cls) (RFun _ i o _)
 simplifyBareType'' (tvs, cls) (RAllT tv t) =
   simplifyBareType'' (ty_var_value tv : tvs, cls) t
 
-simplifyBareType'' (tvs, cls) t =
-  ForallT (PlainTV . symbolName <$> reverse tvs)
-    <$> mapM simplifyBareType' (reverse cls)
-    <*> simplifyBareType' t
+simplifyBareType'' (tvs, cls) t = undefined
+-- YL : same here. missing instances
+  -- ForallT (PlainTV . symbolName <$> reverse tvs)
+  --   <$> mapM simplifyBareType' (reverse cls)
+  --   <*> simplifyBareType' t
 
 
 data Simpl a = Simplified a

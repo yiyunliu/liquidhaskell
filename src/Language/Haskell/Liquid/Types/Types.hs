@@ -2393,6 +2393,7 @@ instance F.PPrint KVProf where
 
 instance NFData KVProf
 
+-- YL : Can we use GHC's Hole? Or is there one?
 hole :: Expr
 hole = F.PKVar (F.KV (F.FS "HOLE")) mempty
 

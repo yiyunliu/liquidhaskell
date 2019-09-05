@@ -39,6 +39,7 @@ import           Language.Fixpoint.Misc  ((=>>))
 import qualified Language.Fixpoint.Types as F
 import           Language.Fixpoint.Types.Visitor (kvars)
 import           Language.Haskell.Liquid.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 -- import           Language.Haskell.Liquid.Types.RefType
 -- import           Language.Haskell.Liquid.Types.Fresh
 import           Language.Haskell.Liquid.Constraint.Types
@@ -105,7 +106,7 @@ addKuts _x t = modify $ \s -> s { kuts = mappend (F.KS ks) (kuts s)   }
        | S.null ks' = ks'
        | otherwise  = {- F.tracepp ("addKuts: " ++ showpp _x) -} ks'
 
-specTypeKVars :: SpecType -> [F.KVar]
+specTypeKVars :: SpecType -> [F.KVar LHSymbol]
 specTypeKVars = foldReft (\ _ r ks -> (kvars $ ur_reft r) ++ ks) []
 
 --------------------------------------------------------------------------------
@@ -132,7 +133,8 @@ exprRefType_ γ (Lam α e) | isTyVar α
   = RAllT (makeRTVar $ rTyVar α) (exprRefType_ γ e)
 
 exprRefType_ γ (Lam x e)
-  = rFun (F.symbol x) (ofType $ varType x) (exprRefType_ γ e)
+-- YL : corebndr is just a var, which means this is fine
+  = rFun (F.AS $ LHVar x) (ofType $ varType x) (exprRefType_ γ e)
 
 exprRefType_ γ (Tick _ e)
   = exprRefType_ γ e

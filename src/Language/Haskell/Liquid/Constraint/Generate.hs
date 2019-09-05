@@ -1194,6 +1194,7 @@ caseEnv   :: CGEnv -> Var -> [AltCon] -> AltCon -> [Var] -> Maybe [Int] -> CG CG
 -------------------------------------------------------------------------------------
 caseEnv γ x _   (DataAlt c) ys pIs = do 
 
+  -- YL : Var -> FixSymbol conversion.
   let (x' : ys')   = F.symbol <$> (x:ys)
   xt0             <- checkTyCon ("checkTycon cconsCase", x) γ <$> γ ??= x
   let xt           = shiftVV xt0 x'
