@@ -7,6 +7,9 @@
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE DeriveDataTypeable        #-}
 
+-- YL : this file is mostly commented out for now. It would only make sense to refactor here
+-- when the Types are correctly parameterized
+
 module Language.Haskell.Liquid.Parse
   ( hsSpecificationP
   , specSpecificationP
@@ -41,7 +44,8 @@ import qualified Text.PrettyPrint.HughesPJ              as PJ
 import           Text.PrettyPrint.HughesPJ.Compat       ((<+>)) 
 import           Language.Fixpoint.Types                hiding (panic, SVar, DDecl, DataDecl, DataCtor (..), Error, R, Predicate)
 import           Language.Haskell.Liquid.GHC.Misc
-import           Language.Haskell.Liquid.Types          
+import           Language.Haskell.Liquid.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 import qualified Language.Fixpoint.Misc                 as Misc      
 import qualified Language.Haskell.Liquid.Misc           as Misc
 import qualified Language.Haskell.Liquid.Measure        as Measure
@@ -82,9 +86,9 @@ hsSpecificationP modName specComments specQuotes =
 initPStateWithList :: PState Void
 initPStateWithList
 -- YL : use GHC tyswiredin? i'm worried that it might not work due to the wired in defined in LH
-  = undefined -- initPState { empList  = Just (EVar ("GHC.Types.[]" :: FixSymbol))
-    --            , singList = Just (\e -> EApp (EApp (EVar ("GHC.Types.:"  :: FixSymbol)) e) (EVar ("GHC.Types.[]" :: FixSymbol)))
-    --            }
+  = initPState { empList  = Just (EVar $ FS $ ("GHC.Types.[]" :: FixSymbol))
+               , singList = Just (\e -> EApp (EApp (EVar $ FS $ ("GHC.Types.:"  :: FixSymbol)) e) (EVar $ FS $ ("GHC.Types.[]" :: FixSymbol)))
+               }
 
 --------------------------------------------------------------------------
 specSpecificationP  :: SourceName -> String -> Either Error (ModName, Measure.BareSpec)
@@ -92,13 +96,14 @@ specSpecificationP  :: SourceName -> String -> Either Error (ModName, Measure.Ba
 specSpecificationP f s = mapRight snd $  parseWithError initPStateWithList specificationP (newPos f 1 1) s
 
 specificationP :: Parser Void (ModName, Measure.BareSpec)
-specificationP = undefined -- do 
-  -- reserved "module"
-  -- reserved "spec"
-  -- name   <- symbolP
-  -- reserved "where"
-  -- xs     <- if True then grabs (specP <* whiteSpace) else sepBy specP newline
-  -- return $ mkSpec (ModName SpecImport $ mkModuleName $ symbolString name) xs
+specificationP = do 
+  reserved "module"
+  reserved "spec"
+  -- YL : liquid-fixpoint: should return FixSymbol
+  FS name   <- symbolP
+  reserved "where"
+  xs     <- if True then grabs (specP <* whiteSpace) else sepBy specP newline
+  return $ mkSpec (ModName SpecImport $ mkModuleName $ symbolString name) xs
 
 -- debugP = grabs (specP <* whiteSpace)
 
@@ -166,15 +171,17 @@ parseSymbolToLogic f = mapRight snd . parseWithError initPStateWithList toLogicP
 
 toLogicP :: Parser Void LogicMap
 toLogicP
+  -- YL : this is getting messy. Expr Void -> Expr s. huge performance cost?
   = undefined -- toLogicMap <$> many toLogicOneP
 
 toLogicOneP :: Parser Void  (Located FixSymbol, [FixSymbol], Expr Void)
 toLogicOneP
-  = undefined -- do reserved "define"
-    --    (x:xs) <- many1 (locParserP symbolP)
-    --    reservedOp "="
-    --    e      <- exprP
-    --    return (x, val <$> xs, e)
+  = do reserved "define"
+       (x:xs) <- many1 (locParserP symbolP)
+       reservedOp "="
+       e      <- exprP
+       -- YL : address the isomorphism mapping
+       undefined -- return (x, val <$> xs, e)
 
 
 defineP :: Parser Void (Located FixSymbol, FixSymbol)
@@ -236,31 +243,32 @@ nullPC :: BareType -> ParamComp
 nullPC bt = PC PcNoSymbol bt
 
 btP :: Parser Void ParamComp
-btP = undefined -- do
-  -- c@(PC sb _) <- compP
-  -- case sb of
-  --   PcNoSymbol   -> return c
-  --   PcImplicit b -> parseFun c b
-  --   PcExplicit b -> parseFun c b
-  -- <?> "btP"
-  -- where
-  --   parseFun c@(PC sb t1) b  =
-  --     ((do
-  --           reservedOp "->"
-  --           PC _ t2 <- btP
-  --           return (PC sb (rFun b t1 t2)))
-  --       <|>
-  --        (do
-  --           reservedOp "~>"
-  --           PC _ t2 <- btP
-  --           return (PC sb (rImpF b t1 t2)))
-  --       <|>
-  --        (do
-  --           reservedOp "=>"
-  --           PC _ t2 <- btP
-  --           -- TODO:AZ return an error if s == PcExplicit
-  --           return $ PC sb $ foldr (rFun dummySymbol) t2 (getClasses t1))
-  --        <|> return c)
+btP = do
+  c@(PC sb _) <- compP
+  case sb of
+    PcNoSymbol   -> return c
+    -- YL : fix
+    -- PcImplicit b -> parseFun c b
+    -- PcExplicit b -> parseFun c b
+  <?> "btP"
+  where
+    parseFun c@(PC sb t1) b  =
+      ((do
+            reservedOp "->"
+            PC _ t2 <- btP
+            return (PC sb (rFun b t1 t2)))
+        <|>
+         (do
+            reservedOp "~>"
+            PC _ t2 <- btP
+            return (PC sb (rImpF b t1 t2)))
+        <|>
+         (do
+            reservedOp "=>"
+            PC _ t2 <- btP
+            -- TODO:AZ return an error if s == PcExplicit
+            return $ PC sb $ foldr (rFun (AS . LHRefSym $ dummySymbol)) t2 (getClasses t1))
+         <|> return c)
 
 
 compP :: Parser Void ParamComp
@@ -291,16 +299,19 @@ holePC = do
   return (PC (PcImplicit b) h)
 
 namedCircleP :: Parser Void ParamComp
-namedCircleP = undefined -- do
-  -- lb <- locParserP lowerIdP
-  -- (do _ <- colon
-  --     let b = val lb
-  --     -- YL : another Symbol Void FixSymbol iso
-  --     PC (PcExplicit b) <$> bareArgP b
-  --   <|> do
-  --     b <- dummyBindP
-  --     PC (PcImplicit b) <$> dummyP (lowerIdTail (val lb))
-  --   )
+namedCircleP = do
+  lb <- locParserP lowerIdP
+  (do _ <- colon
+      let (FS b) = val lb
+      -- YL : Probably should define some sort of isomorphism between Symbol Void and FixSymbol
+      -- or at least FixSymbolic instance for Symbol Void
+      PC (PcExplicit b) <$> bareArgP b
+    <|> do
+      b <- dummyBindP
+      -- YL : Fix
+      undefined
+      -- PC (PcImplicit b) <$> dummyP (lowerIdTail (val lb))
+    )
 
 unnamedCircleP :: Parser Void ParamComp
 unnamedCircleP = do
@@ -405,7 +416,7 @@ refDefP :: FixSymbol
         -> Parser Void (Expr Void)
         -> Parser Void (Reft Void -> BareType)
         -> Parser Void BareType
-refDefP vv rp kindP' = braces $ undefined -- do
+refDefP vv rp kindP' = undefined -- braces $ do
   -- x       <- optBindP vv
   -- -- NOSUBST i       <- freshIntP
   -- t       <- try (kindP' <* reservedOp "|") <|> return (RHole . uTop) <?> "refDefP"
@@ -426,10 +437,10 @@ optBindP :: FixSymbol -> Parser Void FixSymbol
 optBindP x = undefined -- try bindP <|> return x
 
 holeP :: Parser Void BareType
-holeP    = reserved "_" >> spaces >> return (RHole $ uTop $ Reft ("VV", hole))
+holeP    = undefined -- reserved "_" >> spaces >> return (RHole $ uTop $ Reft ("VV", hole))
 
 holeRefP :: Parser Void (Reft Void -> BareType)
-holeRefP = undefined -- reserved "_" >> spaces >> return (RHole . uTop)
+holeRefP =  undefined -- reserved "_" >> spaces >> return (RHole . uTop)
 
 -- NOPROP refasHoleP :: Parser Void Expr
 -- NOPROP refasHoleP  = try refaP
@@ -437,7 +448,7 @@ holeRefP = undefined -- reserved "_" >> spaces >> return (RHole . uTop)
 
 refasHoleP :: Parser Void (Expr Void)
 refasHoleP
-  =  undefined -- (reserved "_" >> return hole)
+  = undefined -- (reserved "_" >> return hole)
  -- <|> refaP
  -- <?> "refasHoleP"
 
@@ -450,7 +461,7 @@ refasHoleP
 -- as `foo :: a -> b bar`..
 bbaseP :: Parser Void (Reft Void -> BareType)
 bbaseP
-  = undefined -- holeRefP  -- Starts with '_'
+  =  undefined -- holeRefP  -- Starts with '_'
  -- <|> liftM2 bLst (brackets (maybeP bareTypeP)) predicatesP
  -- <|> liftM2 bTup (parens $ sepBy (maybeBind bareTypeP) comma) predicatesP
  -- <|> try parseHelper  -- starts with lower
@@ -475,7 +486,7 @@ lowerIdTail l = undefined
 
 bTyConP :: Parser Void BTyCon
 bTyConP
-  = undefined  -- (reservedOp "'" >> (mkPromotedBTyCon <$> locUpperIdP))
+  = undefined -- (reservedOp "'" >> (mkPromotedBTyCon <$> locUpperIdP))
  -- <|> mkBTyCon <$> locUpperIdP
  -- <?> "bTyConP"
 
