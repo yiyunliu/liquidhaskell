@@ -339,8 +339,9 @@ type Symbol    = F.Symbol LHSymbol
 -- Ideally, this bandaid should be replaced so we don't have these
 -- hacky corner cases.
 
--- YL : by looking at makeLogicMap, it shouldn't hold LHSymbol..
--- but since it's a monoid, it can always be extended.
+-- YL : after reading the definition of makeLogicMap, it shouldn't hold LHSymbol..
+-- but since it's a monoid, it can always be extended. I guess they never get resolved?
+-- Should I turn this into a Var -> FixSymbol map
 data LogicMap = LM
   { lmSymDefs  :: M.HashMap F.FixSymbol LMap        -- ^ Map from symbols to equations they define
   , lmVarSyms  :: M.HashMap Var (Maybe F.FixSymbol) -- ^ Map from (lifted) Vars to `Symbol`; see:
@@ -533,7 +534,7 @@ instance F.Subable LHSymbol Predicate where
 
 instance NFData r => NFData (UReft r)
 
-
+-- YL : should be FixSymbol since it is Bare
 newtype BTyVar = BTV Symbol deriving (Show, Generic, Data, Typeable)
 
 newtype RTyVar = RTV TyVar deriving (Generic, Data, Typeable)

@@ -15,7 +15,7 @@ module Language.Haskell.Liquid.Constraint.Init (
     initCGI,
     ) where
 
-import           Prelude                                       hiding (error, undefined)
+import           Prelude                                       hiding (error)
 import           Coercion
 import           DataCon
 import           CoreSyn
@@ -81,15 +81,21 @@ initEnv info
        let f4    = mergeDataConTypes tce (mergeDataConTypes tce f40 (f41 ++ f42)) (filter (isDataConId . fst) f2)
        sflag    <- scheck <$> get
        let senv  = if sflag then f2 else []
-       let tx    = mapFst F.symbol . addRInv ialias . strataUnify senv . predsUnify sp
+       -- YL : get back symbolic 
+       let tx    = undefined -- mapFst F.symbol . addRInv ialias . strataUnify senv . predsUnify sp
+       -- YL : what is this? a mix of string and ghc sym or purely string?
        let bs    = (tx <$> ) <$> [f0 ++ f0' ++ fi, f1 ++ f1', f2, f3 ++ f3', f4, f5]
        modify $ \s -> s { dataConTys = f4 }
        lt1s     <- F.toListSEnv . cgLits <$> get
-       let lt2s  = [ (F.symbol x, rTypeSort tce t) | (x, t) <- f1' ]
-       let tcb   = mapSnd (rTypeSort tce) <$> concat bs
+       -- YL : symbolic instance for Var
+       let lt2s  = undefined -- [ (F.symbol x, rTypeSort tce t) | (x, t) <- f1' ]
+       -- YL : 
+       let tcb   = undefined -- mapSnd (rTypeSort tce) <$> concat bs
        let cbs   = giCbs . giSrc $ info
-       let γ0    = measEnv sp (head bs) cbs tcb lt1s lt2s (bs!!3) (bs!!5) hs info
-       γ  <- globalize <$> foldM (+=) γ0 ( [("initEnv", x, y) | (x, y) <- concat $ tail bs])
+       -- YL : important!
+       let γ0    = undefined -- measEnv sp (head bs) cbs tcb lt1s lt2s (bs!!3) (bs!!5) hs info
+       -- YL : ... types += 
+       γ  <- globalize <$> foldM (+=) γ0 ( [("initEnv", undefined x, y) | (x, y) <- concat $ tail bs])
        return γ {invs = is (invs1 ++ invs2)}
   where
     sp           = giSpec info
@@ -120,7 +126,7 @@ makeAutoDecrDataCons dcts specenv dcs
 idTyCon :: Id -> Maybe TyCon
 idTyCon = fmap dataConTyCon . idDataConM
 
-lenOf :: F.Symbol s -> F.Expr s
+lenOf :: F.Symbol LHSymbol -> F.Expr LHSymbol
 lenOf x = F.mkEApp lenLocSymbol [F.EVar x]
 
 makeSizedDataCons :: [(Id, SpecType)] -> DataCon -> Integer -> (RSort, (Id, SpecType))
@@ -173,18 +179,19 @@ measEnv :: GhcSpec
         -> [(F.Symbol LHSymbol, SpecType)] -- YL: a bunch of refreshed stuff
         -> [CoreBind]
         -> [(F.Symbol LHSymbol, F.Sort LHSymbol)]
-        -> [(F.Symbol LHS, F.Sort)]
-        -> [(F.Symbol, F.Sort)]
-        -> [(F.Symbol, SpecType)]
-        -> [(F.Symbol, SpecType)]
-        -> [F.Symbol]
+        -> [(F.Symbol LHSymbol, F.Sort LHSymbol)]
+        -> [(F.Symbol LHSymbol, F.Sort LHSymbol)]
+        -> [(F.Symbol LHSymbol, SpecType)]
+        -> [(F.Symbol LHSymbol, SpecType)]
+        -> [F.FixSymbol]
         -> GhcInfo
         -> CGEnv
 --------------------------------------------------------------------------------
 measEnv sp xts cbs _tcb lt1s lt2s asms itys hs info = CGE
   { cgLoc    = Sp.empty
   , renv     = fromListREnv (second val <$> gsMeas (gsData sp)) []
-  , syenv    = F.fromListSEnv (gsFreeSyms (gsName sp))
+  -- YL : ???
+  , syenv    = undefined -- F.fromListSEnv -- (gsFreeSyms (gsName sp))
   , litEnv   = F.fromListSEnv lts
   , constEnv = F.fromListSEnv lt2s
   , fenv     = initFEnv $ filterHO (tcb' ++ lts ++ (second (rTypeSort tce . val) <$> gsMeas (gsData sp)))
@@ -204,7 +211,8 @@ measEnv sp xts cbs _tcb lt1s lt2s asms itys hs info = CGE
   , lcb      = M.empty
   , holes    = fromListHEnv hs
   , lcs      = mempty
-  , aenv     = axEnv (gsRefl sp)
+  -- YL : why is logic map even needed?
+  , aenv     = undefined -- axEnv (gsRefl sp)
   , cerr     = Nothing
   , cgInfo   = info
   , cgVar    = Nothing
@@ -214,8 +222,9 @@ measEnv sp xts cbs _tcb lt1s lt2s asms itys hs info = CGE
       filterHO xs = if higherOrderFlag sp then xs else filter (F.isFirstOrder . snd) xs
       lts         = lt1s ++ lt2s
       tcb'        = []
-      axEnv sp    = M.union (M.mapWithKey (fromMaybe . F.symbol) $ lmVarSyms $ gsLogicMap sp)
-                            (M.fromList [(v, F.symbol v) | v <- gsReflects sp])
+      -- YL : good var? nope.... see the first argument of union
+      -- axEnv sp    = M.union (M.mapWithKey (fromMaybe . F.symbol) $ lmVarSyms $ gsLogicMap sp)
+      --                       (M.fromList [(v, F.symbol v) | v <- gsReflects sp])
 
 
 assm :: GhcInfo -> [(Var, SpecType)]
@@ -250,7 +259,7 @@ grtyTop info     = forM topVs $ \v -> (v,) <$> trueTy (varType v)
     sp           = gsSig . giSpec $ info
 
 
-infoLits :: (GhcSpec -> [(F.Symbol, LocSpecType)]) -> (F.Sort -> Bool) -> GhcInfo -> F.SEnv F.Sort
+infoLits :: (GhcSpec -> [(F.Symbol LHSymbol, LocSpecType)]) -> (F.Sort LHSymbol -> Bool) -> GhcInfo -> F.SEnv LHSymbol (F.Sort LHSymbol)
 infoLits litF selF info = F.fromListSEnv $ cbLits ++ measLits
   where
     cbLits    = filter (selF . snd) $ coreBindLits tce info
@@ -307,16 +316,16 @@ initCGI cfg info = CGInfo {
     nspc       = gsName spc
     notFn      = isNothing . F.functionSort
 
-coreBindLits :: F.TCEmb TyCon -> GhcInfo -> [(F.Symbol, F.Sort)]
+coreBindLits :: F.TCEmb LHSymbol TyCon -> GhcInfo -> [(F.Symbol LHSymbol, F.Sort LHSymbol)]
 coreBindLits tce info
-  = sortNub      $ [ (F.symbol x, F.strSort) | (_, Just (F.ESym x)) <- lconsts ]    -- strings
-                ++ [ (dconToSym dc, dconToSort dc) | dc <- dcons ]                  -- data constructors
-  where
-    src         = giSrc info
-    lconsts      = literalConst tce <$> literals (giCbs src)
-    dcons        = filter isDCon freeVs
-    freeVs       = giImpVars src ++ freeSyms
-    freeSyms     = fmap snd . gsFreeSyms . gsName . giSpec $ info
-    dconToSort   = typeSort tce . expandTypeSynonyms . varType
-    dconToSym    = F.symbol . idDataCon
-    isDCon x     = isDataConId x && not (hasBaseTypeVar x)
+  = undefined -- sortNub      $ [ (F.symbol x, F.strSort) | (_, Just (F.ESym x)) <- lconsts ]    -- strings
+  --               ++ [ (dconToSym dc, dconToSort dc) | dc <- dcons ]                  -- data constructors
+  -- where
+  --   src         = giSrc info
+  --   lconsts      = literalConst tce <$> literals (giCbs src)
+  --   dcons        = filter isDCon freeVs
+  --   freeVs       = giImpVars src ++ freeSyms
+  --   freeSyms     = fmap snd . gsFreeSyms . gsName . giSpec $ info
+  --   dconToSort   = typeSort tce . expandTypeSynonyms . varType
+  --   dconToSym    = F.symbol . idDataCon
+  --   isDCon x     = isDataConId x && not (hasBaseTypeVar x)

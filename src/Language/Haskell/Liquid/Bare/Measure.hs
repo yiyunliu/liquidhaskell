@@ -54,7 +54,8 @@ makeHaskellMeasures :: GhcSrc -> Bare.TycEnv -> LogicMap -> Ms.BareSpec
 --------------------------------------------------------------------------------
 makeHaskellMeasures src tycEnv lmap spec 
           = Bare.measureToBare <$> ms
-  where 
+  where
+    -- YL : it's kind of like searching for a measure in corebinds
     ms    = makeMeasureDefinition tycEnv lmap cbs <$> mSyms 
     cbs   = nonRecCoreBinds   (giCbs src) 
     mSyms = S.toList (Ms.hmeas spec)

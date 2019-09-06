@@ -1,4 +1,5 @@
 {-# LANGUAGE ImplicitParams        #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE FlexibleContexts      #-}
@@ -44,6 +45,7 @@ import           Language.Fixpoint.SortCheck (pruneUnsortedReft)
 import           Language.Haskell.Liquid.Misc -- (concatMapM)
 import qualified Language.Haskell.Liquid.UX.CTags       as Tg
 import           Language.Haskell.Liquid.Types hiding (loc)
+import           Language.Haskell.Liquid.Types.LHSymbol
 
 -- import           Language.Haskell.Liquid.Types.Variance
 -- import           Language.Haskell.Liquid.Types.Strata
@@ -136,10 +138,10 @@ bsplitW γ t =
      isHO  <- allowHO   <$> get
      return $ bsplitW' γ t temp isHO
 
-bsplitW' :: (PPrint r, F.Reftable r, SubsTy RTyVar RSort r, F.Reftable (RTProp RTyCon RTyVar r))
-         => CGEnv -> RRType r -> F.Templates -> Bool -> [F.WfC Cinfo]
+bsplitW' :: (PPrint r, F.Reftable LHSymbol r, SubsTy RTyVar RSort r, F.Reftable LHSymbol (RTProp RTyCon RTyVar r))
+         => CGEnv -> RRType r -> F.Templates LHSymbol -> Bool -> [F.WfC LHSymbol Cinfo]
 bsplitW' γ t temp isHO
-  | isHO || F.isNonTrivial r'
+  | isHO || F.isNonTrivial @LHSymbol r'
   = F.wfC (feBinds $ fenv γ) r' ci
   | otherwise
   = []
@@ -454,7 +456,7 @@ traceTy (RRTy _ _ _ t)  = parens ("RRTy " ++ traceTy t)
 parens :: String -> String
 parens s = "(" ++ s ++ ")"
 
-rHole :: F.Reft -> SpecType
+rHole :: F.Reft LHSymbol -> SpecType
 rHole = RHole . uTop
 
 
@@ -481,7 +483,7 @@ rsplitsCWithVariance _ γ t1s t2s variants
 bsplitC :: CGEnv
         -> SpecType
         -> SpecType
-        -> CG [F.SubC Cinfo]
+        -> CG [F.SubC LHSymbol Cinfo]
 bsplitC γ t1 t2 = do
   checkStratum γ t1 t2
   temp   <- getTemplates
@@ -492,7 +494,7 @@ bsplitC γ t1 t2 = do
 addLhsInv :: CGEnv -> SpecType -> SpecType
 addLhsInv γ t = addRTyConInv (invs γ) t `strengthen` r
   where
-    r         = (mempty :: UReft F.Reft) { ur_reft = F.Reft (F.dummySymbol, p) }
+    r         = (mempty :: UReft (F.Reft LHSymbol)) { ur_reft = F.Reft (F.AS $ LHRefSym F.dummySymbol, p) }
     p         = constraintToLogic rE' (lcs γ)
     rE'       = insertREnv v t (renv γ)
     v         = rTypeValueVar t
@@ -508,13 +510,13 @@ checkStratum γ t1 t2
     [s1, s2]  = getStrata <$> [t1, t2]
     wrn       =  ErrOther (getLocation γ) (text $ "Stratum Error : " ++ show s1 ++ " > " ++ show s2)
 
-bsplitC' :: CGEnv -> SpecType -> SpecType -> F.Templates -> Bool -> [F.SubC Cinfo]
+bsplitC' :: CGEnv -> SpecType -> SpecType -> F.Templates LHSymbol -> Bool -> [F.SubC LHSymbol Cinfo]
 bsplitC' γ t1 t2 tem isHO
  | isHO
  = F.subC γ' r1'  r2' Nothing tag ci
- | F.isFunctionSortedReft r1' && F.isNonTrivial r2'
+ | F.isFunctionSortedReft r1' && F.isNonTrivial @LHSymbol r2'
  = F.subC γ' (r1' {F.sr_reft = mempty}) r2' Nothing tag ci
- | F.isNonTrivial r2'
+ | F.isNonTrivial @LHSymbol r2'
  = F.subC γ' r1'  r2' Nothing tag ci
  | otherwise
  = []
@@ -529,10 +531,12 @@ bsplitC' γ t1 t2 tem isHO
     src = getLocation γ
     g   = reLocal $ renv γ
 
+
+-- YL : Temporary symbol generated from liquidhaskell
 unifyVV :: SpecType -> SpecType -> CG (SpecType, SpecType)
 unifyVV t1@(RApp _ _ _ _) t2@(RApp _ _ _ _)
   = do vv     <- (F.vv . Just) <$> fresh
-       return  $ (shiftVV t1 vv,  (shiftVV t2 vv) )
+       return  $ (shiftVV t1 (F.FS vv),  (shiftVV t2 (F.FS vv)) )
 
 unifyVV _ _
   = panic Nothing $ "Constraint.Generate.unifyVV called on invalid inputs"
@@ -562,12 +566,12 @@ forallExprRefType γ t = t `strengthen` (uTop r')
     r'                = fromMaybe mempty $ forallExprReft γ r
     r                 = F.sr_reft $ rTypeSortedReft (emb γ) t
 
-forallExprReft :: CGEnv -> F.Reft -> Maybe F.Reft
+forallExprReft :: CGEnv -> F.Reft LHSymbol -> Maybe (F.Reft LHSymbol)
 forallExprReft γ r =
   do e <- F.isSingletonReft r
      forallExprReft_ γ $ F.splitEApp e
 
-forallExprReft_ :: CGEnv -> (F.Expr, [F.Expr]) -> Maybe F.Reft
+forallExprReft_ :: CGEnv -> (F.Expr LHSymbol, [F.Expr LHSymbol]) -> Maybe (F.Reft LHSymbol)
 forallExprReft_ γ (F.EVar x, [])
   = case forallExprReftLookup γ x of
       Just (_,_,_,t)  -> Just $ F.sr_reft $ rTypeSortedReft (emb γ) t
@@ -584,12 +588,14 @@ forallExprReft_ _ _
 
 -- forallExprReftLookup :: CGEnv -> F.Symbol -> Int
 forallExprReftLookup :: CGEnv
-                     -> F.Symbol
-                     -> Maybe ([F.Symbol], [SpecType], [RReft], SpecType)
+                     -> F.Symbol LHSymbol
+                     -> Maybe ([F.Symbol LHSymbol], [SpecType], [RReft], SpecType)
 forallExprReftLookup γ x = snap <$> F.lookupSEnv x (syenv γ)
   where
     snap     = mapFourth4 ignoreOblig . (\(_,(a,b,c),t)->(a,b,c,t)) . bkArrow . fourth4 . bkUniv . lookup
-    lookup z = fromMaybe (panicUnbound γ z) (γ ?= F.symbol z)
+    -- YL : depend on how the map was built
+    lookup z = fromMaybe (panicUnbound γ z) (γ ?= (F.AS $ LHVar z) -- F.symbol z
+                                            )
 
 
 --------------------------------------------------------------------------------

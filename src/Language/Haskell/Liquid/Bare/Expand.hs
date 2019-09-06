@@ -3,11 +3,13 @@
 --   TODO: _only_ export `makeRTEnv`, `cookSpecType` and maybe `qualifyExpand`...
 
 {-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
+-- YL : expand means alias expansion
 
 module Language.Haskell.Liquid.Bare.Expand 
   ( -- * Create alias expansion environment
@@ -45,6 +47,7 @@ import qualified Language.Haskell.Liquid.GHC.Misc      as GM
 import qualified Language.Haskell.Liquid.GHC.API       as Ghc 
 import qualified Language.Haskell.Liquid.Types.RefType as RT 
 import           Language.Haskell.Liquid.Types         hiding (fresh)
+import           Language.Haskell.Liquid.Types.LHSymbol
 import qualified Language.Haskell.Liquid.Misc          as Misc 
 import qualified Language.Haskell.Liquid.Measure       as Ms
 import qualified Language.Haskell.Liquid.Bare.Resolve  as Bare
@@ -136,7 +139,8 @@ setREAlias env a = env { exprAliases = M.insert n a (exprAliases env) }
 
 
 --------------------------------------------------------------------------------
-type AliasTable x t = M.HashMap F.Symbol (Located (RTAlias x t))
+-- YL : stuff like Nat definitely should be an alias
+type AliasTable x t = M.HashMap F.FixSymbol (Located (RTAlias x t))
 
 buildAliasTable :: [Located (RTAlias x t)] -> AliasTable x t
 buildAliasTable = M.fromList . map (\rta -> (rtName (val rta), rta))
@@ -192,7 +196,7 @@ genExpandOrder table graph
 ordNub :: Ord a => [a] -> [a]
 ordNub = map head . L.group . L.sort
 
-buildTypeEdges :: (F.Symbolic c) => AliasTable x t -> RType c tv r -> [F.Symbol]
+buildTypeEdges :: (F.FixSymbolic c) => AliasTable x t -> RType c tv r -> [F.Symbol]
 buildTypeEdges table = ordNub . go
   where
     -- go :: t -> [Symbol]
@@ -263,10 +267,10 @@ qualifyExpand env name rtEnv l bs
 expandLoc :: (Expand a) => BareRTEnv -> Located a -> Located a 
 expandLoc rtEnv lx = expand rtEnv (F.loc lx) <$> lx 
 
-instance Expand Expr where 
+instance Expand (Expr LHSymbol) where 
   expand = expandExpr 
 
-instance Expand F.Reft where
+instance Expand (F.Reft LHSymbol) where
   expand rtEnv l (F.Reft (v, ra)) = F.Reft (v, expand rtEnv l ra) 
 
 instance Expand RReft where
@@ -292,7 +296,9 @@ instance Expand BareType where
     = expandReft     rtEnv l -- apply expression aliases 
     . expandBareType rtEnv l -- apply type       aliases 
 
-instance Expand (RTAlias F.Symbol Expr) where 
+
+-- YL : could be void...
+instance Expand (RTAlias F.FixSymbol (Expr s)) where 
   expand rtEnv l x = x { rtBody = expand rtEnv l (rtBody x) } 
 
 instance Expand BareRTAlias where 
@@ -335,7 +341,7 @@ instance Expand BareSpec where
 instance Expand a => Expand (F.Located a) where 
   expand rtEnv _ = expandLoc rtEnv 
 
-instance Expand a => Expand (F.LocSymbol, a) where 
+instance Expand a => Expand (F.Located F.FixSymbol, a) where 
   expand rtEnv l (x, y) = (x, expand rtEnv l y)
 
 instance Expand a => Expand (Maybe a) where 
@@ -716,7 +722,7 @@ expandEApp _ _ (f, es) = F.eApps f es
 --------------------------------------------------------------------------------
 -- | Expand Alias Application --------------------------------------------------
 --------------------------------------------------------------------------------
-expandApp :: F.Subable ty => F.SourcePos -> Located (RTAlias F.Symbol ty) -> [Expr] -> ty
+expandApp :: F.Subable LHSymbol ty => F.SourcePos -> Located (RTAlias F.FixSymbol ty) -> [Expr LHSymbol] -> ty
 expandApp l lre es
   | Just su <- args = F.subst su (rtBody re)
   | otherwise       = Ex.throw err
@@ -742,9 +748,11 @@ txExpToBind t = evalState (expToBindT t) (ExSt 0 M.empty πs)
   where 
     πs        = M.fromList [(pname p, p) | p <- ty_preds $ toRTypeRep t ]
 
+
+-- YL : ExSt???? substitution? If it replaces predicates then it should be FixSymbol always
 data ExSt = ExSt { fresh :: Int
-                 , emap  :: M.HashMap F.Symbol (RSort, F.Expr)
-                 , pmap  :: M.HashMap F.Symbol RPVar
+                 , emap  :: M.HashMap F.FixSymbol (RSort, F.Expr LHSymbol)
+                 , pmap  :: M.HashMap F.FixSymbol RPVar
                  }
 
 -- | TODO: Niki please write more documentation for this, maybe an example?
@@ -786,7 +794,7 @@ expToBindReft (RProp s (RHole r)) = rPropP s <$> expToBindRef r
 expToBindReft (RProp s t)  = RProp s  <$> expToBindT t
 
 
-getBinds :: State ExSt (M.HashMap F.Symbol (RSort, F.Expr))
+getBinds :: State ExSt (M.HashMap F.FixSymbol (RSort, F.Expr LHSymbol))
 getBinds
   = do bds <- emap <$> get
        modify $ \st -> st{emap = M.empty}
@@ -795,7 +803,7 @@ getBinds
 addExists :: SpecType -> State ExSt SpecType
 addExists t = liftM (M.foldlWithKey' addExist t) getBinds
 
-addExist :: SpecType -> F.Symbol -> (RSort, F.Expr) -> SpecType
+addExist :: SpecType -> F.FixSymbol -> (RSort, F.Expr LHSymbol) -> SpecType
 addExist t x (tx, e) = REx x t' t
   where 
     t'               = (ofRSort tx) `strengthen` uTop r
@@ -816,10 +824,10 @@ expToBind p = do
       pargs' <- mapM expToBindParg pargs0
       return $ p { pargs = pargs' }
 
-expToBindParg :: (((), F.Symbol, F.Expr), RSort) -> State ExSt ((), F.Symbol, F.Expr)
+expToBindParg :: (((), F.FixSymbol, F.Expr LHSymbol), RSort) -> State ExSt ((), F.FixSymbol, F.Expr LHSymbol)
 expToBindParg ((t, s, e), s') = liftM ((,,) t s) (expToBindExpr e s')
 
-expToBindExpr :: F.Expr ->  RSort -> State ExSt F.Expr
+expToBindExpr :: F.Expr LHSymbol ->  RSort -> State ExSt (F.Expr LHSymbol)
 expToBindExpr e@(EVar s) _ 
   | Char.isLower $ F.headSym $ F.symbol s
   = return e
@@ -828,7 +836,7 @@ expToBindExpr e t
        modify $ \st -> st{emap = M.insert s (t, e) (emap st)}
        return $ EVar s
 
-freshSymbol :: State ExSt F.Symbol
+freshSymbol :: State ExSt F.FixSymbol
 freshSymbol
   = do n <- fresh <$> get
        modify $ \s -> s {fresh = n+1}

@@ -217,6 +217,8 @@ normalizeVV idx t@(RApp _ _ _ _)
 normalizeVV _ t
   = t
 
+
+-- YL : what does this do?
 --------------------------------------------------------------------------------
 (+=) :: CGEnv -> (String, F.Symbol LHSymbol, SpecType) -> CG CGEnv
 --------------------------------------------------------------------------------

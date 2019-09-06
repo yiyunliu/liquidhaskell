@@ -20,6 +20,8 @@ import           Language.Haskell.Liquid.Types
 -- import           Language.Haskell.Liquid.Measure
 -- import           Language.Haskell.Liquid.Types.RefType
 
+-- YL : ***ToBare Why?
+-- Is this still needed
 --------------------------------------------------------------------------------
 specToBare :: SpecType -> BareType
 --------------------------------------------------------------------------------
@@ -36,18 +38,24 @@ measureToBare :: SpecMeasure -> BareMeasure
 --------------------------------------------------------------------------------
 measureToBare = bimap (fmap specToBare) dataConToBare
 
-dataConToBare :: DataCon -> LocSymbol
-dataConToBare d = (dropModuleNames . F.symbol) <$> locNamedThing d
-  where
-    _msg  = "dataConToBare dc = " ++ show d ++ " v = " ++ show v ++ " vx = " ++ show vx
-    v     = dataConWorkId d
-    vx    = F.symbol v
+
+-- YL : Bare really has contain LocSymbol unless you want to perform a bunch of scary
+-- partial pattern matching
+dataConToBare :: DataCon -> F.Located F.FixSymbol
+dataConToBare d = undefined -- (dropModuleNames . undefined -- F.symbol
+  --                 ) <$> locNamedThing d
+  -- where
+  --   _msg  = "dataConToBare dc = " ++ show d ++ " v = " ++ show v ++ " vx = " ++ show vx
+  --   v     = dataConWorkId d
+  --   vx    = F.symbol v
 
 specToBareTC :: RTyCon -> BTyCon
 specToBareTC = tyConBTyCon . rtc_tc
 
 specToBareTV :: RTyVar -> BTyVar
-specToBareTV (RTV α) = BTV (F.symbol α)
+-- YL : type of BTV is wrong
+specToBareTV (RTV α) = BTV (undefined -- F.symbol α
+                           )
 
 txRType :: (c1 -> c2) -> (tv1 -> tv2) -> RType c1 tv1 r -> RType c2 tv2 r
 txRType cF vF = go

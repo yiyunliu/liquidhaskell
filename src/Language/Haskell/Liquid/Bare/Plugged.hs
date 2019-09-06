@@ -2,6 +2,9 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 
+-- YL : I remember James mentioning something about Ghc and Holes.
+-- Is there anything from the ghc api that we can use?
+
 module Language.Haskell.Liquid.Bare.Plugged 
   ( makePluggedSig
   , makePluggedDataCon
@@ -21,6 +24,7 @@ import qualified Language.Haskell.Liquid.GHC.Misc  as GM
 import qualified Language.Haskell.Liquid.GHC.API   as Ghc 
 import           Language.Haskell.Liquid.Types.RefType (updateRTVar, addTyConInfo, ofType, rTyVar, subts, toType, uReft)
 import           Language.Haskell.Liquid.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 import qualified Language.Haskell.Liquid.Misc       as Misc 
 import qualified Language.Haskell.Liquid.Bare.Types as Bare
 import qualified Language.Haskell.Liquid.Bare.Misc  as Bare
@@ -45,7 +49,9 @@ import qualified Language.Haskell.Liquid.Bare.Misc  as Bare
 --   this module is responsible for plugging the holes we obviously cannot
 --   assume, as in e.g. L.H.L.Constraint.* that they do not appear.
 --------------------------------------------------------------------------------
-makePluggedSig :: ModName -> F.TCEmb Ghc.TyCon -> TyConMap -> Ghc.NameSet
+-- YL : what should I do with the NOTE....
+-- YL : Should I e concerned about maps like this (TCEmb): TyCon -> (Sort LHSymbol, TcArgs)
+makePluggedSig :: ModName -> F.TCEmb LHSymbol Ghc.TyCon -> TyConMap -> Ghc.NameSet
                -> Bare.PlugTV Ghc.Var -> LocSpecType
                -> LocSpecType
 
@@ -69,7 +75,7 @@ makePluggedSig name embs tyi exports kx t
 
 plugHoles :: (Ghc.NamedThing a, PPrint a, Show a) 
           => Bare.PlugTV a
-          -> F.TCEmb Ghc.TyCon
+          -> F.TCEmb LHSymbol Ghc.TyCon
           -> Bare.TyConMap
           -> (SpecType -> RReft -> RReft)
           -> Ghc.Type
@@ -80,7 +86,7 @@ plugHoles (Bare.LqTV x) a b = plugHoles_new a b x
 plugHoles _             _ _ = \_ _ t -> t
 
 
-makePluggedDataCon :: F.TCEmb Ghc.TyCon -> Bare.TyConMap -> Located DataConP -> Located DataConP
+makePluggedDataCon :: F.TCEmb LHSymbol Ghc.TyCon -> Bare.TyConMap -> Located DataConP -> Located DataConP
 makePluggedDataCon embs tyi ldcp 
   | mismatchFlds      = Ex.throw (err "fields")
   | mismatchTyVars    = Ex.throw (err "type variables")
@@ -117,11 +123,11 @@ makePluggedDataCon embs tyi ldcp
 -- 
 --   and not, forall b. a -> a -> Bool.
 
-plugMany :: F.TCEmb Ghc.TyCon -> Bare.TyConMap 
+plugMany :: F.TCEmb LHSymbol Ghc.TyCon -> Bare.TyConMap 
          -> Located DataConP            
          -> ([Ghc.Var], [Ghc.Type],             Ghc.Type)   -- ^ hs type 
-         -> ([RTyVar] , [(F.Symbol, SpecType)], SpecType)   -- ^ lq type 
-         -> ([(F.Symbol, SpecType)], SpecType)              -- ^ plugged lq type
+         -> ([RTyVar] , [(F.Symbol LHSymbol, SpecType)], SpecType)   -- ^ lq type 
+         -> ([(F.Symbol LHSymbol, SpecType)], SpecType)              -- ^ plugged lq type
 plugMany embs tyi ldcp (hsAs, hsArgs, hsRes) (lqAs, lqArgs, lqRes) 
                      = F.notracepp msg (drop nTyVars (zip xs ts), t) 
   where 
@@ -131,14 +137,14 @@ plugMany embs tyi ldcp (hsAs, hsArgs, hsRes) (lqAs, lqArgs, lqRes)
     hsT              = foldr Ghc.mkFunTy    hsRes hsArgs' 
     lqT              = foldr (uncurry rFun) lqRes lqArgs' 
     hsArgs'          = [ Ghc.mkTyVarTy a               | a <- hsAs] ++ hsArgs 
-    lqArgs'          = [(F.dummySymbol, RVar a mempty) | a <- lqAs] ++ lqArgs 
+    lqArgs'          = [(F.FS F.dummySymbol, RVar a mempty) | a <- lqAs] ++ lqArgs 
     nTyVars          = length hsAs -- == length lqAs
     dcName           = Ghc.dataConName . dcpCon . val $ ldcp
     msg              = "plugMany: " ++ F.showpp (dcName, hsT, lqT)
 
 plugHoles_old, plugHoles_new 
   :: (Ghc.NamedThing a, PPrint a, Show a)
-  => F.TCEmb Ghc.TyCon
+  => F.TCEmb LHSymbol Ghc.TyCon
   -> Bare.TyConMap 
   -> a
   -> (SpecType -> RReft -> RReft)
@@ -161,9 +167,10 @@ plugHoles_old tce tyi x f t0 zz@(Loc l l' st0)
                           Right s -> Bare.vmap s
     su                = [(y, rTyVar x)           | (x, y) <- tyvsmap]
     su'               = [(y, RVar (rTyVar x) ()) | (x, y) <- tyvsmap] :: [(RTyVar, RSort)]
-    coSub             = M.fromList [(F.symbol y, F.FObj (F.symbol x)) | (y, x) <- su]
+    -- YL : injecting Var? even if it is deterministic, could two Vars be deterministic in different ways
+    coSub             = undefined -- M.fromList [(F.symbol y, F.FObj (F.symbol x)) | (y, x) <- su]
     ps'               = fmap (subts su') <$> ps
-    cs'               = [(F.dummySymbol, RApp c ts [] mempty) | (c, ts) <- cs ] 
+    cs'               = [(F.FS F.dummySymbol, RApp c ts [] mempty) | (c, ts) <- cs ] 
     (αs,_,ls1,cs,rt)  = bkUnivClass (F.notracepp "hs-spec" $ ofType (Ghc.expandTypeSynonyms t0) :: SpecType)
     (_,ps,ls2,_ ,st)  = bkUnivClass (F.notracepp "lq-spec" st0)
     -- msg i             = "plugHoles_old: " ++ F.showpp x ++ " " ++ i 
@@ -186,7 +193,7 @@ plugHoles_new tce tyi x f t0 zz@(Loc l l' st0)
   where 
     rt'               = tx rt
     as'               = subRTVar su <$> as
-    cs'               = [ (F.dummySymbol, ct) | (c, t) <- cs, let ct = tx (RApp c t [] mempty) ]
+    cs'               = [ (F.FS F.dummySymbol, ct) | (c, t) <- cs, let ct = tx (RApp c t [] mempty) ]
     tx                = subts su
     su                = case Bare.runMapTyVars (toType rt) st err of
                           Left e  -> Ex.throw e 
@@ -207,13 +214,13 @@ subRTVar su a@(RTVar v i) = Mb.maybe a (`RTVar` i) (lookup v su)
 
 
 
-bkUnivClass :: SpecType -> ([SpecRTVar],[PVar RSort], [F.Symbol], [(RTyCon, [SpecType])], SpecType )
+bkUnivClass :: SpecType -> ([SpecRTVar],[PVar RSort], [F.Symbol LHSymbol], [(RTyCon, [SpecType])], SpecType )
 bkUnivClass t        = (as, ps, ls, cs, t2) 
   where 
     (as, ps, ls, t1) = bkUniv  t
     (cs, t2)         = bkClass t1
 
-goPlug :: F.TCEmb Ghc.TyCon -> Bare.TyConMap -> (Doc -> Doc -> Error) -> (SpecType -> RReft -> RReft) -> SpecType -> SpecType
+goPlug :: F.TCEmb LHSymbol Ghc.TyCon -> Bare.TyConMap -> (Doc -> Doc -> Error) -> (SpecType -> RReft -> RReft) -> SpecType -> SpecType
        -> SpecType
 goPlug tce tyi err f = go 
   where
@@ -250,7 +257,7 @@ goPlug tce tyi err f = go
     -- problem to the user.
     -- go st               _                 = st
 
-addRefs :: F.TCEmb Ghc.TyCon -> TyConMap -> SpecType -> SpecType
+addRefs :: F.TCEmb LHSymbol Ghc.TyCon -> TyConMap -> SpecType -> SpecType
 addRefs tce tyi (RApp c ts _ r) = RApp c' ts ps r
   where
     RApp c' _ ps _ = addTyConInfo tce tyi (RApp c ts [] r)
