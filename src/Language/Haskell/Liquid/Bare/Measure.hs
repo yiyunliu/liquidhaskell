@@ -5,6 +5,8 @@
 -- | This module contains (most of) the code needed to lift Haskell entitites,
 --   . code- (CoreBind), and data- (Tycon) definitions into the spec level.
 
+-- YL : is this anyhow related to Axioms or are they relatively independent?
+
 module Language.Haskell.Liquid.Bare.Measure
   ( makeHaskellMeasures
   , makeHaskellInlines
@@ -38,6 +40,7 @@ import qualified Language.Haskell.Liquid.GHC.API       as Ghc
 import qualified Language.Haskell.Liquid.GHC.Misc      as GM
 import qualified Language.Haskell.Liquid.Types.RefType as RT
 import           Language.Haskell.Liquid.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 -- import           Language.Haskell.Liquid.Types.Bounds
 import qualified Language.Haskell.Liquid.Measure       as Ms
 
@@ -47,10 +50,10 @@ import qualified Language.Haskell.Liquid.Bare.Expand   as Bare
 import qualified Language.Haskell.Liquid.Bare.DataType as Bare 
 import qualified Language.Haskell.Liquid.Bare.ToBare   as Bare 
 
--- YL: operates on BareMeasures
+-- YL: converting measures to baremeasures
 --------------------------------------------------------------------------------
 makeHaskellMeasures :: GhcSrc -> Bare.TycEnv -> LogicMap -> Ms.BareSpec
-                    -> [Measure (Located BareType) LocSymbol]
+                    -> [Measure (Located BareType) (F.Located F.FixSymbol)]
 --------------------------------------------------------------------------------
 makeHaskellMeasures src tycEnv lmap spec 
           = Bare.measureToBare <$> ms
@@ -93,9 +96,10 @@ makeUnSorted t defs
 
     xx = F.vv $ Just 10000
 
-coreToDef' :: Bare.TycEnv -> LogicMap -> LocSymbol -> Ghc.Var -> Ghc.CoreExpr 
+coreToDef' :: Bare.TycEnv -> LogicMap -> Located (F.Symbol LHSymbol) -> Ghc.Var -> Ghc.CoreExpr 
            -> [Def LocSpecType Ghc.DataCon] 
-coreToDef' tycEnv lmap vx v def = 
+coreToDef' tycEnv lmap vx v def =
+  -- YL : vx, v the same thing
   case runToLogic embs lmap dm (errHMeas vx) (coreToDef vx v def) of
     Right l -> l
     Left e  -> Ex.throw e
@@ -103,12 +107,12 @@ coreToDef' tycEnv lmap vx v def =
     embs    = Bare.tcEmbs       tycEnv 
     dm      = Bare.tcDataConMap tycEnv  
 
-errHMeas :: LocSymbol -> String -> Error
+errHMeas :: LocSymbol LHSymbol -> String -> Error
 errHMeas x str = ErrHMeas (GM.sourcePosSrcSpan $ loc x) (pprint $ val x) (text str)
 
 --------------------------------------------------------------------------------
-makeHaskellInlines :: GhcSrc -> F.TCEmb Ghc.TyCon -> LogicMap -> Ms.BareSpec 
-                   -> [(LocSymbol, LMap)]
+makeHaskellInlines :: GhcSrc -> F.TCEmb LHSymbol Ghc.TyCon -> LogicMap -> Ms.BareSpec 
+                   -> [(LocSymbol LHSymbol, LMap)]
 --------------------------------------------------------------------------------
 makeHaskellInlines src embs lmap spec 
          = makeMeasureInline embs lmap cbs <$> inls 
@@ -116,8 +120,8 @@ makeHaskellInlines src embs lmap spec
     cbs  = nonRecCoreBinds (giCbs src) 
     inls = S.toList        (Ms.inlines spec)
 
-makeMeasureInline :: F.TCEmb Ghc.TyCon -> LogicMap -> [Ghc.CoreBind] -> LocSymbol
-                  -> (LocSymbol, LMap)
+makeMeasureInline :: F.TCEmb LHSymbol Ghc.TyCon -> LogicMap -> [Ghc.CoreBind] -> LocSymbol LHSymbol
+                  -> (LocSymbol LHSymbol, LMap)
 makeMeasureInline embs lmap cbs x = 
   case GM.findVarDef (val x) cbs of 
     Nothing       -> Ex.throw $ errHMeas x "Cannot inline haskell function"
@@ -131,8 +135,8 @@ makeMeasureInline embs lmap cbs x =
 --   but NOT when lifting inlines (which do not have case-of). 
 --   For details, see [NOTE:Lifting-Stages] 
 
-coreToFun' :: F.TCEmb Ghc.TyCon -> Maybe Bare.DataConMap -> LogicMap -> LocSymbol -> Ghc.Var -> Ghc.CoreExpr
-           -> (([Ghc.Var], Either F.Expr F.Expr) -> a) -> a
+coreToFun' :: F.TCEmb LHSymbol Ghc.TyCon -> Maybe Bare.DataConMap -> LogicMap -> LocSymbol LHSymbol -> Ghc.Var -> Ghc.CoreExpr
+           -> (([Ghc.Var], Either (F.Expr LHSymbol) (F.Expr LHSymbol)) -> a) -> a
 coreToFun' embs dmMb lmap x v def ok = either Ex.throw ok act 
   where 
     act  = runToLogic embs lmap dm err xFun 
@@ -291,7 +295,7 @@ dataConSel dc n (Proj i) = mkArrow as [] [] [] [xt] (mempty <$> ti)
     err                  = panic Nothing $ "DataCon " ++ show dc ++ "does not have " ++ show i ++ " fields"
 
 -- bkDataCon :: DataCon -> Int -> ([RTVar RTyVar RSort], [SpecType], (Symbol, SpecType, RReft))
-bkDataCon :: (F.Reftable (RTProp RTyCon RTyVar r), PPrint r, F.Reftable r) => Ghc.DataCon -> Int -> ([RTVar RTyVar RSort], [RRType r], (F.Symbol, RRType r, r))
+bkDataCon :: (F.Reftable LHSymbol (RTProp RTyCon RTyVar r), PPrint r, F.Reftable LHSymbol r) => Ghc.DataCon -> Int -> ([RTVar RTyVar RSort], [RRType r], (F.Symbol LHSymbol, RRType r, r))
 bkDataCon dc nFlds  = (as, ts, (F.dummySymbol, t, mempty))
   where
     ts                = RT.ofType <$> Misc.takeLast nFlds _ts
@@ -320,14 +324,14 @@ bareBool = RApp (RTyCon Ghc.boolTyCon [] def) [] [] mempty
 
 -}
 
-makeMeasureSelector :: (Show a1) => LocSymbol -> SpecType -> Ghc.DataCon -> Int -> a1 -> Measure SpecType Ghc.DataCon
+makeMeasureSelector :: (Show a1) => LocSymbol LHSymbol -> SpecType -> Ghc.DataCon -> Int -> a1 -> Measure SpecType Ghc.DataCon
 makeMeasureSelector x s dc n i = M { msName = x, msSort = s, msEqns = [eqn], msKind = MsSelector, msUnSorted = mempty}
   where
     eqn                        = Def x dc Nothing args (E (F.EVar $ mkx i))
     args                       = ((, Nothing) . mkx) <$> [1 .. n]
     mkx j                      = F.symbol ("xx" ++ show j)
 
-makeMeasureChecker :: LocSymbol -> SpecType -> Ghc.DataCon -> Int -> Measure SpecType Ghc.DataCon
+makeMeasureChecker :: LocSymbol LHSymbol -> SpecType -> Ghc.DataCon -> Int -> Measure SpecType Ghc.DataCon
 makeMeasureChecker x s0 dc n = M { msName = x, msSort = s, msEqns = eqn : (eqns <$> filter (/= dc) dcs), msKind = MsChecker, msUnSorted = mempty }
   where
     s       = F.notracepp ("makeMeasureChecker: " ++ show x) s0
@@ -339,7 +343,7 @@ makeMeasureChecker x s0 dc n = M { msName = x, msSort = s, msEqns = eqn : (eqns 
 
 
 ----------------------------------------------------------------------------------------------
-makeMeasureSpec' :: MSpec SpecType Ghc.DataCon -> ([(Ghc.Var, SpecType)], [(LocSymbol, RRType F.Reft)])
+makeMeasureSpec' :: MSpec SpecType Ghc.DataCon -> ([(Ghc.Var, SpecType)], [(LocSymbol LHSymbol, RRType (F.Reft LHSymbol))])
 ----------------------------------------------------------------------------------------------
 makeMeasureSpec' mspec0 = (ctorTys, measTys) 
   where 
@@ -357,7 +361,7 @@ makeMeasureSpec env sigEnv myName (name, spec)
   . bareMSpec     env sigEnv myName name 
   $ spec 
 
-bareMSpec :: Bare.Env -> Bare.SigEnv -> ModName -> ModName -> Ms.BareSpec -> Ms.MSpec LocBareType LocSymbol 
+bareMSpec :: Bare.Env -> Bare.SigEnv -> ModName -> ModName -> Ms.BareSpec -> Ms.MSpec LocBareType (LocSymbol  LHSymbol)
 bareMSpec env sigEnv myName name spec = Ms.mkMSpec ms cms ims 
   where
     cms        = F.notracepp "CMS" $ filter inScope1 $             Ms.cmeasures spec
@@ -371,12 +375,12 @@ bareMSpec env sigEnv myName name spec = Ms.mkMSpec ms cms ims
     okSort     = Bare.knownGhcType env name . msSort 
     okCtors    = all (Bare.knownGhcDataCon env name . ctor) . msEqns 
 
-mkMeasureDCon :: Bare.Env -> ModName -> Ms.MSpec t LocSymbol -> Ms.MSpec t Ghc.DataCon
+mkMeasureDCon :: Bare.Env -> ModName -> Ms.MSpec t (LocSymbol LHSymbol) -> Ms.MSpec t Ghc.DataCon
 mkMeasureDCon env name m = mkMeasureDCon_ m [ (val n, symDC n) | n <- measureCtors m ]
   where 
     symDC                = Bare.lookupGhcDataCon env name "measure-datacon"
 
-mkMeasureDCon_ :: Ms.MSpec t LocSymbol -> [(F.Symbol, Ghc.DataCon)] -> Ms.MSpec t Ghc.DataCon
+mkMeasureDCon_ :: Ms.MSpec t (LocSymbol LHSymbol) -> [(F.Symbol LHSymbol, Ghc.DataCon)] -> Ms.MSpec t Ghc.DataCon
 mkMeasureDCon_ m ndcs = m' {Ms.ctorMap = cm'}
   where
     m'                = fmap (tx.val) m

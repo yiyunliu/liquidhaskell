@@ -1,3 +1,6 @@
+-- YL : it would at least be useful to learn how this file works
+
+
 module Language.Haskell.Liquid.Bare.Laws ( makeInstanceLaws ) where
 
 import qualified Data.Maybe                                 as Mb
@@ -30,7 +33,7 @@ makeInstanceLaw env sigEnv sigs name rilaw = LawInstance
   { lilName   = Mb.fromMaybe errmsg tc
   , liSupers  = mkTy <$> rilSupers rilaw 
   , lilTyArgs = mkTy <$> rilTyArgs rilaw
-  , lilEqus   = [(mkVar l, mkTypedVar r) | (l,r)<- rilEqus rilaw ]  
+  , lilEqus   = undefined -- [(mkVar l, mkTypedVar r) | (l,r)<- rilEqus rilaw ]  
   , lilPos    = GM.sourcePosSrcSpan $ loc $ rilPos rilaw
   } 
   where
@@ -42,12 +45,12 @@ makeInstanceLaw env sigEnv sigs name rilaw = LawInstance
 
     mkTy :: LocBareType -> LocSpecType
     mkTy = Bare.cookSpecType env sigEnv name Bare.GenTV 
-    mkVar :: LocSymbol -> VarOrLocSymbol 
+    mkVar :: F.Located F.FixSymbol -> VarOrLocSymbol 
     mkVar x = case Bare.maybeResolveSym env name "makeInstanceLaw" x of 
                 Just v -> Left v 
                 _      -> Right x 
 
-    mkTypedVar :: LocSymbol -> (VarOrLocSymbol, Maybe LocSpecType)
+    mkTypedVar :: F.Located F.FixSymbol -> (VarOrLocSymbol, Maybe LocSpecType)
     mkTypedVar l = case mkVar l of 
                      Left x -> (Left x, Just $ Mb.fromMaybe (dummyLoc $ ofType $ varType x) (L.lookup x sigs))
                      Right x -> (Right x, Nothing)

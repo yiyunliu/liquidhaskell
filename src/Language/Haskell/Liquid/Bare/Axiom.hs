@@ -6,6 +6,9 @@
 -- | This module contains the code that DOES reflection; i.e. converts Haskell
 --   definitions into refinements.
 
+-- YL : this could also help understand how to extend liquidhaskell. any resolution going on here?
+-- YL : GLOBAL. Anything I can delete with confidence?
+
 module Language.Haskell.Liquid.Bare.Axiom ( makeHaskellAxioms ) where
 
 import Prelude hiding (error)
@@ -26,13 +29,14 @@ import           Language.Haskell.Liquid.Types.RefType
 import           Language.Haskell.Liquid.Transforms.CoreToLogic
 import           Language.Haskell.Liquid.GHC.Misc
 import           Language.Haskell.Liquid.Types
+import           Language.Haskell.Liquid.Types.LHSymbol
 
 import           Language.Haskell.Liquid.Bare.Resolve as Bare
 import           Language.Haskell.Liquid.Bare.Types   as Bare
 
 -----------------------------------------------------------------------------------------------
 makeHaskellAxioms :: GhcSrc -> Bare.Env -> Bare.TycEnv -> ModName -> LogicMap -> GhcSpecSig -> Ms.BareSpec 
-                  -> [(Ghc.Var, LocSpecType, F.Equation)]
+                  -> [(Ghc.Var, LocSpecType, F.Equation LHSymbol)]
 -----------------------------------------------------------------------------------------------
 makeHaskellAxioms src env tycEnv name lmap spSig 
   = fmap (makeAxiom env tycEnv name lmap) 
@@ -40,15 +44,15 @@ makeHaskellAxioms src env tycEnv name lmap spSig
 
 
 getReflectDefs :: GhcSrc -> GhcSpecSig -> Ms.BareSpec 
-               -> [(LocSymbol, Maybe SpecType, Ghc.Var, Ghc.CoreExpr)]
+               -> [(Located F.FixSymbol, Maybe SpecType, Ghc.Var, Ghc.CoreExpr)]
 getReflectDefs src sig spec = findVarDefType cbs sigs <$> xs
   where
     sigs                    = gsTySigs sig 
     xs                      = S.toList (Ms.reflects spec)
     cbs                     = giCbs src
 
-findVarDefType :: [Ghc.CoreBind] -> [(Ghc.Var, LocSpecType)] -> LocSymbol
-               -> (LocSymbol, Maybe SpecType, Ghc.Var, Ghc.CoreExpr)
+findVarDefType :: [Ghc.CoreBind] -> [(Ghc.Var, LocSpecType)] -> Located F.FixSymbol
+               -> (Located F.FixSymbol, Maybe SpecType, Ghc.Var, Ghc.CoreExpr)
 findVarDefType cbs sigs x = case findVarDef (val x) cbs of
   Just (v, e) -> if Ghc.isExportedId v
                    then (x, val <$> lookup v sigs, v, e)
@@ -57,8 +61,8 @@ findVarDefType cbs sigs x = case findVarDef (val x) cbs of
 
 --------------------------------------------------------------------------------
 makeAxiom :: Bare.Env -> Bare.TycEnv -> ModName -> LogicMap 
-          -> (LocSymbol, Maybe SpecType, Ghc.Var, Ghc.CoreExpr)
-          -> (Ghc.Var, LocSpecType, F.Equation)
+          -> (Located F.FixSymbol, Maybe SpecType, Ghc.Var, Ghc.CoreExpr)
+          -> (Ghc.Var, LocSpecType, F.Equation LHSymbol)
 --------------------------------------------------------------------------------
 makeAxiom env tycEnv name lmap (x, mbT, v, def) 
             = (v, t, e)
@@ -68,15 +72,16 @@ makeAxiom env tycEnv name lmap (x, mbT, v, def)
     embs    = Bare.tcEmbs       tycEnv 
     dm      = Bare.tcDataConMap tycEnv 
 
-mkError :: LocSymbol -> String -> Error
+mkError :: F.Located F.FixSymbol  -> String -> Error
 mkError x str = ErrHMeas (sourcePosSrcSpan $ loc x) (pprint $ val x) (PJ.text str)
 
 makeAssumeType
-  :: F.TCEmb Ghc.TyCon -> LogicMap -> DataConMap -> LocSymbol -> Maybe SpecType
+  :: F.TCEmb LHSymbol Ghc.TyCon -> LogicMap -> DataConMap -> F.Located F.FixSymbol -> Maybe SpecType
   -> Ghc.Var -> Ghc.CoreExpr
-  -> (LocSpecType, F.Equation)
+  -> (LocSpecType, F.Equation LHSymbol)
 makeAssumeType tce lmap dm x mbT v def
-  = (x {val = at `strengthenRes` F.subst su ref},  F.mkEquation (val x) xts le out)
+  -- YL : the equation couldn't contain Var. Now it can..
+  = undefined -- (x {val = at `strengthenRes` F.subst su ref},  F.mkEquation (val x) xts le out)
   where
     t     = Mb.fromMaybe (ofType $ Ghc.varType v) mbT
     out   = rTypeSort tce (ty_res tRep)
@@ -91,12 +96,12 @@ makeAssumeType tce lmap dm x mbT v def
     mkErr s    = ErrHMeas (sourcePosSrcSpan $ loc x) (pprint $ val x) (PJ.text s)
     bbs        = filter isBoolBind xs
     (xs, def') = grabBody (normalize def)
-    su         = F.mkSubst  $ zip (F.symbol     <$> xs) xArgs
-                           ++ zip (simplesymbol <$> xs) xArgs
-    xts        = zipWith (\x t -> (F.symbol x, rTypeSortExp tce t)) xs ts
+    su         = undefined -- F.mkSubst  $ zip (F.symbol     <$> xs) xArgs
+                 --           ++ zip (simplesymbol <$> xs) xArgs
+    xts        = undefined -- zipWith (\x t -> (F.symbol x, rTypeSortExp tce t)) xs ts
     ts         = filter (not . isClassType) (ty_args tRep)
 
-rTypeSortExp :: F.TCEmb Ghc.TyCon -> SpecType -> F.Sort
+rTypeSortExp :: F.TCEmb LHSymbol Ghc.TyCon -> SpecType -> F.Sort LHSymbol
 rTypeSortExp tce = typeSort tce . Ghc.expandTypeSynonyms . toType
 
 grabBody :: Ghc.CoreExpr -> ([Ghc.Var], Ghc.CoreExpr)
@@ -107,7 +112,7 @@ grabBody e              = ([], e)
 isBoolBind :: Ghc.Var -> Bool
 isBoolBind v = isBool (ty_res $ toRTypeRep ((ofType $ Ghc.varType v) :: RRType ()))
 
-strengthenRes :: SpecType -> F.Reft -> SpecType
+strengthenRes :: SpecType -> F.Reft LHSymbol -> SpecType
 strengthenRes t r = fromRTypeRep $ trep {ty_res = ty_res trep `strengthen` F.ofReft r }
   where
     trep = toRTypeRep t
@@ -146,22 +151,22 @@ instance Subable Ghc.CoreAlt where
   subst su (c, xs, e) = (c, xs, subst su e)
 
 -- | Specification for Haskell function
-axiomType :: (TyConable c) => LocSymbol -> RType c tv RReft -> RType c tv RReft
-axiomType s t = fromRTypeRep (tr {ty_res = res, ty_binds = xs})
-  where
-    res           = strengthen (ty_res tr) (singletonApp s ys)
-    ys            = fst $ unzip $ dropWhile (isClassType . snd) xts
-    xts           = safeZip "axiomBinds" xs (ty_args tr)
-    xs            = zipWith unDummy bs [1..]
-    tr            = toRTypeRep t
-    bs            = ty_binds tr
+axiomType :: (TyConable c) => F.Located F.FixSymbol  -> RType c tv RReft -> RType c tv RReft
+axiomType s t = undefined -- fromRTypeRep (tr {ty_res = res, ty_binds = xs})
+  -- where
+  --   res           = strengthen (ty_res tr) (singletonApp s ys)
+  --   ys            = fst $ unzip $ dropWhile (isClassType . snd) xts
+  --   xts           = safeZip "axiomBinds" xs (ty_args tr)
+  --   xs            = zipWith unDummy bs [1..]
+  --   tr            = toRTypeRep t
+  --   bs            = ty_binds tr
 
-unDummy :: F.Symbol -> Int -> F.Symbol
+unDummy :: F.FixSymbol -> Int -> F.FixSymbol
 unDummy x i
   | x /= F.dummySymbol = x
   | otherwise          = F.symbol ("lq" ++ show i)
 
-singletonApp :: F.Symbolic a => LocSymbol -> [a] -> UReft F.Reft
+singletonApp :: F.FixSymbolic a => Located F.FixSymbol -> [a] -> UReft (F.Reft LHSymbol)
 singletonApp s ys = MkUReft r mempty mempty
   where
-    r             = F.exprReft (F.mkEApp s (F.eVar <$> ys))
+    r             = undefined -- uF.exprReft (F.mkEApp s (F.eVar <$> ys))

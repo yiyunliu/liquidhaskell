@@ -3,13 +3,15 @@
 --   TODO: _only_ export `makeRTEnv`, `cookSpecType` and maybe `qualifyExpand`...
 
 {-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
--- YL : expand means alias expansion
+-- YL : expand means alias expansion. I used FixSymbol as much as possible here since aliaes
+-- shouldn't be resolved to GHC types
 
 module Language.Haskell.Liquid.Bare.Expand 
   ( -- * Create alias expansion environment
@@ -79,33 +81,35 @@ renameRTArgs rte = RTE
   , exprAliases = M.map (fmap (           renameRTVArgs)) (exprAliases rte) 
   } 
 
-makeREAliases :: [Located (RTAlias F.Symbol F.Expr)] -> BareRTEnv 
+makeREAliases :: [Located (RTAlias F.FixSymbol (F.Expr LHSymbol))] -> BareRTEnv 
 makeREAliases = graphExpand buildExprEdges f mempty 
   where
     f rtEnv xt = setREAlias rtEnv (expandLoc rtEnv xt)
 
-renameVV :: RTAlias F.Symbol BareType -> RTAlias F.Symbol BareType 
-renameVV rt = rt { rtBody = RT.shiftVV (rtBody rt) (F.vv (Just 0)) }
+-- YL : Why FixSymbol? Because resolved ones use RTyVar
+renameVV :: RTAlias F.FixSymbol BareType -> RTAlias F.FixSymbol BareType 
+renameVV rt = rt { rtBody = RT.shiftVV (rtBody rt) (F.FS $ F.vv (Just 0)) }
 
 -- | @renameRTVArgs@ ensures that @RTAlias@ value parameters have distinct names 
 --   to avoid variable capture e.g. as in tests-names-pos-Capture01.hs
-renameRTVArgs :: (F.PPrint a, F.Subable a) => RTAlias x a -> RTAlias x a 
+renameRTVArgs :: (F.PPrint a, F.Subable LHSymbol a) => RTAlias x a -> RTAlias x a 
 renameRTVArgs rt = rt { rtVArgs = newArgs
                       , rtBody  = F.notracepp msg $ F.subst su (rtBody rt) 
                       } 
   where 
     msg          = "renameRTVArgs: " ++ F.showpp su
-    su           = F.mkSubst (zip oldArgs (F.eVar <$> newArgs)) 
+    su           = F.mkSubst @LHSymbol (zip oldArgs (F.eVar <$> newArgs)) 
     newArgs      = zipWith rtArg (rtVArgs rt) [0..]
-    oldArgs      = rtVArgs rt
+    oldArgs      = F.FS <$> rtVArgs rt
     rtArg x i    = F.suffixSymbol x (F.intSymbol "rta" i) 
 
-makeRTAliases :: [Located (RTAlias F.Symbol BareType)] -> BareRTEnv -> BareRTEnv  
-makeRTAliases lxts rte = graphExpand buildTypeEdges f rte lxts 
+makeRTAliases :: [Located (RTAlias F.FixSymbol BareType)] -> BareRTEnv -> BareRTEnv
+-- YL : deleted Symbolic instance...
+makeRTAliases lxts rte = undefined -- graphExpand buildTypeEdges f rte lxts 
   where
     f rtEnv xt         = setRTAlias rtEnv (expandLoc rtEnv xt)
 
-specREAlias :: Bare.Env -> ModName -> Located (RTAlias F.Symbol F.Expr) -> Located (RTAlias F.Symbol F.Expr) 
+specREAlias :: Bare.Env -> ModName -> Located (RTAlias F.FixSymbol (F.Expr LHSymbol)) -> Located (RTAlias F.FixSymbol (F.Expr LHSymbol)) 
 specREAlias env m la = F.atLoc la $ a { rtBody = Bare.qualify env m (loc la) (rtVArgs a) (rtBody a) } 
   where 
     a     = val la 
@@ -113,7 +117,8 @@ specREAlias env m la = F.atLoc la $ a { rtBody = Bare.qualify env m (loc la) (rt
 --------------------------------------------------------------------------------------------------------------
 
 graphExpand :: (PPrint t)
-            => (AliasTable x t -> t -> [F.Symbol])         -- ^ dependencies
+-- YL : the first function parameter is buildExprEdges
+            => (AliasTable x t -> t -> [F.FixSymbol])         -- ^ dependencies
             -> (thing -> Located (RTAlias x t) -> thing) -- ^ update
             -> thing                                     -- ^ initial
             -> [Located (RTAlias x t)]                   -- ^ vertices
@@ -126,13 +131,14 @@ graphExpand buildEdges expBody env lxts
     graph  = buildAliasGraph (buildEdges table) lxts
     table' = checkCyclicAliases table graph
 
-setRTAlias :: RTEnv x t -> Located (RTAlias x t) -> RTEnv x t 
-setRTAlias env a = env { typeAliases =  M.insert n a (typeAliases env) } 
+setRTAlias :: RTEnv x t -> Located (RTAlias x t) -> RTEnv x t
+-- YL : RTEnv has wrong type. anything that returns an RTEnv is commented out
+setRTAlias env a = undefined -- env { typeAliases =  M.insert n a (typeAliases env) } 
   where 
     n            = rtName (val a)  
 
-setREAlias :: RTEnv x t -> Located (RTAlias F.Symbol F.Expr) -> RTEnv x t 
-setREAlias env a = env { exprAliases = M.insert n a (exprAliases env) } 
+setREAlias :: RTEnv x t -> Located (RTAlias F.FixSymbol (F.Expr LHSymbol)) -> RTEnv x t 
+setREAlias env a = undefined -- env { exprAliases = M.insert n a (exprAliases env) } 
   where 
     n            = rtName (val a)
 
@@ -145,7 +151,7 @@ type AliasTable x t = M.HashMap F.FixSymbol (Located (RTAlias x t))
 buildAliasTable :: [Located (RTAlias x t)] -> AliasTable x t
 buildAliasTable = M.fromList . map (\rta -> (rtName (val rta), rta))
 
-fromAliasSymbol :: AliasTable x t -> F.Symbol -> Located (RTAlias x t)
+fromAliasSymbol :: AliasTable x t -> F.FixSymbol -> Located (RTAlias x t)
 fromAliasSymbol table sym
   = fromMaybe err (M.lookup sym table)
   where
@@ -154,17 +160,17 @@ fromAliasSymbol table sym
 type Graph t = [Node t]
 type Node  t = (t, t, [t])
 
-buildAliasGraph :: (PPrint t) => (t -> [F.Symbol]) -> [Located (RTAlias x t)] 
-                -> Graph F.Symbol
+buildAliasGraph :: (PPrint t) => (t -> [F.FixSymbol]) -> [Located (RTAlias x t)] 
+                -> Graph F.FixSymbol
 buildAliasGraph buildEdges = map (buildAliasNode buildEdges)
 
-buildAliasNode :: (PPrint t) => (t -> [F.Symbol]) -> Located (RTAlias x t) 
-               -> Node F.Symbol
+buildAliasNode :: (PPrint t) => (t -> [F.FixSymbol]) -> Located (RTAlias x t) 
+               -> Node F.FixSymbol
 buildAliasNode f la = (rtName a, rtName a, f (rtBody a))
   where 
     a               = val la 
 
-checkCyclicAliases :: AliasTable x t -> Graph F.Symbol -> AliasTable x t 
+checkCyclicAliases :: AliasTable x t -> Graph F.FixSymbol -> AliasTable x t 
 checkCyclicAliases table graph
   = case mapMaybe go (stronglyConnComp graph) of
       []   -> table 
@@ -173,7 +179,7 @@ checkCyclicAliases table graph
       go (CyclicSCC vs) = Just vs
       go (AcyclicSCC _) = Nothing
 
-cycleAliasErr :: AliasTable x t -> [F.Symbol] -> Error
+cycleAliasErr :: AliasTable x t -> [F.FixSymbol] -> Error
 cycleAliasErr _ []          = panic Nothing "checkCyclicAliases: No type aliases in reported cycle"
 cycleAliasErr t scc@(rta:_) = ErrAliasCycle { pos    = fst (locate rta)
                                             , acycle = map locate scc }
@@ -182,7 +188,7 @@ cycleAliasErr t scc@(rta:_) = ErrAliasCycle { pos    = fst (locate rta)
                  , pprint sym )
 
 
-genExpandOrder :: AliasTable x t -> Graph F.Symbol -> [Located (RTAlias x t)]
+genExpandOrder :: AliasTable x t -> Graph F.FixSymbol -> [Located (RTAlias x t)]
 genExpandOrder table graph
   = map (fromAliasSymbol table) symOrder
   where
@@ -196,7 +202,9 @@ genExpandOrder table graph
 ordNub :: Ord a => [a] -> [a]
 ordNub = map head . L.group . L.sort
 
-buildTypeEdges :: (F.FixSymbolic c) => AliasTable x t -> RType c tv r -> [F.Symbol]
+
+-- YL : the function wants to collapse GHC Symbols. Should we allow it?
+buildTypeEdges :: (F.FixSymbolic c) => AliasTable x t -> RType c tv r -> [F.FixSymbol]
 buildTypeEdges table = ordNub . go
   where
     -- go :: t -> [Symbol]
@@ -217,10 +225,10 @@ buildTypeEdges table = ordNub . go
     go_ref (RProp _ (RHole _)) = Nothing
     go_ref (RProp  _ t) = Just t
 
-buildExprEdges :: M.HashMap F.Symbol a -> F.Expr -> [F.Symbol]
+buildExprEdges :: M.HashMap F.FixSymbol a -> F.Expr LHSymbol -> [F.FixSymbol]
 buildExprEdges table  = ordNub . go
   where
-    go :: F.Expr -> [F.Symbol]
+    go :: F.Expr LHSymbol -> [F.FixSymbol]
     go (EApp e1 e2)   = go e1 ++ go e2
     go (ENeg e)       = go e
     go (EBin _ e1 e2) = go e1 ++ go e2
@@ -228,7 +236,8 @@ buildExprEdges table  = ordNub . go
     go (ECst e _)     = go e
     go (ESym _)       = []
     go (ECon _)       = []
-    go (EVar v)       = go_alias v
+    -- YL : do one further pattern matching for FS?
+    go (EVar v)       = undefined -- go_alias v
     go (PAnd ps)       = concatMap go ps
     go (POr ps)        = concatMap go ps
     go (PNot p)        = go p
@@ -257,7 +266,7 @@ class Expand a where
 --   them during expansion. 
 ----------------------------------------------------------------------------------
 qualifyExpand :: (Expand a, Bare.Qualify a) 
-              => Bare.Env -> ModName -> BareRTEnv -> F.SourcePos -> [F.Symbol] -> a -> a 
+              => Bare.Env -> ModName -> BareRTEnv -> F.SourcePos -> [F.FixSymbol] -> a -> a 
 ----------------------------------------------------------------------------------
 qualifyExpand env name rtEnv l bs
   = expand rtEnv l  
@@ -298,7 +307,7 @@ instance Expand BareType where
 
 
 -- YL : could be void...
-instance Expand (RTAlias F.FixSymbol (Expr s)) where 
+instance Expand (RTAlias F.FixSymbol (Expr LHSymbol)) where 
   expand rtEnv l x = x { rtBody = expand rtEnv l (rtBody x) } 
 
 instance Expand BareRTAlias where 
@@ -467,39 +476,42 @@ ofBRType appRTAlias resolveReft !t
 
  -}
 lookupRTEnv :: BTyCon -> BareRTEnv -> Maybe (Located BareRTAlias)
-lookupRTEnv c rtEnv = M.lookup (F.symbol c) (typeAliases rtEnv)
+-- YL : nothing interesting going on here in BTyCon. it simply extracts FS from Loc FixSymbol
+lookupRTEnv c rtEnv = undefined -- M.lookup (F.symbol c) (typeAliases rtEnv)
 
 expandRTAliasApp :: F.SourcePos -> Located BareRTAlias -> [BareType] -> RReft -> BareType 
 expandRTAliasApp l (Loc la _ rta) args r = case isOK of 
   Just e     -> Ex.throw e
-  Nothing    -> F.subst esu . (`RT.strengthen` r) . RT.subsTyVars_meet tsu $ rtBody rta
+  Nothing    -> undefined -- F.subst esu . (`RT.strengthen` r) . RT.subsTyVars_meet tsu $ rtBody rta
   where
     tsu       = zipWith (\α t -> (α, toRSort t, t)) αs ts
-    esu       = F.mkSubst $ zip (F.symbol <$> εs) es
+    esu       = undefined -- F.mkSubst $ zip (F.symbol <$> εs) es
     es        = exprArg l msg <$> es0
     (ts, es0) = splitAt nαs args
-    (αs, εs)  = (BTV <$> rtTArgs rta, rtVArgs rta)
+    -- YL : BTV has the wrong type as well
+    (αs, εs)  = undefined -- (BTV <$> rtTArgs rta, rtVArgs rta)
     targs     = takeWhile (not . isRExprArg) args
     eargs     = dropWhile (not . isRExprArg) args
 
     -- ERROR Checking Code
     msg       = "EXPAND-RTALIAS-APP: " ++ F.showpp (rtName rta)
-    nαs       = length αs
-    nεs       = length εs 
+    nαs       = undefined -- length αs
+    nεs       = undefined -- length εs 
     nargs     = length args 
     ntargs    = length targs
     neargs    = length eargs
     err       = errRTAliasApp l la rta 
     isOK :: Maybe Error
-    isOK
-      | nargs /= ntargs + neargs
-      = err $ PJ.hsep ["Expects", pprint nαs, "type arguments and then", pprint nεs, "expression arguments, but is given", pprint nargs]
-      | nargs /= nαs + nεs
-      = err $ PJ.hsep ["Expects", pprint nαs, "type arguments and "    , pprint nεs, "expression arguments, but is given", pprint nargs]
-      | nαs /= ntargs, not (null eargs)
-      = err $ PJ.hsep ["Expects", pprint nαs, "type arguments before expression arguments"]
-      | otherwise
-      = Nothing
+    -- YL : just printing. still need to fix this. I'm thinking maybe prettyprinting instances of GHC types can be done by symbolic conversion
+    isOK = undefined
+      -- | nargs /= ntargs + neargs
+      -- = err $ PJ.hsep ["Expects", pprint nαs, "type arguments and then", pprint nεs, "expression arguments, but is given", pprint nargs]
+      -- | nargs /= nαs + nεs
+      -- = err $ PJ.hsep ["Expects", pprint nαs, "type arguments and "    , pprint nεs, "expression arguments, but is given", pprint nargs]
+      -- | nαs /= ntargs, not (null eargs)
+      -- = err $ PJ.hsep ["Expects", pprint nαs, "type arguments before expression arguments"]
+      -- | otherwise
+      -- = Nothing
 
 isRExprArg :: RType c tv r -> Bool
 isRExprArg (RExprArg _) = True 
@@ -525,14 +537,14 @@ errRTAliasApp l la rta = Just . ErrAliasApp  sp name sp'
 --   the parser will chomp in `Ev (plus n n)` as a `BareType` and so
 --   `exprArg` converts that `BareType` into an `Expr`.
 --------------------------------------------------------------------------------
-exprArg :: F.SourcePos -> String -> BareType -> Expr
+exprArg :: F.SourcePos -> String -> BareType -> Expr LHSymbol
 exprArg l msg = F.notracepp ("exprArg: " ++ msg) . go 
   where 
-    go :: BareType -> Expr
+    go :: BareType -> Expr LHSymbol
     go (RExprArg e)     = val e
-    go (RVar x _)       = EVar (F.symbol x)
-    go (RApp x [] [] _) = EVar (F.symbol x)
-    go (RApp f ts [] _) = F.mkEApp (F.symbol <$> btc_tc f) (go <$> ts)
+    go (RVar x _)       = undefined -- EVar (F.symbol x)
+    go (RApp x [] [] _) = undefined -- EVar (F.symbol x)
+    go (RApp f ts [] _) = undefined -- F.mkEApp (F.symbol <$> btc_tc f) (go <$> ts)
     go (RAppTy t1 t2 _) = F.EApp (go t1) (go t2)
     go z                = panic sp $ Printf.printf "Unexpected expression parameter: %s in %s" (show z) msg
     sp                  = Just (GM.sourcePosSrcSpan l)
@@ -672,11 +684,13 @@ instance Expand DataConP where
 --   resolve bound variables (e.g. those bound in output refinements by input 
 --   parameters), and we use the @bs@ parameter to pass in the bound symbols.
 --------------------------------------------------------------------------------
-expandExpr :: BareRTEnv -> F.SourcePos -> Expr -> Expr
+expandExpr :: BareRTEnv -> F.SourcePos -> Expr LHSymbol -> Expr LHSymbol
 expandExpr rtEnv l      = go
   where
     go e@(EApp _ _)     = expandEApp rtEnv l (F.splitEApp e)
-    go (EVar x)         = expandSym  rtEnv l x
+
+    -- YL : pattern match? If it is not FS, then it's definitely not an alias
+    go (EVar x)         = undefined -- expandSym  rtEnv l x
     go (ENeg e)         = ENeg       (go e)
     go (ECst e s)       = ECst       (go e) s 
     go (PAnd ps)        = PAnd       (go <$> ps)
@@ -698,8 +712,8 @@ expandExpr rtEnv l      = go
     go e@(ESym _)       = e
     go e@(ECon _)       = e
 
-expandSym :: BareRTEnv -> F.SourcePos -> F.Symbol -> Expr
-expandSym rtEnv l s' = expandEApp rtEnv l (EVar s', [])
+expandSym :: BareRTEnv -> F.SourcePos -> F.FixSymbol -> Expr LHSymbol
+expandSym rtEnv l s' = undefined -- expandEApp rtEnv l (EVar s', [])
 
 -- REBARE :: expandSym' :: Symbol -> BareM Symbol
 -- REBARE :: expandSym' s = do
@@ -707,15 +721,16 @@ expandSym rtEnv l s' = expandEApp rtEnv l (EVar s', [])
   -- REBARE :: let s' = dropModuleNamesAndUnique s
   -- REBARE :: return $ if M.member s' axs then s' else s
 
-expandEApp :: BareRTEnv -> F.SourcePos -> (Expr, [Expr]) -> Expr
+expandEApp :: BareRTEnv -> F.SourcePos -> (Expr LHSymbol, [Expr LHSymbol]) -> Expr LHSymbol
 expandEApp rtEnv l (EVar f, es) = case mBody of
-    Just re -> expandApp l   re       es' 
+  -- YL : caused by BareRTEnv?/
+    Just re -> undefined -- expandApp l   re       es' 
     Nothing -> F.eApps       (EVar f) es' 
   where
     eAs     = exprAliases rtEnv
     mBody   = Misc.firstMaybes [M.lookup f eAs, M.lookup (GM.dropModuleUnique f) eAs]
     es'     = expandExpr rtEnv l <$> es
-    _f0     = GM.dropModuleNamesAndUnique f
+    _f0     = undefined -- GM.dropModuleNamesAndUnique f
 
 expandEApp _ _ (f, es) = F.eApps f es
 
@@ -723,20 +738,21 @@ expandEApp _ _ (f, es) = F.eApps f es
 -- | Expand Alias Application --------------------------------------------------
 --------------------------------------------------------------------------------
 expandApp :: F.Subable LHSymbol ty => F.SourcePos -> Located (RTAlias F.FixSymbol ty) -> [Expr LHSymbol] -> ty
-expandApp l lre es
-  | Just su <- args = F.subst su (rtBody re)
-  | otherwise       = Ex.throw err
-  where
-    re              = F.val lre
-    args            = F.mkSubst <$> Misc.zipMaybe (rtVArgs re) es
-    err             :: UserError 
-    err             = ErrAliasApp sp alias sp' msg
-    sp              = GM.sourcePosSrcSpan l
-    alias           = pprint           (rtName re)
-    sp'             = GM.fSrcSpan lre -- sourcePosSrcSpan (rtPos re)
-    msg             =  "expects" PJ.<+> pprint (length $ rtVArgs re)
-                   PJ.<+> "arguments but it is given"
-                   PJ.<+> pprint (length es)
+expandApp l lre es = undefined
+-- YL : the substitution type has to be big
+  -- | Just su <- args = F.subst su (rtBody re)
+  -- | otherwise       = Ex.throw err
+  -- where
+  --   re              = F.val lre
+  --   args            = F.mkSubst <$> Misc.zipMaybe (rtVArgs re) es
+  --   err             :: UserError 
+  --   err             = ErrAliasApp sp alias sp' msg
+  --   sp              = GM.sourcePosSrcSpan l
+  --   alias           = pprint           (rtName re)
+  --   sp'             = GM.fSrcSpan lre -- sourcePosSrcSpan (rtPos re)
+  --   msg             =  "expects" PJ.<+> pprint (length $ rtVArgs re)
+  --                  PJ.<+> "arguments but it is given"
+  --                  PJ.<+> pprint (length es)
 
 
 -------------------------------------------------------------------------------
@@ -804,7 +820,7 @@ addExists :: SpecType -> State ExSt SpecType
 addExists t = liftM (M.foldlWithKey' addExist t) getBinds
 
 addExist :: SpecType -> F.FixSymbol -> (RSort, F.Expr LHSymbol) -> SpecType
-addExist t x (tx, e) = REx x t' t
+addExist t x (tx, e) = REx (F.FS x) t' t
   where 
     t'               = (ofRSort tx) `strengthen` uTop r
     r                = F.exprReft e
@@ -834,7 +850,7 @@ expToBindExpr e@(EVar s) _
 expToBindExpr e t
   = do s <- freshSymbol
        modify $ \st -> st{emap = M.insert s (t, e) (emap st)}
-       return $ EVar s
+       return $ EVar (F.FS s)
 
 freshSymbol :: State ExSt F.FixSymbol
 freshSymbol

@@ -697,7 +697,7 @@ data RType c tv r
     , rt_out    :: !(RType c tv r)
     , rt_reft   :: !r
     }
-
+  -- YL : what is imp?
   | RImpF  {
       rt_bind   :: !Symbol
     , rt_in     :: !(RType c tv r)
@@ -705,11 +705,13 @@ data RType c tv r
     , rt_reft   :: !r
     }
 
+  -- YL : for all types? PI type for system f?
   | RAllT {
       rt_tvbind :: !(RTVU c tv) -- RTVar tv (RType c tv ()))
     , rt_ty     :: !(RType c tv r)
     }
 
+  -- YL : ranges over predicates?
   -- | "forall x y <z :: Nat, w :: Int> . TYPE"
   --               ^^^^^^^^^^^^^^^^^^^ (rt_pvbind)
   | RAllP {
@@ -1107,6 +1109,7 @@ data RInstance t = RI
   , risigs  :: [(F.Located F.FixSymbol, RISig t)]
   } deriving (Generic, Functor, Data, Typeable, Show)
 
+-- YL : might be helpful to learn how this thing works
 data RILaws ty = RIL
   { rilName    :: BTyCon
   , rilSupers  :: [ty]
@@ -2080,6 +2083,7 @@ getModString = moduleNameString . getModName
 -- | Refinement Type Aliases ---------------------------------------------------
 --------------------------------------------------------------------------------
 data RTEnv tv t = RTE
+  -- YL : wrong type...
   { typeAliases :: M.HashMap Symbol (F.Located (RTAlias tv t))
   , exprAliases :: M.HashMap Symbol (F.Located (RTAlias Symbol Expr))
   }
