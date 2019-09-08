@@ -85,7 +85,7 @@ makeEnv :: Config -> GhcSrc -> LogicMap -> [(ModName, BareSpec)] -> Env
 makeEnv cfg src lmap specs = RE 
   { reLMap      = lmap
   , reSyms      = syms 
-  , _reSubst    = makeVarSubst   src 
+  -- , _reSubst    = makeVarSubst   src 
   , _reTyThings = makeTyThingMap src 
   , reQualImps  = gsQualImps     src
   , reAllImps   = gsAllImps      src
@@ -144,15 +144,15 @@ localKey v
   where 
     (m, x)    = splitModuleNameExact . GM.dropModuleUnique . F.symbol $ v 
 
-makeVarSubst :: GhcSrc -> F.Subst 
-makeVarSubst src = F.mkSubst unqualSyms 
-  where 
-    unqualSyms   = [ (x, mkVarExpr v) 
-                       | (x, mxs) <- M.toList       (makeSymMap src) 
-                       , v        <- Mb.maybeToList (okUnqualified me mxs) 
-                       , not (isWiredInName x)
-                   ] 
-    me           = F.symbol (giTargetMod src) 
+-- makeVarSubst :: GhcSrc -> F.Subst 
+-- makeVarSubst src = F.mkSubst unqualSyms 
+--   where 
+--     unqualSyms   = [ (x, mkVarExpr v) 
+--                        | (x, mxs) <- M.toList       (makeSymMap src) 
+--                        , v        <- Mb.maybeToList (okUnqualified me mxs) 
+--                        , not (isWiredInName x)
+--                    ] 
+--     me           = F.symbol (giTargetMod src) 
 
 -- | @okUnqualified mod mxs@ takes @mxs@ which is a list of modulenames-var 
 --   pairs all of which have the same unqualified symbol representation. 
@@ -160,14 +160,14 @@ makeVarSubst src = F.mkSubst unqualSyms
 --   1. that list is a singleton i.e. there is a UNIQUE unqualified version, OR
 --   2. there is a version whose module equals @me@.
 
-okUnqualified :: F.Symbol -> [(F.Symbol, a)] -> Maybe a 
-okUnqualified _ [(_, x)] = Just x 
-okUnqualified me mxs     = go mxs 
-  where 
-    go []                = Nothing 
-    go ((m,x) : rest)    
-      | me == m          = Just x 
-      | otherwise        = go rest 
+-- okUnqualified :: F.Symbol -> [(F.Symbol, a)] -> Maybe a 
+-- okUnqualified _ [(_, x)] = Just x 
+-- okUnqualified me mxs     = go mxs 
+--   where 
+--     go []                = Nothing 
+--     go ((m,x) : rest)    
+--       | me == m          = Just x 
+--       | otherwise        = go rest 
 
 
 makeSymMap :: GhcSrc -> M.HashMap F.Symbol [(F.Symbol, Ghc.Var)]
@@ -278,6 +278,7 @@ qualifyTopDummy env name = qualifyTop env name dummySourcePos
 dummySourcePos :: F.SourcePos 
 dummySourcePos = F.loc (F.dummyLoc ())
 
+-- YL: this signature might need to change
 class Qualify a where 
   qualify :: Env -> ModName -> F.SourcePos -> [F.Symbol] -> a -> a 
 
@@ -705,7 +706,8 @@ resolveReft env name l ps t bs
     tπs = ty_preds (toRTypeRep t) 
      
 fixReftTyVars :: BareType -> RReft -> RReft 
-fixReftTyVars bt  = coSubRReft coSub 
+fixReftTyVars bt  = coSubRReft coSub
+  -- YL: coSub. substitution on the Coercions
   where
     coSub         = M.fromList [ (F.symbol a, F.FObj (specTvSymbol a)) | a <- tvs ]
     tvs           = RT.allTyVars bt

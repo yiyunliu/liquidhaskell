@@ -16,6 +16,10 @@ module Language.Haskell.Liquid.Liquid (
 
    -- * Liquid Constraint Generation 
   , liquidConstraints
+
+
+  -- YL : testing
+  , testGhcInfo
   ) where
 
 import           Prelude hiding (error)
@@ -92,6 +96,17 @@ checkTargets cfg  = go
                        case ec of 
                          ExitSuccess -> go env' fs
                          _           -> return (ec, env')
+
+-- YL : testing
+--------------------------------------------------------------------------------
+testGhcInfo :: [FilePath] -> [String] -> IO [GhcInfo]
+--------------------------------------------------------------------------------
+testGhcInfo targetFiles args = do
+  cfg <- getOpts args
+  (info, _) <- getGhcInfos Nothing cfg targetFiles
+  pure info
+
+
 
 
 --------------------------------------------------------------------------------
