@@ -186,6 +186,7 @@ data Spec ty bndr  = Spec
   , autois     :: !(M.HashMap (F.Located F.FixSymbol) (Maybe Int))  -- ^ Automatically instantiate axioms in these Functions with maybe specified fuel
   , hmeas      :: !(S.HashSet (F.Located F.FixSymbol))        -- ^ Binders to turn into measures using haskell definitions
   , hbounds    :: !(S.HashSet (F.Located F.FixSymbol))        -- ^ Binders to turn into bounds using haskell definitions
+  -- YL : resolve these? already resolved in makeMeasure...
   , inlines    :: !(S.HashSet (F.Located F.FixSymbol))        -- ^ Binders to turn into logic inline using haskell definitions
   , ignores    :: !(S.HashSet (F.Located F.FixSymbol))        -- ^ Binders to ignore during checking; that is DON't check the corebind. 
   , autosize   :: !(S.HashSet (F.Located F.FixSymbol))        -- ^ Type Constructors that get automatically sizing info

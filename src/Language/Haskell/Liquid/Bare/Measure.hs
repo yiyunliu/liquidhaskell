@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards  #-}
 {-# LANGUAGE TupleSections    #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | This module contains (most of) the code needed to lift Haskell entitites,
 --   . code- (CoreBind), and data- (Tycon) definitions into the spec level.
@@ -8,8 +9,8 @@
 -- YL : is this anyhow related to Axioms or are they relatively independent?
 
 module Language.Haskell.Liquid.Bare.Measure
-  ( makeHaskellMeasures
-  , makeHaskellInlines
+  ( makeHaskellMeasures -- YL : 
+  , makeHaskellInlines -- how are these two different?
   , makeHaskellDataDecls
   , makeMeasureSelectors
   , makeMeasureSpec
@@ -63,11 +64,12 @@ makeHaskellMeasures src tycEnv lmap spec
     cbs   = nonRecCoreBinds   (giCbs src) 
     mSyms = S.toList (Ms.hmeas spec)
   
-makeMeasureDefinition :: Bare.TycEnv -> LogicMap -> [Ghc.CoreBind] -> F.FixSymbol
+makeMeasureDefinition :: Bare.TycEnv -> LogicMap -> [Ghc.CoreBind] -> F.Located F.FixSymbol
                       -> Measure LocSpecType Ghc.DataCon
-makeMeasureDefinition tycEnv lmap cbs x = 
+makeMeasureDefinition tycEnv lmap cbs x =
+  -- YL : resolution?
   case GM.findVarDef (val x) cbs of
-    Nothing       -> Ex.throw $ errHMeas x "Cannot extract measure from haskell function"
+    Nothing       -> Ex.throw $ errHMeas (undefined x) "Cannot extract measure from haskell function"
     Just (v, def) -> Ms.mkM vx vinfo mdef MsLifted (makeUnSorted (Ghc.varType v) mdef) 
                      where 
                        vx           = F.atLoc x (F.AS . LHVar $ v)
@@ -92,9 +94,9 @@ makeUnSorted t defs
     isMeasureType _                   = False  
 
     defToUnSortedExpr def = (xx:(fst <$> binds def), 
-                             Ms.bodyPred (F.mkEApp (measure def) [F.expr xx]) (body def)) 
+                             Ms.bodyPred (F.mkEApp (measure def) [F.expr @LHSymbol xx]) (body def)) 
 
-    xx = F.vv $ Just 10000
+    xx = F.AS . LHRefSym $ F.vv $ Just 10000
 
 coreToDef' :: Bare.TycEnv -> LogicMap -> Located (F.Symbol LHSymbol) -> Ghc.Var -> Ghc.CoreExpr 
            -> [Def LocSpecType Ghc.DataCon] 
@@ -120,11 +122,12 @@ makeHaskellInlines src embs lmap spec
     cbs  = nonRecCoreBinds (giCbs src) 
     inls = S.toList        (Ms.inlines spec)
 
-makeMeasureInline :: F.TCEmb LHSymbol Ghc.TyCon -> LogicMap -> [Ghc.CoreBind] -> LocSymbol LHSymbol
+makeMeasureInline :: F.TCEmb LHSymbol Ghc.TyCon -> LogicMap -> [Ghc.CoreBind] -> Located F.FixSymbol
                   -> (LocSymbol LHSymbol, LMap)
-makeMeasureInline embs lmap cbs x = 
+makeMeasureInline embs lmap cbs x =
+  -- YL : resolved here
   case GM.findVarDef (val x) cbs of 
-    Nothing       -> Ex.throw $ errHMeas x "Cannot inline haskell function"
+    Nothing       -> Ex.throw $ errHMeas (undefined x) "Cannot inline haskell function"
     Just (v, def) -> (vx, coreToFun' embs Nothing lmap vx v def ok)
                      where 
                        vx         = F.atLoc x (F.symbol v)
@@ -387,11 +390,12 @@ mkMeasureDCon_ m ndcs = m' {Ms.ctorMap = cm'}
     cm'               = Misc.hashMapMapKeys (F.symbol . tx) $ Ms.ctorMap m'
     tx                = Misc.mlookup (M.fromList ndcs)
 
-measureCtors ::  Ms.MSpec t LocSymbol -> [LocSymbol]
+measureCtors ::  Ms.MSpec t (LocSymbol LHSymbol) -> [LocSymbol LHSymbol]
+-- YL : the return type is the MSpec t ctor's "ctor". called in mkMeasureDCon
 measureCtors = Misc.sortNub . fmap ctor . concat . M.elems . Ms.ctorMap
 
-mkMeasureSort :: Bare.Env -> ModName -> Ms.MSpec BareType LocSymbol 
-              -> Ms.MSpec SpecType LocSymbol
+mkMeasureSort :: Bare.Env -> ModName -> Ms.MSpec BareType (LocSymbol LHSymbol)
+              -> Ms.MSpec SpecType (LocSymbol LHSymbol)
 mkMeasureSort env name (Ms.MSpec c mm cm im) = 
   Ms.MSpec (map txDef <$> c) (tx <$> mm) (tx <$> cm) (tx <$> im) 
     where
@@ -417,7 +421,7 @@ expandMeasure env name rtEnv m = m
   , msEqns = expandMeasureDef env name rtEnv <$> msEqns m 
   }
 
-expandMeasureDef :: Bare.Env -> ModName -> BareRTEnv -> Def t LocSymbol -> Def t LocSymbol
+expandMeasureDef :: Bare.Env -> ModName -> BareRTEnv -> Def t (LocSymbol LHSymbol) -> Def t (LocSymbol LHSymbol)
 expandMeasureDef env name rtEnv d = d 
   { body  = F.notracepp msg $ Bare.qualifyExpand env name rtEnv l bs (body d) }
   where 
@@ -425,10 +429,12 @@ expandMeasureDef env name rtEnv d = d
     bs    = fst <$> binds d 
     msg   = "QUALIFY-EXPAND-BODY" ++ F.showpp (bs, body d) 
 
+-- YL : or simply LHSymbol
 ------------------------------------------------------------------------------
-varMeasures :: (Monoid r) => Bare.Env -> [(F.Symbol, Located (RRType r))]
+varMeasures :: (Monoid r) => Bare.Env -> [(F.Symbol LHSymbol, Located (RRType r))]
 ------------------------------------------------------------------------------
-varMeasures env = 
+varMeasures env =
+  -- YL : 
   [ (F.symbol v, varSpecType v) 
       | v <- knownVars env 
       , GM.isDataConId v
@@ -446,7 +452,7 @@ isSimpleType :: Ghc.Type -> Bool
 isSimpleType = isFirstOrder . RT.typeSort mempty
 
 makeClassMeasureSpec :: MSpec (RType c tv (UReft r2)) t
-                     -> [(LocSymbol, CMeasure (RType c tv r2))]
+                     -> [(LocSymbol LHSymbol, CMeasure (RType c tv r2))]
 makeClassMeasureSpec (Ms.MSpec {..}) = tx <$> M.elems cmeasMap
   where
     tx (M n s _ _ _) = (n, CM n (mapReft ur_reft s))

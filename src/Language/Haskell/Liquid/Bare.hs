@@ -12,6 +12,7 @@
 --   The actual /representations/ of bare and real (refinement) types are all
 --   in `RefType` -- they are different instances of `RType`
 
+-- YL : read the exports...
 module Language.Haskell.Liquid.Bare (
     GhcSpec(..)
   , makeGhcSpec
@@ -222,6 +223,8 @@ makeLiftedSpec1 :: Config -> GhcSrc -> Bare.TycEnv -> LogicMap -> Ms.BareSpec
 makeLiftedSpec1 _ src tycEnv lmap mySpec = mempty
   { Ms.measures  = Bare.makeHaskellMeasures src tycEnv lmap mySpec }
 
+-- YL : so "lifting" means collapsing everything into serializable form?
+-- everything called by makeliftedspec0 is NOT used in GhcSpec???
 --------------------------------------------------------------------------------
 -- | [NOTE]: LIFTING-STAGES 
 -- 
@@ -444,7 +447,7 @@ makeSpecRefl src menv specs env name sig tycEnv = SpRefl
 
     lmap         = Bare.reLMap env
 
-isReflectVar :: S.HashSet F.Symbol -> Ghc.Var -> Bool 
+cisReflectVar :: S.HashSet F.Symbol -> Ghc.Var -> Bool 
 isReflectVar reflSyms v = S.member vx reflSyms
   where
     vx                  = GM.dropModuleNames (symbol v)
@@ -886,6 +889,7 @@ makeMeasEnv env tycEnv sigEnv specs = Bare.MeasEnv
     (cls, mts)    = Bare.makeClasses        env sigEnv name specs
     laws          = F.notracepp "LAWS" $ Bare.makeCLaws env sigEnv name specs
 
+-- YL : mark. this is why we are converting things into bare object.
 -----------------------------------------------------------------------------------------
 -- | @makeLiftedSpec@ is used to generate the BareSpec object that should be serialized 
 --   so that downstream files that import this target can access the lifted definitions, 

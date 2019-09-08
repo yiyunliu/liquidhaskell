@@ -2127,7 +2127,7 @@ data Def ty ctor = Def
   } deriving (Show, Data, Typeable, Generic, Eq, Functor)
 
 data Measure ty ctor = M
-  -- YL: F.LocSymbol LHSymbol -> Located LHSymbol
+  -- YL: change F.LocSymbol LHSymbol -> Located LHSymbol
   { msName :: F.LocSymbol LHSymbol
   , msSort :: ty
   , msEqns :: [Def ty ctor]
