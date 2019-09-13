@@ -40,8 +40,10 @@ makeMethodTypes :: DEnv Ghc.Var LocSpecType -> [DataConP] -> [Ghc.CoreBind] -> [
 -------------------------------------------------------------------------------
 makeMethodTypes (DEnv m) cls cbs 
   = [(x, MT (addCC x . fromRISig <$> methodType d x m) (addCC x <$> classType (splitDictionary e) x)) | (d,e) <- ds, x <- grepMethods e]
-    where 
+    where
+      -- get the methods for a dict
       grepMethods = filter GM.isMethod . freeVars mempty
+      -- YL : get all the dictionaries
       ds = filter (GM.isDictionary . fst) (concatMap unRec cbs)
       unRec (Ghc.Rec xes) = xes
       unRec (Ghc.NonRec x e) = [(x,e)]
@@ -93,6 +95,7 @@ makeCLaws env sigEnv myName specs =
     ]
   where
     msg tc  = error ("Not a type class: " ++ F.showpp tc)
+    -- YL : resolving the fixsymbol
     classTc = Bare.maybeResolveSym env myName "makeClass" . btc_tc . rcName 
 
 

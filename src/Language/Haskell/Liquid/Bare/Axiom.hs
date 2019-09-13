@@ -6,6 +6,7 @@
 -- | This module contains the code that DOES reflection; i.e. converts Haskell
 --   definitions into refinements.
 
+-- YL : before this happens, propogate the changes
 module Language.Haskell.Liquid.Bare.Axiom ( makeHaskellAxioms ) where
 
 import Prelude hiding (error)
@@ -50,6 +51,7 @@ getReflectDefs src sig spec = findVarDefType cbs sigs <$> xs
 findVarDefType :: [Ghc.CoreBind] -> [(Ghc.Var, LocSpecType)] -> LocSymbol
                -> (LocSymbol, Maybe SpecType, Ghc.Var, Ghc.CoreExpr)
 findVarDefType cbs sigs x = case findVarDef (val x) cbs of
+  -- YL : insert method lookup here?
   Just (v, e) -> if Ghc.isExportedId v
                    then (x, val <$> lookup v sigs, v, e)
                    else Ex.throw $ mkError x ("Lifted functions must be exported; please export " ++ show v)

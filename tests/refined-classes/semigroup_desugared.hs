@@ -83,15 +83,6 @@ lawAssociativeInt x y z =
 -- Attempting to use desugared class laws
 -- ======================================
 
-{-@ assume lawAssociative
- :: d : SemigroupD a
- -> x : a
- -> y : a
- -> z : a
- -> {sdMappend d (sdMappend d x y) z = sdMappend d x (sdMappend d y z)}
-@-}
-lawAssociative :: SemigroupD a -> a -> a -> a -> ()
-lawAssociative _ _ _ _ = ()
 
 {-@ testLemma
  :: d : SemigroupD a
@@ -101,7 +92,7 @@ lawAssociative _ _ _ _ = ()
  -> {sdMappend d (sdMappend d x y) z = sdMappend d x (sdMappend d y z) }
  @-}
 testLemma :: SemigroupD a -> a -> a -> a -> ()
-testLemma d x y z = sdLawAssociative d x y z 
+testLemma (SemigroupD _ assoc) x y z = assoc x y z 
     -- JP: sdLawAssociative doesn't work, but replacing it with the assumed lawAssociative does.
 
 

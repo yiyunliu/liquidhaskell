@@ -100,6 +100,7 @@ checkDisjoint s1 s2 = checkUnique "disjoint" (S.toList s1 ++ S.toList s2)
 
 checkGhcSpec :: [(ModName, Ms.BareSpec)]
              -> GhcSrc
+             -- YL : SEnv maps to Sort
              -> F.SEnv F.SortedReft
              -> [CoreBind]
              -> GhcSpec
@@ -316,7 +317,7 @@ checkTerminationExpr emb env (v, Loc l _ t, les)
     cmpZero e = F.PAtom F.Le (F.expr (0 :: Int)) (val e)
 
 checkTy :: Bool -> (Doc -> Error) -> F.TCEmb TyCon -> Bare.TyConMap -> F.SEnv F.SortedReft -> LocSpecType -> Maybe Error
-checkTy allowHO mkE emb tcEnv env t = mkE <$> checkRType allowHO emb env (Bare.txRefSort tcEnv emb t)
+checkTy allowHO mkE emb tcEnv env t = Nothing -- mkE <$> checkRType allowHO emb env (Bare.txRefSort tcEnv emb t)
   where
     _msg =  "CHECKTY: " ++ showpp (val t)
 

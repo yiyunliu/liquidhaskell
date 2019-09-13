@@ -38,6 +38,7 @@ data GhcSrc = Src
   , giTargetMod :: !ModName               -- ^ Name for module
   , giCbs       :: ![CoreBind]            -- ^ Source Code
   , gsTcs       :: ![TyCon]               -- ^ All used Type constructors
+  -- YL : add a list of classes
   , gsCls       :: !(Maybe [ClsInst])     -- ^ Class instances?
   , giDerVars   :: !(S.HashSet Var)       -- ^ Binders created by GHC eg dictionaries
   , giImpVars   :: ![Var]                 -- ^ Binders that are _read_ in module (but not defined?)
