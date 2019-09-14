@@ -103,7 +103,7 @@ makeGhcSpec cfg src lmap mspecs0
   where 
     mspecs =  [ (m, checkThrow $ Bare.checkBareSpec m sp) | (m, sp) <- mspecs0, isTarget m ] 
            ++ [ (m, sp) | (m, sp) <- mspecs0, not (isTarget m)]
-    sp     = makeGhcSpec0 cfg src lmap mspecs 
+    sp     = makeGhcSpec0 cfg src lmap (F.tracepp "specs passed to makeGhcSpec0" mspecs )
     renv   = ghcSpecEnv sp 
     cbs    = giCbs src
 
@@ -138,7 +138,7 @@ ghcSpecEnv sp = fromListSEnv binds
 -------------------------------------------------------------------------------------
 makeGhcSpec0 :: Config -> GhcSrc ->  LogicMap -> [(ModName, Ms.BareSpec)] -> GhcSpec
 -------------------------------------------------------------------------------------
-makeGhcSpec0 cfg src lmap mspecs = SP 
+makeGhcSpec0 cfg src lmap mspecs' = SP 
   { gsConfig = cfg 
   , gsImps   = makeImports mspecs
   , gsSig    = addReflSigs refl sig 
@@ -178,13 +178,18 @@ makeGhcSpec0 cfg src lmap mspecs = SP
     mySpec2  = Bare.qualifyExpand env name rtEnv l [] mySpec1    where l = F.dummyPos "expand-mySpec2"
     iSpecs2  = Bare.qualifyExpand env name rtEnv l [] iSpecs0    where l = F.dummyPos "expand-iSpecs2"
     rtEnv    = Bare.makeRTEnv env name mySpec1 iSpecs0 lmap  
-    mySpec1  = mySpec0 <> lSpec0    
+    mySpec1  = F.tracepp "mySpec0" mySpec0 <> lSpec0    
     lSpec0   = makeLiftedSpec0 cfg src embs lmap mySpec0 
     embs     = makeEmbeds          src env ((name, mySpec0) : M.toList iSpecs0)
     -- extract name and specs
-    env      = Bare.makeEnv cfg src lmap mspecs  
-    (mySpec0, iSpecs0) = splitSpecs name mspecs 
-    -- check barespecs 
+    env      = Bare.makeEnv cfg src lmap mspecs'
+    mySpec0  = mySpec0' <> clsSpec
+    (mySpec0', iSpecs0) = splitSpecs name mspecs'
+    mspecs    = M.toList $ M.insert name mySpec0 iSpecs0
+    -- check barespecs
+    clsSpec  = if F.symbol name == "Semigroup"
+               then mempty {dataDecls = Bare.makeClassDataDecl env (name, mySpec0')}
+               else mempty
     name     = F.notracepp ("ALL-SPECS" ++ zzz) $ giTargetMod  src 
     zzz      = F.showpp (fst <$> mspecs)
 
@@ -250,6 +255,7 @@ makeLiftedSpec0 cfg src embs lmap mySpec = mempty
   }
   where 
     tcs          = uniqNub (gsTcs src ++ refTcs)
+    -- YL : that's for type classes defined in a different module
     refTcs       = reflectedTyCons cfg embs cbs  mySpec
     cbs          = giCbs       src
     name         = giTargetMod src
@@ -852,7 +858,7 @@ makeTycEnv cfg myName env embs mySpec iSpecs clsdcs = Bare.TycEnv
     tds           = [(name, tcpCon tcp, dd) | (name, tcp, Just dd) <- tcDds]
     adts          = Bare.makeDataDecls cfg embs myName tds       datacons
     dm            = Bare.dataConMap adts
-    dcSelectors   = concatMap (Bare.makeMeasureSelectors cfg dm) (datacons ++ clsdcs)
+    dcSelectors   = concatMap (Bare.makeMeasureSelectors cfg dm) datacons
     recSelectors  = Bare.makeRecordSelectorSigs env myName       datacons 
     fiTcs         = gsFiTcs (Bare.reSrc env)
    
@@ -881,7 +887,7 @@ makeMeasEnv env tycEnv sigEnv specs = Bare.MeasEnv
   , meCLaws       = laws
   }
   where 
-    measures      = mconcat (Ms.mkMSpec' dcSelectors : (Bare.makeMeasureSpec env sigEnv name <$> M.toList specs))
+    measures      = mconcat (Ms.mkMSpec' (F.tracepp "dcSelectors" dcSelectors) : (Bare.makeMeasureSpec env sigEnv name <$> M.toList specs))
     (cs, ms)      = Bare.makeMeasureSpec'     measures
     cms           = Bare.makeClassMeasureSpec measures
     cms'          = [ (x, Loc l l' $ cSort t)  | (Loc l l' x, t) <- cms ]

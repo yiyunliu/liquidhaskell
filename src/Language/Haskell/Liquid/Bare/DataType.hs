@@ -17,6 +17,9 @@ module Language.Haskell.Liquid.Bare.DataType
   , meetDataConSpec
   -- , makeTyConEmbeds
 
+  -- * Type Classes
+  , makeClassDataDecl
+
   ) where
 
 import           Prelude                                hiding (error)
@@ -27,6 +30,7 @@ import           Prelude                                hiding (error)
 -- import           Language.Haskell.Liquid.GHC.TypeRep
 
 import qualified Control.Exception                      as Ex
+import           Control.Arrow                          ((***))
 import qualified Data.List                              as L
 import qualified Data.HashMap.Strict                    as M
 import qualified Data.HashSet                           as S
@@ -376,15 +380,47 @@ makeConTypes env (name, spec)
          = unzip  [ ofBDataDecl env name x y | (x, y) <- gvs ] 
   where 
     gvs  = groupVariances dcs' vdcs
-    dcs' = canonizeDecls env name dcs
+    -- YL : insert it here?
+    -- YL print here. see the difference
+    -- cdcs =  if F.symbol name == "Semigroup" then F.tracepp "bad datadecl" $ makeClassDataDecl env (name, spec) else []
+    dcs' = F.notracepp "-CANONIZEDECLS" $ canonizeDecls env name dcs
     dcs  = Ms.dataDecls spec 
     vdcs = Ms.dvariance spec 
 
+makeClassDataDecl :: Bare.Env -> (ModName, Ms.BareSpec) -> [DataDecl]
+makeClassDataDecl env (m, spec) = classDeclToDataDecl env m <$> Ms.classes spec
+
+  
+
+classDeclToDataDecl :: Bare.Env -> ModName -> RClass LocBareType -> DataDecl
+classDeclToDataDecl env m rcls = DataDecl
+          { tycName   = DnName (btc_tc . rcName $ rcls)
+          , tycTyVars = as
+          , tycPVars  = []
+          , tycTyLabs = []
+          , tycDCons  = [dctor]
+          , tycSrcPos = F.loc . btc_tc . rcName $ rcls
+          , tycSFun   = Nothing
+          , tycPropTy = Nothing
+          , tycKind   = DataUser}
+          -- YL : fix it
+  where Just classTc   = (Bare.maybeResolveSym env m "makeClassDataDecl" . btc_tc . rcName $ rcls) >>= Ghc.tyConClass_maybe
+        classDc        = Ghc.classDataCon classTc
+        as             = F.symbol <$> rcTyVars rcls
+        dctor          = DataCtor
+          { dcName   = F.dummyLoc $ F.symbol classDc
+          , dcTyVars = as
+          , dcTheta  = []
+          , dcFields = (F.val *** F.val) <$> rcMethods rcls
+          , dcResult = Nothing}
+        
 -- | 'canonizeDecls ds' returns a subset of 'ds' with duplicates, e.g. arising
 --   due to automatic lifting (via 'makeHaskellDataDecls'). We require that the
 --   lifted versions appear LATER in the input list, and always use those
 --   instead of the unlifted versions.
 
+
+-- YL : we can skip this for class as we don't auto lift them (for now).
 canonizeDecls :: Bare.Env -> ModName -> [DataDecl] -> [DataDecl]
 canonizeDecls env name ds =
   case Misc.uniqueByKey' selectDD kds of

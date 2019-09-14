@@ -229,7 +229,9 @@ dataConDecl d     = {- F.notracepp msg $ -} DataCtor dx (F.symbol <$> as) [] xts
   where
     isGadt        = not (Ghc.isVanillaDataCon d)
     -- msg           = printf "dataConDecl (gadt = %s)" (show isGadt)
-    xts           = [(Bare.makeDataConSelector Nothing d i, RT.bareOfType t) | (i, t) <- its ]
+    -- YL : we need to add the class ids here..
+    -- nope. it's the same for all the data cons....
+    xts           = F.tracepp "Field Selectors: "[(Bare.makeDataConSelector Nothing d i, RT.bareOfType t) | (i, t) <- its ]
     dx            = F.symbol <$> GM.locNamedThing d
     its           = zip [1..] ts
     (as,_ps,ts,t)  = Ghc.dataConSig d
