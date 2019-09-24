@@ -290,7 +290,7 @@ checkRTAliases msg _ as = err1s
     err1s               = checkDuplicateRTAlias msg as
 
 checkBind :: (PPrint v) => Bool -> Doc -> F.TCEmb TyCon -> Bare.TyConMap -> F.SEnv F.SortedReft -> (v, LocSpecType) -> Maybe Error
-checkBind allowHO s emb tcEnv env (v, t) = Nothing -- checkTy allowHO msg emb tcEnv env (F.tracepp "YYDebug" t)
+checkBind allowHO s emb tcEnv env (v, t) = checkTy allowHO msg emb tcEnv env (F.tracepp "YYDebug" t)
   where
     msg                      = ErrTySpec (GM.fSrcSpan t) (Just s) (pprint v) (val t)
 

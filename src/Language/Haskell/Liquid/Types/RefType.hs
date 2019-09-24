@@ -1694,7 +1694,7 @@ grabArgs τs τ
   = reverse (τ:τs)
 
 isNonValueTy :: Type -> Bool
-isNonValueTy t = {- Ghc.isPredTy -} isClassPred t || isEqPred t
+isNonValueTy t = False {- Ghc.isPredTy -} -- isClassPred t || isEqPred t
 
 
 expandProductType :: (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r, Reftable (RTProp RTyCon RTyVar r))
