@@ -135,7 +135,7 @@ ghcSpecEnv sp = fromListSEnv binds
 -------------------------------------------------------------------------------------
 makeGhcSpec0 :: Config -> GhcSrc ->  LogicMap -> [(ModName, Ms.BareSpec)] -> GhcSpec
 -------------------------------------------------------------------------------------
-makeGhcSpec0 cfg src lmap mspecs = SP 
+makeGhcSpec0 cfg src lmap mspecs' = SP 
   { gsConfig = cfg 
   , gsImps   = makeImports mspecs
   , gsSig    = addReflSigs refl sig 
@@ -171,11 +171,11 @@ makeGhcSpec0 cfg src lmap mspecs = SP
     sigEnv   = makeSigEnv  embs tyi (gsExports src) rtEnv 
     tyi      = Bare.tcTyConMap   tycEnv
     -- YL : append cls
-    tycEnv   = makeTycEnv   cfg name env embs mySpec2 iSpecs2 cls
+    tycEnv   = makeTycEnv   cfg name env embs mySpec2 iSpecs2
     mySpec2  = Bare.qualifyExpand env name rtEnv l [] mySpec1    where l = F.dummyPos "expand-mySpec2"
     iSpecs2  = Bare.qualifyExpand env name rtEnv l [] iSpecs0    where l = F.dummyPos "expand-iSpecs2"
     rtEnv    = Bare.makeRTEnv env name mySpec1 iSpecs0 lmap  
-    mySpec1  = F.tracepp "mySpec0" mySpec0 <> lSpec0    
+    mySpec1  = F.notracepp "mySpec0" mySpec0 <> lSpec0    
     lSpec0   = makeLiftedSpec0 cfg src embs lmap mySpec0 
     embs     = makeEmbeds          src env ((name, mySpec0) : M.toList iSpecs0)
     -- extract name and specs
