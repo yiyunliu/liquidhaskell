@@ -82,7 +82,7 @@ makeAssumeType tce lmap dm x mbT v def
     out   = rTypeSort tce (ty_res tRep)
     at    = F.notracepp ("AXIOM-TYPE: " ++ showpp (x, toType t)) $ axiomType x t
     tRep  = toRTypeRep at
-    xArgs = F.EVar <$> [x | (x, t) <- zip (ty_binds tRep) (ty_args tRep), not (isClassType t)]
+    xArgs = F.EVar <$> [x | (x, t) <- zip (ty_binds tRep) (ty_args tRep), not (isErasableType t)]
     _msg  = unwords [showpp x, showpp mbT]
     le    = case runToLogicWithBoolBinds bbs tce lmap dm mkErr (coreToLogic def') of
               Right e -> e
@@ -94,7 +94,7 @@ makeAssumeType tce lmap dm x mbT v def
     su         = F.mkSubst  $ zip (F.symbol     <$> xs) xArgs
                            ++ zip (simplesymbol <$> xs) xArgs
     xts        = zipWith (\x t -> (F.symbol x, rTypeSortExp tce t)) xs ts
-    ts         = filter (not . isClassType) (ty_args tRep)
+    ts         = filter (not . isErasableType) (ty_args tRep)
 
 rTypeSortExp :: F.TCEmb Ghc.TyCon -> SpecType -> F.Sort
 rTypeSortExp tce = typeSort tce . Ghc.expandTypeSynonyms . toType
@@ -150,7 +150,7 @@ axiomType :: (TyConable c) => LocSymbol -> RType c tv RReft -> RType c tv RReft
 axiomType s t = fromRTypeRep (tr {ty_res = res, ty_binds = xs})
   where
     res           = strengthen (ty_res tr) (singletonApp s ys)
-    ys            = fst $ unzip $ dropWhile (isClassType . snd) xts
+    ys            = fst $ unzip $ dropWhile (isErasableType . snd) xts
     xts           = safeZip "axiomBinds" xs (ty_args tr)
     xs            = zipWith unDummy bs [1..]
     tr            = toRTypeRep t

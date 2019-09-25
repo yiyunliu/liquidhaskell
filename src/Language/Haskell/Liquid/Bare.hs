@@ -54,7 +54,7 @@ import qualified Language.Haskell.Liquid.Bare.Class         as Bare
 import qualified Language.Haskell.Liquid.Bare.Check         as Bare 
 import qualified Language.Haskell.Liquid.Bare.Laws          as Bare 
 import qualified Language.Haskell.Liquid.Transforms.CoreToLogic as CoreToLogic 
-import           Control.Arrow                    (second)
+import           Control.Arrow                    (first, second)
 
 --------------------------------------------------------------------------------
 -- | De/Serializing Spec files -------------------------------------------------
@@ -160,24 +160,33 @@ makeGhcSpec0 cfg src lmap mspecs = SP
     refl     = makeSpecRefl  src measEnv specs env name sig tycEnv 
     laws     = makeSpecLaws env sigEnv (gsTySigs sig ++ gsAsmSigs sig) measEnv specs 
     sig      = makeSpecSig cfg name specs env sigEnv   tycEnv measEnv (giCbs src)
+    -- YL: put cls here?
+    (cls, _) =  first (fmap dummyLoc) $ Bare.makeClasses env sigEnv name (M.fromList [(name, mySpec0)])
+    
     measEnv  = makeMeasEnv      env tycEnv sigEnv       specs 
     -- build up environments
     specs    = M.insert name mySpec iSpecs2
     mySpec   = mySpec2 <> lSpec1 
     lSpec1   = lSpec0 <> makeLiftedSpec1 cfg src tycEnv lmap mySpec1 
     sigEnv   = makeSigEnv  embs tyi (gsExports src) rtEnv 
-    tyi      = Bare.tcTyConMap   tycEnv 
-    tycEnv   = makeTycEnv   cfg name env embs mySpec2 iSpecs2 
+    tyi      = Bare.tcTyConMap   tycEnv
+    -- YL : append cls
+    tycEnv   = makeTycEnv   cfg name env embs mySpec2 iSpecs2 cls
     mySpec2  = Bare.qualifyExpand env name rtEnv l [] mySpec1    where l = F.dummyPos "expand-mySpec2"
     iSpecs2  = Bare.qualifyExpand env name rtEnv l [] iSpecs0    where l = F.dummyPos "expand-iSpecs2"
     rtEnv    = Bare.makeRTEnv env name mySpec1 iSpecs0 lmap  
-    mySpec1  = mySpec0 <> lSpec0    
+    mySpec1  = F.tracepp "mySpec0" mySpec0 <> lSpec0    
     lSpec0   = makeLiftedSpec0 cfg src embs lmap mySpec0 
     embs     = makeEmbeds          src env ((name, mySpec0) : M.toList iSpecs0)
     -- extract name and specs
-    env      = Bare.makeEnv cfg src lmap mspecs  
-    (mySpec0, iSpecs0) = splitSpecs name mspecs 
-    -- check barespecs 
+    env      = Bare.makeEnv cfg src lmap mspecs'
+    mySpec0  = mySpec0' <> clsSpec
+    (mySpec0', iSpecs0) = splitSpecs name mspecs'
+    mspecs    = M.toList $ M.insert name mySpec0 iSpecs0
+    -- check barespecs
+    clsSpec  = if F.symbol name == "Semigroup"
+               then mempty {dataDecls = Bare.makeClassDataDecl env (name, mySpec0')}
+               else mempty
     name     = F.notracepp ("ALL-SPECS" ++ zzz) $ giTargetMod  src 
     zzz      = F.showpp (fst <$> mspecs)
 

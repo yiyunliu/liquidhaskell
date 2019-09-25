@@ -133,7 +133,7 @@ import Data.List (sort, foldl')
 strengthenDataConType :: (Var, SpecType) -> (Var, SpecType)
 strengthenDataConType (x, t) = (x, fromRTypeRep trep {ty_res = tres})
   where
-    tres     = F.notracepp _msg $ ty_res trep `strengthen` MkUReft (exprReft expr) mempty mempty
+    tres     = F.tracepp _msg $ ty_res trep `strengthen` MkUReft (exprReft expr) mempty mempty
     trep     = toRTypeRep t
     _msg     = "STRENGTHEN-DATACONTYPE x = " ++ F.showpp (x, (zip xs ts))
     (xs, ts) = dataConArgs trep
@@ -1694,7 +1694,7 @@ grabArgs τs τ
   = reverse (τ:τs)
 
 isNonValueTy :: Type -> Bool
-isNonValueTy t = {- Ghc.isPredTy -} isClassPred t || isEqPred t
+isNonValueTy t = False {- Ghc.isPredTy -} -- isClassPred t || isEqPred t
 
 
 expandProductType :: (PPrint r, Reftable r, SubsTy RTyVar (RType RTyCon RTyVar ()) r, Reftable (RTProp RTyCon RTyVar r))

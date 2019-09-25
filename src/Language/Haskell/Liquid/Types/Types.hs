@@ -52,7 +52,7 @@ module Language.Haskell.Liquid.Types.Types (
   , rTyConPVs
   , rTyConPropVs
   -- , isClassRTyCon
-  , isClassType, isEqType, isRVar, isBool
+  , isClassType, isEqType, isRVar, isBool, isErasableType
 
   -- * Refinement Types
   , RType (..), Ref(..), RTProp, rPropP
@@ -623,6 +623,9 @@ isEqType _              = False
 isClassType :: TyConable c => RType c t t1 -> Bool
 isClassType (RApp c _ _ _) = isClass c
 isClassType _              = False
+
+isErasableType :: TyConable c => RType c t t1 -> Bool
+isErasableType = const False
 
 -- rTyConPVHPs = filter isHPropPV . rtc_pvars
 -- isHPropPV   = not . isPropPV
