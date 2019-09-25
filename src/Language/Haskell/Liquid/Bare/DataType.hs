@@ -338,8 +338,8 @@ makeDataFields :: F.TCEmb Ghc.TyCon -> F.FTycon -> [RTyVar] -> [(F.LocSymbol, Sp
                -> [F.DataField]
 makeDataFields tce _c as xts = [ F.DField x (fSort t) | (x, t) <- xts]
   where
-    su                      = zip (F.symbol <$> as) [0..]
-    fSort                   = {- muSort c (length as) . -}  F.substVars su . RT.rTypeSort tce
+    su    = zip (F.symbol <$> as) [0..]
+    fSort = F.substVars su . F.mapFVar (+ (length as)) . RT.rTypeSort tce
 
 {- 
 muSort :: F.FTycon -> Int -> F.Sort -> F.Sort
@@ -698,7 +698,7 @@ makeRecordSelectorSigs env name = checkRecordSelectorSigs . concatMap makeOne
   where
   makeOne (Loc l l' dcp)
     | null fls                    --    no field labels
-    || any (isFunTy . snd) args   -- OR function-valued fields
+    || any (isFunTy . snd) args && not (higherOrderFlag env)   -- OR function-valued fields
     || dcpIsGadt dcp              -- OR GADT style datcon
     = []
     | otherwise 
