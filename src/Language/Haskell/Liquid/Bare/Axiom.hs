@@ -36,7 +36,7 @@ makeHaskellAxioms :: GhcSrc -> Bare.Env -> Bare.TycEnv -> ModName -> LogicMap ->
                   -> [(Ghc.Var, LocSpecType, F.Equation)]
 -----------------------------------------------------------------------------------------------
 makeHaskellAxioms src env tycEnv name lmap spSig 
-  = fmap (makeAxiom env tycEnv name lmap) 
+  = F.tracepp "makeHaskellAxioms" . fmap (makeAxiom env tycEnv name lmap) 
   . getReflectDefs src spSig
 
 
@@ -51,8 +51,8 @@ getReflectDefs src sig spec = findVarDefType cbs sigs <$> xs
 findVarDefType :: [Ghc.CoreBind] -> [(Ghc.Var, LocSpecType)] -> LocSymbol
                -> (LocSymbol, Maybe SpecType, Ghc.Var, Ghc.CoreExpr)
 findVarDefType cbs sigs x = case findVarDef (val x) cbs of
-  Just (v, e) -> if Ghc.isExportedId v
-                   then (x, val <$> lookup v sigs, v, e)
+  Just (v, e) -> if Ghc.isExportedId v || isMethod (F.symbol x)
+                   then (F.tracepp "FIND-VAR-DEF-NAME" $ x, F.tracepp "FIND-VAR-DEF" $ val <$> lookup v sigs, v, e)
                    else Ex.throw $ mkError x ("Lifted functions must be exported; please export " ++ show v)
   Nothing     -> Ex.throw $ mkError x "Cannot lift haskell function"
 
@@ -155,7 +155,7 @@ axiomType s t = AT to (reverse xts) res
     (to, (_,xts, Just res)) = runState (go t) (1,[], Nothing)
     go (RAllT a t) = RAllT a <$> go t
     go (RAllP p t) = RAllP p <$> go t 
-    go (RFun x tx t r) | isClassType tx = (\t' -> RFun x tx t' r) <$> go t
+    go (RFun x tx t r) | isErasableType tx = (\t' -> RFun x tx t' r) <$> go t
     go (RFun x tx t r) = do 
       (i,bs,res) <- get 
       let x' = unDummy x i 

@@ -120,7 +120,15 @@ testLemma (SemigroupD _ assoc) x y z = assoc x y z
 
 
 
+class TestClass a where
+  mpd :: a -> a -> a
+  asc :: a -> a -> a -> ()
 
+instance TestClass Int where
+  mpd x y = x + y
+  asc x y z =   mpd (mpd x y) z
+            ==. mpd x (mpd y z)
+            *** QED
 
 -- {-@ mappend 
 -- {-@ assume mappend 

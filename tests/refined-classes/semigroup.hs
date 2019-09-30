@@ -1,4 +1,5 @@
 {-@ LIQUID "--reflection" @-}
+{-@ LIQUID "--ple" @-}
 module Semigroup where
 
 import Prelude hiding (Semigroup, mappend)
@@ -45,20 +46,91 @@ class YYSemigroup a where
 mappendInt :: Int -> Int -> Int
 mappendInt a b = a + b
 
-{-@ mappendAssociative :: v:Int -> v':Int -> v'':Int -> {mappendInt (mappendInt v v') v''  == mappendInt v (mappendInt v' v'') } @-}
-mappendAssociative :: Int -> Int -> Int -> ()
-mappendAssociative x y z =
-        mappendInt (mappendInt x y) z 
-    ==. (x + y) + z
-    ==. x + (y + z)
-    ==. mappendInt x (mappendInt y z)
-    *** QED
+f :: Int -> Int -> Int
+f a b = a + b
+
+-- {-@ testTheorem :: v:Int -> v':Int -> {v + v' = v' - v} @-}
+-- testTheorem :: Int -> Int -> ()
+-- testTheorem v v' = const () (f v v')
+
+
+{-@ reflect $cmappend @-}
+-- {-@ assume fff :: { mappendInt = $cmappend  } @-}
+-- fff :: ()
+-- fff = ()
+
+-- {-@ mappendAssociative :: v:Int -> v':Int -> v'':Int -> {mappendInt (mappendInt v v') v''  == mappendInt v (mappendInt v' v'') } @-}
+-- mappendAssociative :: Int -> Int -> Int -> ()
+-- mappendAssociative x y z =
+--         mappendInt (mappendInt x y) z 
+--     ==. (x + y) + z
+--     ==. x + (y + z)
+--     ==. mappendInt x (mappendInt y z)
+--     *** QED
+
+{-@  reflect carrot  @-}
+carrot :: Int
+carrot = 2
 
 -- instance YYSemigroup Int where
 --     -- mappend a b = a ^ b
---     mappend a b = mappendInt a b
+--     mappend a b = a * b
 
---     lawAssociative x y z = mappendAssociative x y z
+--     lawAssociative x y z = ()--mappendAssociative x y z
+
+data MyNat = Z | S MyNat
+
+-- {-@ reflect natAdd @-}
+-- natAdd :: MyNat -> MyNat -> MyNat
+-- natAdd Z n' = n'
+-- natAdd (S n) n' = S (natAdd n n')
+
+
+-- {-@ natLawAssociative :: m:MyNat -> n:MyNat -> p:MyNat -> {natAdd (natAdd m n) p = natAdd m (natAdd n p) }@-}
+-- natLawAssociative :: MyNat -> MyNat -> MyNat -> ()
+-- natLawAssociative Z n p = natAdd (natAdd Z n) p
+--                      ==. natAdd n p
+--                      ==. natAdd Z (natAdd n p)
+--                      *** QED
+-- natLawAssociative (S m) n p = natAdd (natAdd (S m) n) p
+--                          ==. natAdd (S (natAdd m n)) p
+--                          ==. S (natAdd (natAdd m n) p)
+--                          ==. const (S (natAdd m (natAdd n p) )) (natLawAssociative m n p)
+--                          ==. natAdd (S m) (natAdd n p)
+--                          *** QED
+
+
+-- TRY THIS : SAFE
+-- instance YYSemigroup MyNat where
+--   mappend m n  = natAdd m n
+--   lawAssociative m n p =  natLawAssociative m n p
+
+
+  
+
+-- TRY THIS : Should be SAFE, but throws unification error
+
+-- instance YYSemigroup MyNat where
+--   mappend Z n' = n'
+--   mappend (S n) n' = S (mappend n n') 
+
+--   lawAssociative Z n p = mappend (mappend Z n) p
+--                      ==. mappend n p
+--                      ==. mappend Z (mappend n p)
+--                      *** QED
+--   lawAssociative (S m) n p = mappend (mappend (S m) n) p
+--                          ==. mappend (S (mappend m n)) p
+--                          ==. S (mappend (mappend m n) p)
+--                          ==. const (S (mappend m (mappend n p) )) (lawAssociative m n p)
+--                          ==. mappend (S m) (mappend n p)
+--                          *** QED
+    
+    
+
+-- {-@ reflect natAdd @-}
+-- natAdd :: Nat -> Nat -> Nat
+-- natAdd Z n' =  n'
+-- natAdd (S n) n' = S (natAdd n n')
 
 
 -- -- instance YYSemigroup Float where

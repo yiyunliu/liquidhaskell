@@ -111,13 +111,13 @@ checkThrow :: Ex.Exception e => Either e c -> c
 checkThrow = either Ex.throw id 
 
 ghcSpecEnv :: GhcSpec -> SEnv SortedReft
-ghcSpecEnv sp = fromListSEnv binds
+ghcSpecEnv sp = fromListSEnv (F.tracepp "ghcSpecEnv-BINDS" binds)
   where
     emb       = gsTcEmbeds (gsName sp)
     binds     = concat 
                  [ [(x,        rSort t) | (x, Loc _ _ t) <- gsMeas     (gsData sp)]
                  , [(symbol v, rSort t) | (v, Loc _ _ t) <- gsCtors    (gsData sp)]
-                 , [(symbol v, vSort v) | v              <- gsReflects (gsRefl sp)]
+                 , [(F.tracepp "ghcSpecEnv-REFL" $ if (GM.dropModuleNamesAndUnique (symbol v) == "$cmappend") then "$cmappend" else symbol v , vSort v) | v              <- gsReflects (gsRefl sp)]
                  , [(x,        vSort v) | (x, v)         <- gsFreeSyms (gsName sp), Ghc.isConLikeId v ]
                  , [(x, RR s mempty)    | (x, s)         <- wiredSortedSyms       ]
                  , [(x, RR s mempty)    | (x, s)         <- gsImps sp       ]
@@ -161,7 +161,7 @@ makeGhcSpec0 cfg src lmap mspecs' = SP
     laws     = makeSpecLaws env sigEnv (gsTySigs sig ++ gsAsmSigs sig) measEnv specs 
     sig      = makeSpecSig cfg name specs env sigEnv   tycEnv measEnv (giCbs src)
     -- YL: put cls here?
-    (cls, _) =  first (fmap dummyLoc) $ Bare.makeClasses env sigEnv name (M.fromList [(name, mySpec0)])
+    -- (cls, _) =  first (fmap dummyLoc) $ Bare.makeClasses env sigEnv name (M.fromList [(name, mySpec0)])
     
     measEnv  = makeMeasEnv      env tycEnv sigEnv       specs 
     -- build up environments
@@ -184,7 +184,7 @@ makeGhcSpec0 cfg src lmap mspecs' = SP
     (mySpec0', iSpecs0) = splitSpecs name mspecs'
     mspecs    = M.toList $ M.insert name mySpec0 iSpecs0
     -- check barespecs
-    clsSpec  = if F.symbol name == "Semigroup"
+    clsSpec  = if True -- F.symbol name == "Semigroup"
                then mempty {dataDecls = Bare.makeClassDataDecl env (name, mySpec0')}
                else mempty
     name     = F.notracepp ("ALL-SPECS" ++ zzz) $ giTargetMod  src 
@@ -438,7 +438,7 @@ makeSpecRefl src menv specs env name sig tycEnv = SpRefl
   , gsAutoInst   = makeAutoInst env name mySpec 
   , gsImpAxioms  = concatMap (Ms.axeqs . snd) (M.toList specs)
   , gsMyAxioms   = F.notracepp "gsMyAxioms" myAxioms 
-  , gsReflects   = F.notracepp "gsReflects" (lawMethods ++ filter (isReflectVar rflSyms) sigVars)
+  , gsReflects   = F.notracepp "gsReflects" (lawMethods ++ filter (isReflectVar rflSyms) (F.tracepp "SIG_VARS" sigVars))
   , gsHAxioms    = F.notracepp "gsHAxioms" xtes 
   }
   where
@@ -446,7 +446,7 @@ makeSpecRefl src menv specs env name sig tycEnv = SpRefl
     mySpec       = M.lookupDefault mempty name specs 
     xtes         = Bare.makeHaskellAxioms src env tycEnv name lmap sig mySpec
     myAxioms     = [ Bare.qualifyTop env name (F.loc lt) (e {eqName = symbol x}) | (x, lt, e) <- xtes]  
-    rflSyms      = S.fromList (getReflects specs)
+    rflSyms      = F.tracepp "REFL-SYMS" $ S.fromList (getReflects specs)
     sigVars      = F.notracepp "SIGVARS" $ (fst3 <$> xtes)            -- reflects
                                         ++ (fst  <$> gsAsmSigs sig)   -- assumes
                                       -- ++ (fst  <$> gsTySigs  sig)   -- measures 
@@ -456,7 +456,7 @@ makeSpecRefl src menv specs env name sig tycEnv = SpRefl
 isReflectVar :: S.HashSet F.Symbol -> Ghc.Var -> Bool 
 isReflectVar reflSyms v = S.member vx reflSyms
   where
-    vx                  = GM.dropModuleNames (symbol v)
+    vx                  = GM.dropModuleNamesAndUnique (symbol v)
 
 getReflects :: Bare.ModSpecs -> [Symbol]
 getReflects  = fmap val . S.toList . S.unions . fmap (names . snd) . M.toList
@@ -890,8 +890,9 @@ makeMeasEnv env tycEnv sigEnv specs = Bare.MeasEnv
     datacons      = Bare.tcDataCons    tycEnv 
     embs          = Bare.tcEmbs        tycEnv 
     name          = Bare.tcName        tycEnv
-    dms           = Bare.makeDefaultMethods env mts  
-    (cls, mts)    = Bare.makeClasses        env sigEnv name specs
+    dms           = Bare.makeDefaultMethods env mts
+    -- make sure it doesn't interfere with us
+    (cls, mts)    = mapSnd (filter (\(mn,_,_) -> F.symbol mn /= "Semigroup")) . mapFst (filter (\cl -> F.symbol (dcpCon cl) /= "Semigroup.C:YYSemigroup")) $ Bare.makeClasses        env sigEnv name specs
     laws          = F.notracepp "LAWS" $ Bare.makeCLaws env sigEnv name specs
 
 -----------------------------------------------------------------------------------------
