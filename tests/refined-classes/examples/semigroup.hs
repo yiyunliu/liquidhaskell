@@ -39,7 +39,7 @@ natAdd :: MyNat -> MyNat -> MyNat
 natAdd Z n' = n'
 natAdd (S n) n' = S (natAdd n n')
 
-
+{-@ reflect natLawAssociative @-}
 {-@ natLawAssociative :: m:MyNat -> n:MyNat -> p:MyNat -> {natAdd (natAdd m n) p = natAdd m (natAdd n p) }@-}
 natLawAssociative :: MyNat -> MyNat -> MyNat -> ()
 natLawAssociative Z n p = natAdd (natAdd Z n) p

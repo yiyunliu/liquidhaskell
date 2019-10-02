@@ -99,7 +99,7 @@ saveLiftedSpec src sp = do
 makeGhcSpec :: Config -> GhcSrc ->  LogicMap -> [(ModName, Ms.BareSpec)] -> GhcSpec
 -------------------------------------------------------------------------------------
 makeGhcSpec cfg src lmap mspecs0  
-           = checkThrow (Bare.checkGhcSpec mspecs src renv cbs sp)
+           = checkThrow (Bare.checkGhcSpec (F.tracepp "GhcSpec" mspecs) src renv cbs sp)
   where 
     mspecs =  [ (m, checkThrow $ Bare.checkBareSpec m sp) | (m, sp) <- mspecs0, isTarget m ] 
            ++ [ (m, sp) | (m, sp) <- mspecs0, not (isTarget m)]
@@ -117,7 +117,7 @@ ghcSpecEnv sp = fromListSEnv (F.tracepp "ghcSpecEnv-BINDS" binds)
     binds     = concat 
                  [ [(x,        rSort t) | (x, Loc _ _ t) <- gsMeas     (gsData sp)]
                  , [(symbol v, rSort t) | (v, Loc _ _ t) <- gsCtors    (gsData sp)]
-                 , [(F.tracepp "ghcSpecEnv-REFL" $ if (GM.dropModuleNamesAndUnique (symbol v) == "$cmappend") then "$cmappend" else symbol v , vSort v) | v              <- gsReflects (gsRefl sp)]
+                 , [(symbol v , vSort v) | v              <- gsReflects (gsRefl sp)]
                  , [(x,        vSort v) | (x, v)         <- gsFreeSyms (gsName sp), Ghc.isConLikeId v ]
                  , [(x, RR s mempty)    | (x, s)         <- wiredSortedSyms       ]
                  , [(x, RR s mempty)    | (x, s)         <- gsImps sp       ]
@@ -184,9 +184,15 @@ makeGhcSpec0 cfg src lmap mspecs' = SP
     (mySpec0', iSpecs0) = splitSpecs name mspecs'
     mspecs    = M.toList $ M.insert name mySpec0 iSpecs0
     -- check barespecs
-    clsSpec  = if True -- F.symbol name == "Semigroup"
-               then mempty {dataDecls = Bare.makeClassDataDecl env (name, mySpec0')}
-               else mempty
+    
+    clsSpec  = mempty {dataDecls = clsDecls, reflects = S.fromList methods}
+    clsDecls = Bare.makeClassDataDecl env (name, mySpec0')
+    methods = [ F.dummyLoc $ F.symbol x | (_,e) <- ds, x <- grepMethods e, F.symbol name == "Semigroup"]
+    grepMethods = filter GM.isMethod . freeVars mempty
+    ds = filter (GM.isDictionary . fst) (concatMap unRec (giCbs src))
+    unRec (Ghc.Rec xes) = xes
+    unRec (Ghc.NonRec x e) = [(x,e)]
+    
     name     = F.notracepp ("ALL-SPECS" ++ zzz) $ giTargetMod  src 
     zzz      = F.showpp (fst <$> mspecs)
 
@@ -437,7 +443,7 @@ makeSpecRefl src menv specs env name sig tycEnv = SpRefl
   { gsLogicMap   = lmap 
   , gsAutoInst   = makeAutoInst env name mySpec 
   , gsImpAxioms  = concatMap (Ms.axeqs . snd) (M.toList specs)
-  , gsMyAxioms   = F.notracepp "gsMyAxioms" myAxioms 
+  , gsMyAxioms   = F.tracepp "gsMyAxioms" myAxioms 
   , gsReflects   = F.notracepp "gsReflects" (lawMethods ++ filter (isReflectVar rflSyms) (F.tracepp "SIG_VARS" sigVars))
   , gsHAxioms    = F.notracepp "gsHAxioms" xtes 
   }
@@ -454,9 +460,12 @@ makeSpecRefl src menv specs env name sig tycEnv = SpRefl
     lmap         = Bare.reLMap env
 
 isReflectVar :: S.HashSet F.Symbol -> Ghc.Var -> Bool 
-isReflectVar reflSyms v = S.member vx reflSyms
+isReflectVar reflSyms v
+  | GM.isMethod s = S.member s reflSyms
+  | otherwise     = S.member vx reflSyms
   where
-    vx                  = GM.dropModuleNamesAndUnique (symbol v)
+    s                   = symbol v
+    vx                  = GM.dropModuleNamesAndUnique s
 
 getReflects :: Bare.ModSpecs -> [Symbol]
 getReflects  = fmap val . S.toList . S.unions . fmap (names . snd) . M.toList
@@ -891,8 +900,9 @@ makeMeasEnv env tycEnv sigEnv specs = Bare.MeasEnv
     embs          = Bare.tcEmbs        tycEnv 
     name          = Bare.tcName        tycEnv
     dms           = Bare.makeDefaultMethods env mts
-    -- make sure it doesn't interfere with us
-    (cls, mts)    = mapSnd (filter (\(mn,_,_) -> F.symbol mn /= "Semigroup")) . mapFst (filter (\cl -> F.symbol (dcpCon cl) /= "Semigroup.C:YYSemigroup")) $ Bare.makeClasses        env sigEnv name specs
+    -- disable class laws
+    (cls, mts)    = ([], [])
+    -- (cls, mts)    = Bare.makeClasses        env sigEnv name specs
     laws          = F.notracepp "LAWS" $ Bare.makeCLaws env sigEnv name specs
 
 -----------------------------------------------------------------------------------------

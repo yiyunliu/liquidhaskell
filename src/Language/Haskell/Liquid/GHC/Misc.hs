@@ -778,6 +778,20 @@ ignoreCoreBinds vs cbs
       | otherwise     = [b] 
     go (Rec xes)      = [Rec (filter ((`notElem` vs) . fst) xes)]
 
+findVarDefMethod :: Symbol -> [CoreBind] -> Maybe (Var, CoreExpr)
+findVarDefMethod x cbs =
+  case rcbs  of
+                     (NonRec v def   : _ ) -> Just (v, def)
+                     (Rec [(v, def)] : _ ) -> Just (v, def)
+                     _                     -> Nothing
+  where
+    rcbs             = if isMethod x then mCbs else xCbs 
+    xCbs            = [ cb | cb <- concatMap unRec cbs, x `elem` coreBindSymbols cb ]
+    mCbs            = [ cb | cb <- concatMap unRec cbs, x `elem` methodSymbols cb]
+    unRec (Rec xes) = [NonRec x es | (x,es) <- xes]
+    unRec nonRec    = [nonRec]
+
+
 
 findVarDef :: Symbol -> [CoreBind] -> Maybe (Var, CoreExpr)
 findVarDef x cbs = case xCbs of
@@ -788,6 +802,9 @@ findVarDef x cbs = case xCbs of
     xCbs            = [ cb | cb <- concatMap unRec cbs, x `elem` coreBindSymbols cb ]
     unRec (Rec xes) = [NonRec x es | (x,es) <- xes]
     unRec nonRec    = [nonRec]
+
+methodSymbols :: CoreBind -> [Symbol]
+methodSymbols = filter isMethod . map (dropModuleNames . symbol) . binders
 
 
 coreBindSymbols :: CoreBind -> [Symbol]
