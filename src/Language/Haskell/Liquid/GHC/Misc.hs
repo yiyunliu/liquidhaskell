@@ -811,7 +811,7 @@ coreBindSymbols :: CoreBind -> [Symbol]
 coreBindSymbols = map (dropModuleNames . simplesymbol) . binders
 
 simplesymbol :: (NamedThing t) => t -> Symbol
-simplesymbol = symbol . getName
+simplesymbol = F.tracepp "SIMPLE-SYMBOL" . symbol . getName
 
 binders :: Bind a -> [a]
 binders (NonRec z _) = [z]

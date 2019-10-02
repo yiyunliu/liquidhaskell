@@ -99,7 +99,7 @@ saveLiftedSpec src sp = do
 makeGhcSpec :: Config -> GhcSrc ->  LogicMap -> [(ModName, Ms.BareSpec)] -> GhcSpec
 -------------------------------------------------------------------------------------
 makeGhcSpec cfg src lmap mspecs0  
-           = checkThrow (Bare.checkGhcSpec (F.tracepp "GhcSpec" mspecs) src renv cbs sp)
+           = checkThrow (Bare.checkGhcSpec mspecs src renv cbs sp)
   where 
     mspecs =  [ (m, checkThrow $ Bare.checkBareSpec m sp) | (m, sp) <- mspecs0, isTarget m ] 
            ++ [ (m, sp) | (m, sp) <- mspecs0, not (isTarget m)]
@@ -111,7 +111,7 @@ checkThrow :: Ex.Exception e => Either e c -> c
 checkThrow = either Ex.throw id 
 
 ghcSpecEnv :: GhcSpec -> SEnv SortedReft
-ghcSpecEnv sp = fromListSEnv (F.tracepp "ghcSpecEnv-BINDS" binds)
+ghcSpecEnv sp = fromListSEnv (F.notracepp "ghcSpecEnv-BINDS" binds)
   where
     emb       = gsTcEmbeds (gsName sp)
     binds     = concat 
@@ -187,7 +187,8 @@ makeGhcSpec0 cfg src lmap mspecs' = SP
     
     clsSpec  = mempty {dataDecls = clsDecls, reflects = S.fromList methods}
     clsDecls = Bare.makeClassDataDecl env (name, mySpec0')
-    methods = [ F.dummyLoc $ F.symbol x | (_,e) <- ds, x <- grepMethods e, F.symbol name == "Semigroup"]
+    -- YL : can't reflect lawAssociative...
+    methods = [ F.dummyLoc $ F.symbol x | (_,e) <- ds, x <- grepMethods e, F.symbol name == "Semigroup", GM.simplesymbol x == "$cmappend"]
     grepMethods = filter GM.isMethod . freeVars mempty
     ds = filter (GM.isDictionary . fst) (concatMap unRec (giCbs src))
     unRec (Ghc.Rec xes) = xes
@@ -443,8 +444,8 @@ makeSpecRefl src menv specs env name sig tycEnv = SpRefl
   { gsLogicMap   = lmap 
   , gsAutoInst   = makeAutoInst env name mySpec 
   , gsImpAxioms  = concatMap (Ms.axeqs . snd) (M.toList specs)
-  , gsMyAxioms   = F.tracepp "gsMyAxioms" myAxioms 
-  , gsReflects   = F.notracepp "gsReflects" (lawMethods ++ filter (isReflectVar rflSyms) (F.tracepp "SIG_VARS" sigVars))
+  , gsMyAxioms   = F.notracepp "gsMyAxioms" myAxioms 
+  , gsReflects   = F.tracepp "gsReflects" (lawMethods ++ filter (isReflectVar rflSyms) (F.notracepp "SIG_VARS" sigVars))
   , gsHAxioms    = F.notracepp "gsHAxioms" xtes 
   }
   where
@@ -824,7 +825,7 @@ makeSpecName env tycEnv measEnv name = SpNames
   where 
     datacons, cls :: [DataConP]
     datacons   = Bare.tcDataCons tycEnv 
-    cls        = F.tracepp "meClasses" $ Bare.meClasses measEnv 
+    cls        = F.notracepp "meClasses" $ Bare.meClasses measEnv 
     tycons     = Bare.tcTyCons   tycEnv 
 
 
@@ -901,8 +902,8 @@ makeMeasEnv env tycEnv sigEnv specs = Bare.MeasEnv
     name          = Bare.tcName        tycEnv
     dms           = Bare.makeDefaultMethods env mts
     -- disable class laws
-    (cls, mts)    = ([], [])
-    -- (cls, mts)    = Bare.makeClasses        env sigEnv name specs
+    -- (cls, mts)    = ([], [])
+    (cls, mts)    = mapSnd (filter (\(mn,_,_) -> F.symbol mn /= "Semigroup")) . mapFst (filter (\cl -> F.symbol (dcpCon cl) /= "Semigroup.C:YYSemigroup")) $ Bare.makeClasses        env sigEnv name specs    
     laws          = F.notracepp "LAWS" $ Bare.makeCLaws env sigEnv name specs
 
 -----------------------------------------------------------------------------------------
