@@ -36,6 +36,7 @@ natAdd :: MyNat -> MyNat -> MyNat
 natAdd Z n' = n'
 natAdd (S n) n' = S (natAdd n n')
 
+
 {-@ natLawAssociative :: m:MyNat -> n:MyNat -> p:MyNat -> {natAdd (natAdd m n) p = natAdd m (natAdd n p) }@-}
 natLawAssociative :: MyNat -> MyNat -> MyNat -> ()
 natLawAssociative Z _ _ = ()
@@ -45,15 +46,18 @@ natLawAssociative (S m) n p = natLawAssociative m n p
 -- comment out the proof and it will complain so we know it's not blindly accepting
 instance YYSemigroup MyNat where
   mappend m n  = natAdd m n
-  lawAssociative m n p =  () -- natLawAssociative m n p
+  lawAssociative m n p =  natLawAssociative m n p
 
 
 data MyQnat = QZ | QS MyQnat
+
 
 {-@ reflect qnatAdd @-}
 qnatAdd :: MyQnat -> MyQnat -> MyQnat
 qnatAdd QZ n' = n'
 qnatAdd (QS n) n' = QS (qnatAdd n n')
+
+
 
 {-@ qnatLawAssociative :: m:MyQnat -> n:MyQnat -> p:MyQnat -> {qnatAdd (qnatAdd m n) p = qnatAdd m (qnatAdd n p) }@-}
 qnatLawAssociative :: MyQnat -> MyQnat -> MyQnat -> ()
@@ -64,9 +68,10 @@ qnatLawAssociative (QS m) n p = qnatLawAssociative m n p
 -- comment out the proof and it will complain so we know it's not blindly accepting
 instance YYSemigroup MyQnat where
   mappend m n  = qnatAdd m n
-  lawAssociative m n p =  () -- qnatLawAssociative m n p
+  lawAssociative m n p =  qnatLawAssociative m n p
 
 
-instance YYSemigroup Int where
-  mappend m n  = m + n
-  lawAssociative m n p =  () -- qnatLawAssociative m n p
+
+-- instance YYSemigroup Int where
+--   mappend m n  = m + n
+--   lawAssociative m n p =  () -- qnatLawAssociative m n p

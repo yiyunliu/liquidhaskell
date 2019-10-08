@@ -433,7 +433,7 @@ processTargetModule cfg0 logicMap depGraph specEnv file typechecked bareSpec = d
   bareSpecs  <- makeBareSpecs cfg depGraph specEnv     modSum bareSpec
   let ghcSpec = makeGhcSpec   cfg ghcSrc   logicMap           bareSpecs  
   _          <- liftIO $ saveLiftedSpec ghcSrc ghcSpec 
-  return      $ GI ghcSrc ghcSpec
+  return      $ tracepp "GHC-SPEC" $ GI ghcSrc ghcSpec
 
 ---------------------------------------------------------------------------------------
 -- | @makeGhcSrc@ builds all the source-related information needed for consgen 
@@ -820,7 +820,11 @@ instance PPrint GhcSpec where
     , "******* DataCon Specifications (Measure) ****"
     , pprintLongList k (gsCtors (gsData spec))
     , "******* Measure Specifications **************"
-    , pprintLongList k (gsMeas (gsData spec))       ]
+    , pprintLongList k (gsMeas (gsData spec))
+    , "******* Auto Generated Signatures ***********"
+    , pprintLongList k (gsInSigs (gsSig spec))
+    , "******* Data Type Invariants ****************"
+    , pprintLongList k (gsInvariants (gsData spec))]
 
 instance PPrint GhcInfo where
   pprintTidy k info = vcat

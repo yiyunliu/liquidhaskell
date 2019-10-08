@@ -27,7 +27,6 @@ class YYSemigroup a where
     lawAssociative :: a -> a -> a -> ()
 
 
-{-@ reflect $cmappend @-}
 
 -- sadly, this does not work
 -- the error message reveals very useful information

@@ -902,8 +902,8 @@ makeMeasEnv env tycEnv sigEnv specs = Bare.MeasEnv
     name          = Bare.tcName        tycEnv
     dms           = Bare.makeDefaultMethods env mts
     -- disable class laws
-    -- (cls, mts)    = ([], [])
-    (cls, mts)    = mapSnd (filter (\(mn,_,_) -> F.symbol mn /= "Semigroup")) . mapFst (filter (\cl -> F.symbol (dcpCon cl) /= "Semigroup.C:YYSemigroup")) $ Bare.makeClasses        env sigEnv name specs    
+    (cls, mts)    = ([], [])
+    -- (cls, mts)    = mapSnd (filter (\(mn,_,_) -> F.symbol mn /= "Semigroup")) . mapFst (filter (\cl -> F.symbol (dcpCon cl) /= "Semigroup.C:YYSemigroup")) $ Bare.makeClasses        env sigEnv name specs    
     laws          = F.notracepp "LAWS" $ Bare.makeCLaws env sigEnv name specs
 
 -----------------------------------------------------------------------------------------

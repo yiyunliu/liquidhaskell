@@ -150,18 +150,20 @@ data AxiomType = AT { aty :: SpecType, aargs :: [(F.Symbol, SpecType)], ares :: 
 
 -- | Specification for Haskell function
 axiomType :: LocSymbol -> SpecType -> AxiomType
-axiomType s t = AT to (reverse xts) res  
+axiomType s t = AT (F.tracepp "RESULT" $ to) (reverse xts) res  
   where
     (to, (_,xts, Just res)) = runState (go t) (1,[], Nothing)
-    go (RAllT a t) = RAllT a <$> go t
+    go (RAllT a t) = do -- RAllT a <$> go t
+      t' <- go t
+      return $ F.tracepp "RETURNING-ALLT" $ RAllT a t'
     go (RAllP p t) = RAllP p <$> go t 
     go (RFun x tx t r) | isErasableType tx = (\t' -> RFun x tx t' r) <$> go t
     go (RFun x tx t r) = do 
       (i,bs,res) <- get 
       let x' = unDummy x i 
       put (i+1, (x', tx):bs,res)
-      t' <- go t 
-      return $ RFun x' tx t' r 
+      t' <- go t
+      return $ F.tracepp "RETURNING-RFUN" $ RFun x' tx t' r 
     go t = do 
       (i,bs,res) <- get 
       let ys = reverse $ map fst bs
