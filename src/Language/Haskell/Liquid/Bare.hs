@@ -188,7 +188,7 @@ makeGhcSpec0 cfg src lmap mspecs' = SP
     clsSpec  = mempty {dataDecls = clsDecls, reflects = S.fromList methods}
     clsDecls = Bare.makeClassDataDecl env (name, mySpec0')
     -- YL : can't reflect lawAssociative...
-    methods = [ F.dummyLoc $ F.symbol x | (_,e) <- ds, x <- grepMethods e, F.symbol name == "Semigroup", GM.simplesymbol x == "$cmappend"]
+    methods = [ F.dummyLoc $ F.symbol x | (_,e) <- ds, x <- grepMethods e, F.symbol name == "Semigroup", GM.simplesymbol x /= "$clawAssociative"]
     grepMethods = filter GM.isMethod . freeVars mempty
     ds = filter (GM.isDictionary . fst) (concatMap unRec (giCbs src))
     unRec (Ghc.Rec xes) = xes

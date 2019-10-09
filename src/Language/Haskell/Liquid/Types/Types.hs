@@ -950,11 +950,14 @@ type OkRT c tv r = ( TyConable c
 -- | TyConable Instances -------------------------------------------------------
 -------------------------------------------------------------------------------
 
+
 instance TyConable RTyCon where
   isFun      = isFunTyCon . rtc_tc
   isList     = (listTyCon ==) . rtc_tc
   isTuple    = TyCon.isTupleTyCon   . rtc_tc
-  isClass    = isClass . rtc_tc -- isClassRTyCon
+  isClass c    = -- (isClass . rtc_tc) c -- isClassRTyCon
+    let x = rtc_tc c in
+      isClass x && ((F.tracepp "isClass-RTycon" $ simplesymbol x) /= "Semigroup.YYSemigroup")
   isEqual    = isEqual . rtc_tc
   ppTycon    = F.toFix
 
@@ -968,7 +971,7 @@ instance TyConable TyCon where
   isFun      = isFunTyCon
   isList     = (listTyCon ==)
   isTuple    = TyCon.isTupleTyCon
-  isClass c  = isClassTyCon c   || isEqual c -- c == eqPrimTyCon
+  isClass c  = (isClassTyCon c   || isEqual c)  && (simplesymbol c /= "Semigroup.YYSemigroup") -- c == eqPrimTyCon
   isEqual c  = c == eqPrimTyCon || c == eqReprPrimTyCon
   ppTycon    = text . showPpr
 

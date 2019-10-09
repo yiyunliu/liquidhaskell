@@ -524,7 +524,7 @@ isBangInteger [(C.DataAlt s, _, _), (C.DataAlt jp,_,_), (C.DataAlt jn,_,_)]
 isBangInteger _ = False 
 
 isErasable :: Id -> Bool
-isErasable v = F.tracepp msg $ isGhcSplId v && not (isDCId v)  && not (GM.isDictionary v)
+isErasable v = F.tracepp msg $ isGhcSplId v && not (isDCId v)  && not (F.isPrefixOfSym "$fYYSemigroup" (F.tracepp "CHECCCC"  $ GM.simplesymbol v)) && not (F.isPrefixOfSym "$dYYSemigroup" (GM.simplesymbol v))
   where 
     msg      = "isErasable: " ++ GM.showPpr (v, Var.idDetails v)
 
