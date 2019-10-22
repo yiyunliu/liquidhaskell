@@ -697,16 +697,18 @@ makeRecordSelectorSigs :: Bare.Env -> ModName -> [Located DataConP] -> [(Ghc.Var
 makeRecordSelectorSigs env name = checkRecordSelectorSigs . concatMap makeOne
   where
   makeOne (Loc l l' dcp)
-    | null fls                    --    no field labels
+    | (null fls && not (Mb.isJust maybe_cls))                    --    no field labels
     || any (isFunTy . snd) args && not (higherOrderFlag env)   -- OR function-valued fields
     || dcpIsGadt dcp              -- OR GADT style datcon
     = []
     | otherwise 
     = [ (v, t) | (Just v, t) <- zip fs ts ] 
     where
+      maybe_cls = Ghc.tyConClass_maybe (Ghc.dataConTyCon dc)
       dc  = dcpCon dcp
-      fls = Ghc.dataConFieldLabels dc
-      fs  = Bare.lookupGhcNamedVar env name . Ghc.flSelector <$> fls 
+      fls = GM.tracePpr "FIELD-LABELS" $ Ghc.dataConFieldLabels dc
+      fs  = Bare.lookupGhcNamedVar env name  <$>
+            Mb.maybe (fmap Ghc.flSelector fls) (fmap Ghc.getName . Ghc.classAllSelIds) maybe_cls
       ts :: [ LocSpecType ]
       ts = [ Loc l l' (mkArrow (makeRTVar <$> dcpFreeTyVars dcp) [] (dcpFreeLabels dcp)
                                  [] [(z, res, mempty)]
