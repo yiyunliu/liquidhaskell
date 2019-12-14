@@ -86,8 +86,8 @@ instance (Freshable m Integer, Freshable m r, F.Reftable r ) => Freshable m (RRT
 -----------------------------------------------------------------------------------------------
 trueRefType :: (Freshable m Integer, Freshable m r, F.Reftable r) => RRType r -> m (RRType r)
 -----------------------------------------------------------------------------------------------
-trueRefType (RAllT α t)
-  = RAllT α <$> true t
+trueRefType (RAllT α t r)
+  = RAllT α <$> true t <*> true r 
 
 trueRefType (RAllP π t)
   = RAllP π <$> true t
@@ -98,7 +98,9 @@ trueRefType (RImpF _ t t' _)
 trueRefType (RFun _ t t' _)
   = rFun <$> fresh <*> true t <*> true t'
 
-trueRefType (RApp c ts _  _) | isClass c
+
+-- YL: Num special case
+trueRefType (RApp c ts _  _) | isNumCls c || isEqual c
   = rRCls c <$> mapM true ts
 
 trueRefType (RApp c ts rs r)
@@ -140,8 +142,8 @@ trueRef (RProp s t) = RProp s <$> trueRefType t
 -----------------------------------------------------------------------------------------------
 refreshRefType :: (Freshable m Integer, Freshable m r, F.Reftable r) => RRType r -> m (RRType r)
 -----------------------------------------------------------------------------------------------
-refreshRefType (RAllT α t)
-  = RAllT α <$> refresh t
+refreshRefType (RAllT α t r)
+  = RAllT α <$> refresh t <*> true r
 
 refreshRefType (RAllP π t)
   = RAllP π <$> refresh t
@@ -154,7 +156,7 @@ refreshRefType (RFun b t t' _)
   | b == F.dummySymbol = rFun <$> fresh <*> refresh t <*> refresh t'
   | otherwise          = rFun     b     <$> refresh t <*> refresh t'
 
-refreshRefType (RApp rc ts _ _) | isClass rc
+refreshRefType (RApp rc ts _ _) | isNumCls rc || isEqual rc
   = return $ rRCls rc ts
 
 refreshRefType (RApp rc ts rs r)
@@ -199,8 +201,8 @@ type FreshM m = Freshable m Integer
 --------------------------------------------------------------------------------
 refreshVV :: FreshM m => SpecType -> m SpecType
 --------------------------------------------------------------------------------
-refreshVV (RAllT a t) = 
-  RAllT a <$> refreshVV t
+refreshVV (RAllT a t r) = 
+  RAllT a <$> refreshVV t <*> return r 
 
 refreshVV (RAllP p t) = 
   RAllP p <$> refreshVV t

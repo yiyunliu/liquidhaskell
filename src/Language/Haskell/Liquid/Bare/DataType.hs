@@ -379,11 +379,7 @@ makeConTypes :: Bare.Env -> (ModName, Ms.BareSpec)
 makeConTypes env (name, spec) 
          = unzip  [ ofBDataDecl env name x y | (x, y) <- gvs ] 
   where 
-    gvs  = groupVariances dcs' vdcs
-    -- YL : insert it here?
-    -- YL print here. see the difference
-    -- cdcs =  if F.symbol name == "Semigroup" then F.tracepp "bad datadecl" $ makeClassDataDecl env (name, spec) else []
-    dcs' = F.notracepp "-CANONIZEDECLS" $ canonizeDecls env name dcs
+    gvs  = groupVariances (canonizeDecls env name dcs) vdcs
     dcs  = Ms.dataDecls spec 
     vdcs = Ms.dvariance spec 
 
@@ -600,8 +596,8 @@ varSignToVariance varsigns i = case filter (\p -> fst p == i) varsigns of
                                 _        -> Bivariant
 
 getPsSig :: [(UsedPVar, a)] -> Bool -> SpecType -> [(a, Bool)]
-getPsSig m pos (RAllT _ t)
-  = getPsSig m pos t
+getPsSig m pos (RAllT _ t r)
+  = addps m pos r ++  getPsSig m pos t
 getPsSig m pos (RApp _ ts rs r)
   = addps m pos r ++ concatMap (getPsSig m pos) ts
     ++ concatMap (getPsSigPs m pos) rs
@@ -710,7 +706,7 @@ makeRecordSelectorSigs env name = checkRecordSelectorSigs . concatMap makeOne
       fs  = Bare.lookupGhcNamedVar env name  <$>
             Mb.maybe (fmap Ghc.flSelector fls) (fmap Ghc.getName . Ghc.classAllSelIds) maybe_cls
       ts :: [ LocSpecType ]
-      ts = [ Loc l l' (mkArrow (makeRTVar <$> dcpFreeTyVars dcp) [] (dcpFreeLabels dcp)
+      ts = [ Loc l l' (mkArrow (zip (makeRTVar <$> dcpFreeTyVars dcp) (repeat mempty)) [] (dcpFreeLabels dcp)
                                  [] [(z, res, mempty)]
                                  (dropPreds (F.subst su t `RT.strengthen` mt)))
              | (x, t) <- reverse args -- NOTE: the reverse here is correct

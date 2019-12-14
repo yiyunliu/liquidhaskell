@@ -101,7 +101,7 @@ measureSpecType v = go mkT [] [1..] t
     t               = ofType (GM.expandVarType v) :: SpecType
     boolRes         =  isBool $ ty_res $ toRTypeRep t 
 
-    go f args i (RAllT a t)      = RAllT a $ go f args i t
+    go f args i (RAllT a t r)    = RAllT a (go f args i t) r 
     go f args i (RAllP p t)      = RAllP p $ go f args i t
     go f args i (RFun x t1 t2 r)
      | isErasableType t1           = RFun x t1 (go f args i t2) r
@@ -524,17 +524,19 @@ isBangInteger [(C.DataAlt s, _, _), (C.DataAlt jp,_,_), (C.DataAlt jn,_,_)]
 isBangInteger _ = False 
 
 isErasable :: Id -> Bool
-isErasable v = F.tracepp msg $ isGhcSplId v && not (isDCId v)  && not (F.isPrefixOfSym "$fYYSemigroup" (F.tracepp "CHECCCC"  $ GM.simplesymbol v)) && not (F.isPrefixOfSym "$dYYSemigroup" (GM.simplesymbol v))
+isErasable v = F.tracepp msg $ isGhcSplId v && not (isDCId v)
   where 
     msg      = "isErasable: " ++ GM.showPpr (v, Var.idDetails v)
 
+-- YL: a really broken way of discarding dictionaries
 isGhcSplId :: Id -> Bool
-isGhcSplId v = isPrefixOfSym (symbol ("$" :: String)) (simpleSymbolVar v)
+isGhcSplId v = any (\x -> isPrefixOfSym (symbol ('$' : x :: String)) (simpleSymbolVar v)) wiredin
+  where wiredin = ["dNum","dIntegral","dEq","fNum","fIntegral","fEq"]
 
 isDCId :: Id -> Bool
 isDCId v = case Var.idDetails v of 
   DataConWorkId _ -> True 
-  DataConWrapId _ -> True 
+  DataConWrapId _ -> True
   _               -> False 
 
 isANF :: Id -> Bool

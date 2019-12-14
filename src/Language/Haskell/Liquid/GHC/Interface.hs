@@ -567,7 +567,7 @@ makeBareSpecs cfg depGraph specEnv modSum tgtSpec = do
   let reachable = reachableModules depGraph (ms_mod modSum)
   specSpecs    <- findAndParseSpecFiles cfg paths modSum reachable
   let homeSpecs = cachedBareSpecs specEnv reachable
-  let impSpecs  = specSpecs ++ homeSpecs
+  let impSpecs  = tracepp "specSpecs" specSpecs ++ tracepp "homeSpecs" homeSpecs
   let tgtMod    = ModName Target (moduleName (ms_mod modSum))
   return        $ (tgtMod, tgtSpec) : impSpecs
 

@@ -135,7 +135,7 @@ ghcSpecEnv sp = fromListSEnv (F.notracepp "ghcSpecEnv-BINDS" binds)
 -------------------------------------------------------------------------------------
 makeGhcSpec0 :: Config -> GhcSrc ->  LogicMap -> [(ModName, Ms.BareSpec)] -> GhcSpec
 -------------------------------------------------------------------------------------
-makeGhcSpec0 cfg src lmap mspecs' = SP 
+makeGhcSpec0 cfg src lmap mspecsNoClass = SP 
   { gsConfig = cfg 
   , gsImps   = makeImports mspecs
   , gsSig    = addReflSigs refl sig 
@@ -157,45 +157,68 @@ makeGhcSpec0 cfg src lmap mspecs' = SP
     myRTE    = myRTEnv       src env sigEnv rtEnv  
     qual     = makeSpecQual cfg env tycEnv measEnv rtEnv specs 
     sData    = makeSpecData  src env sigEnv measEnv sig specs 
-    refl     = makeSpecRefl  src measEnv specs env name sig tycEnv 
+    refl     = makeSpecRefl  cfg src measEnv specs env name sig tycEnv 
     laws     = makeSpecLaws env sigEnv (gsTySigs sig ++ gsAsmSigs sig) measEnv specs 
     sig      = makeSpecSig cfg name specs env sigEnv   tycEnv measEnv (giCbs src)
-    -- YL: put cls here?
-    -- (cls, _) =  first (fmap dummyLoc) $ Bare.makeClasses env sigEnv name (M.fromList [(name, mySpec0)])
-    
     measEnv  = makeMeasEnv      env tycEnv sigEnv       specs 
     -- build up environments
     specs    = M.insert name mySpec iSpecs2
     mySpec   = mySpec2 <> lSpec1 
     lSpec1   = lSpec0 <> makeLiftedSpec1 cfg src tycEnv lmap mySpec1 
     sigEnv   = makeSigEnv  embs tyi (gsExports src) rtEnv 
-    tyi      = Bare.tcTyConMap   tycEnv
-    -- YL : append cls
-    tycEnv   = makeTycEnv   cfg name env embs mySpec2 iSpecs2
+    tyi      = Bare.tcTyConMap   tycEnv 
+    tycEnv   = makeTycEnv   cfg name env embs mySpec2 iSpecs2 
     mySpec2  = Bare.qualifyExpand env name rtEnv l [] mySpec1    where l = F.dummyPos "expand-mySpec2"
     iSpecs2  = Bare.qualifyExpand env name rtEnv l [] iSpecs0    where l = F.dummyPos "expand-iSpecs2"
+    mspecs   = M.toList $ M.insert name mySpec0 iSpecs0
     rtEnv    = Bare.makeRTEnv env name mySpec1 iSpecs0 lmap  
-    mySpec1  = F.notracepp "mySpec0" mySpec0 <> lSpec0    
+    mySpec1  = mySpec0 <> lSpec0    
     lSpec0   = makeLiftedSpec0 cfg src embs lmap mySpec0 
     embs     = makeEmbeds          src env ((name, mySpec0) : M.toList iSpecs0)
     -- extract name and specs
-    env      = Bare.makeEnv cfg src lmap mspecs'
-    mySpec0  = mySpec0' <> clsSpec
-    (mySpec0', iSpecs0) = splitSpecs name mspecs'
-    mspecs    = M.toList $ M.insert name mySpec0 iSpecs0
-    -- check barespecs
-    
-    clsSpec  = mempty {dataDecls = clsDecls, reflects = S.fromList methods}
-    clsDecls = Bare.makeClassDataDecl env (name, mySpec0')
-    -- YL : can't reflect lawAssociative...
-    methods = [ F.dummyLoc $ F.symbol x | (_,e) <- ds, x <- grepMethods e, F.symbol name == "Semigroup", GM.simplesymbol x /= "$clawAssociative"]
-    grepMethods = filter GM.isMethod . freeVars mempty
-    ds = filter (GM.isDictionary . fst) (concatMap unRec (giCbs src))
-    unRec (Ghc.Rec xes) = xes
-    unRec (Ghc.NonRec x e) = [(x,e)]
-    
+    env      = Bare.makeEnv cfg src lmap mspecsNoClass
+    mySpec0  = compileClasses src env (name, mySpec0NoClass) (M.toList iSpecs0)
+    (mySpec0NoClass, iSpecs0) = splitSpecs name mspecsNoClass
+    -- check barespecs 
     name     = F.notracepp ("ALL-SPECS" ++ zzz) $ giTargetMod  src 
-    zzz      = F.showpp (fst <$> mspecs)
+    zzz      = F.showpp (fst <$> mspecsNoClass)
+
+compileClasses :: GhcSrc -> Bare.Env -> (ModName, Ms.BareSpec)
+               -> [(ModName, Ms.BareSpec)] -> Ms.BareSpec
+compileClasses src env (name, spec) rest  = spec <> clsSpec
+  where clsSpec  = mempty {dataDecls = clsDecls, reflects = S.fromList methods}
+        clsDecls = Bare.makeClassDataDecl env (name, spec)
+        methods = F.tracepp "methods" [ F.symbol <$> GM.locNamedThing x |
+                    (d, e) <- concatMap unRec (giCbs src)
+                  , F.tracepp (F.showpp (F.symbol d)) (Ghc.isDFunId d)
+                  , cls <- Mb.maybeToList $ L.lookup d instClss
+                  , cls `elem` refinedClasses
+                  , x <- freeVars mempty e
+                  -- YL: Hack
+                  , not (isPrefixOfSym "$claw" (GM.simplesymbol x))
+                  , GM.isMethod x
+                  ]
+
+        instClss :: [(Ghc.DFunId, Ghc.Class)]
+        instClss = GM.notracePpr "instClss" . fmap (\inst -> (Ghc.is_dfun inst, Ghc.is_cls inst)) .
+                   mconcat .
+                   Mb.maybeToList .
+                   gsCls $
+                   src
+        
+        refinedClasses :: [Ghc.Class]
+        refinedClasses = Mb.mapMaybe resolveClassMaybe clsDecls ++
+                         concatMap (Mb.mapMaybe resolveClassMaybe.dataDecls.snd) rest
+
+        resolveClassMaybe :: DataDecl -> Maybe Ghc.Class
+        resolveClassMaybe d = Bare.maybeResolveSym env name "resolveClassMaybe"
+          (dataNameSymbol.tycName $ d) >>=
+          Ghc.tyConClass_maybe
+        unRec (Ghc.Rec xes) = xes
+        unRec (Ghc.NonRec x e) = [(x,e)]          
+                        
+        
+
 
 splitSpecs :: ModName -> [(ModName, Ms.BareSpec)] -> (Ms.BareSpec, Bare.ModSpecs) 
 splitSpecs name specs = (mySpec, iSpecm) 
@@ -437,21 +460,23 @@ makeSpecLaws env sigEnv sigs menv specs = SpLaws
   }
 
 ------------------------------------------------------------------------------------------
-makeSpecRefl :: GhcSrc -> Bare.MeasEnv -> Bare.ModSpecs -> Bare.Env -> ModName -> GhcSpecSig -> Bare.TycEnv 
+makeSpecRefl :: Config -> GhcSrc -> Bare.MeasEnv -> Bare.ModSpecs -> Bare.Env -> ModName -> GhcSpecSig -> Bare.TycEnv 
              -> GhcSpecRefl 
 ------------------------------------------------------------------------------------------
-makeSpecRefl src menv specs env name sig tycEnv = SpRefl 
+makeSpecRefl cfg src menv specs env name sig tycEnv = SpRefl 
   { gsLogicMap   = lmap 
   , gsAutoInst   = makeAutoInst env name mySpec 
   , gsImpAxioms  = concatMap (Ms.axeqs . snd) (M.toList specs)
   , gsMyAxioms   = F.notracepp "gsMyAxioms" myAxioms 
-  , gsReflects   = F.tracepp "gsReflects" (lawMethods ++ filter (isReflectVar rflSyms) (F.notracepp "SIG_VARS" sigVars))
+  , gsReflects   = F.notracepp "gsReflects" (lawMethods ++ filter (isReflectVar rflSyms) sigVars ++ wReflects)
   , gsHAxioms    = F.notracepp "gsHAxioms" xtes 
+  , gsWiredReft  = wReflects
   }
   where
+    wReflects    = Bare.wiredReflects cfg env name sig
     lawMethods   = F.notracepp "Law Methods" $ concatMap Ghc.classMethods (fst <$> Bare.meCLaws menv) 
     mySpec       = M.lookupDefault mempty name specs 
-    xtes         = Bare.makeHaskellAxioms src env tycEnv name lmap sig mySpec
+    xtes         = Bare.makeHaskellAxioms cfg src env tycEnv name lmap sig mySpec
     myAxioms     = [ Bare.qualifyTop env name (F.loc lt) (e {eqName = symbol x}) | (x, lt, e) <- xtes]  
     rflSyms      = F.tracepp "REFL-SYMS" $ S.fromList (getReflects specs)
     sigVars      = F.notracepp "SIGVARS" $ (fst3 <$> xtes)            -- reflects
@@ -479,9 +504,11 @@ getReflects  = fmap val . S.toList . S.unions . fmap (names . snd) . M.toList
 ------------------------------------------------------------------------------------------
 addReflSigs :: GhcSpecRefl -> GhcSpecSig -> GhcSpecSig
 ------------------------------------------------------------------------------------------
-addReflSigs refl sig = sig { gsAsmSigs = reflSigs ++ gsAsmSigs sig }
+addReflSigs refl sig = sig { gsAsmSigs = reflSigs ++ filter notReflected (gsAsmSigs sig) }
   where 
-    reflSigs         = [ (x, t) | (x, t, _) <- gsHAxioms refl ]   
+    reflSigs        = [ (x, t) | (x, t, _) <- gsHAxioms refl ]   
+    reflected       = fst <$> reflSigs
+    notReflected xt = (fst xt) `notElem` reflected
 
 makeAutoInst :: Bare.Env -> ModName -> Ms.BareSpec -> M.HashMap Ghc.Var (Maybe Int)
 makeAutoInst env name spec = Misc.hashMapMapKeys (Bare.lookupGhcVar env name "Var") (Ms.autois spec)
@@ -505,7 +532,7 @@ makeSpecSig cfg name specs env sigEnv tycEnv measEnv cbs = SpSig
     asmSigs    = Bare.tcSelVars tycEnv 
               ++ makeAsmSigs env sigEnv name specs 
               ++ [ (x,t) | (_, x, t) <- concat $ map snd (Bare.meCLaws measEnv)]
-    tySigs     = strengthenSigs . concat $
+    tySigs     = strengthenSigs . concat $ 
                   [ [(v, (0, t)) | (v, t,_) <- mySigs                         ]   -- NOTE: these weights are to priortize 
                   , [(v, (1, t)) | (v, t  ) <- makeMthSigs measEnv            ]   -- user defined sigs OVER auto-generated 
                   , [(v, (2, t)) | (v, t  ) <- makeInlSigs env rtEnv allSpecs ]   -- during the strengthening, i.e. to KEEP 
@@ -901,9 +928,7 @@ makeMeasEnv env tycEnv sigEnv specs = Bare.MeasEnv
     embs          = Bare.tcEmbs        tycEnv 
     name          = Bare.tcName        tycEnv
     dms           = Bare.makeDefaultMethods env mts
-    -- disable class laws
     (cls, mts)    = ([], [])
-    -- (cls, mts)    = mapSnd (filter (\(mn,_,_) -> F.symbol mn /= "Semigroup")) . mapFst (filter (\cl -> F.symbol (dcpCon cl) /= "Semigroup.C:YYSemigroup")) $ Bare.makeClasses        env sigEnv name specs    
     laws          = F.notracepp "LAWS" $ Bare.makeCLaws env sigEnv name specs
 
 -----------------------------------------------------------------------------------------
@@ -934,7 +959,7 @@ makeLiftedSpec src _env refl sData sig qual myRTE lSpec0 = lSpec0
     xbs           = toBare <$> reflTySigs 
     sigVars       = S.difference defVars reflVars
     defVars       = S.fromList (giDefVars src)
-    reflTySigs    = [(x, t) | (x,t,_) <- gsHAxioms refl]
+    reflTySigs    = [(x, t) | (x,t,_) <- gsHAxioms refl, x `notElem` gsWiredReft refl]
     reflVars      = S.fromList (fst <$> reflTySigs)
     -- myAliases fld = M.elems . fld $ myRTE 
     srcF          = giTarget src 
@@ -976,7 +1001,7 @@ mkRTE tAs eAs   = RTE
 
 normalizeBareAlias :: Bare.Env -> Bare.SigEnv -> ModName -> Located BareRTAlias 
                    -> Located BareRTAlias 
-normalizeBareAlias env sigEnv name lx = fixRTA <$> lx 
+normalizeBareAlias env sigEnv name lx = fixRTA <$> lx
   where 
     fixRTA  :: BareRTAlias -> BareRTAlias 
     fixRTA  = mapRTAVars fixArg . fmap fixBody 

@@ -833,6 +833,7 @@ isPredVar v = F.notracepp msg . isPredType . varType $ v
   where
     msg     =  "isGoodCaseBind v = " ++ show v
 
+-- YL: Num special case
 isPredType :: Type -> Bool
 isPredType = anyF [ isEqPred ]
 

@@ -72,6 +72,6 @@ instance YYSemigroup MyQnat where
 
 
 
--- instance YYSemigroup Int where
---   mappend m n  = m + n
---   lawAssociative m n p =  () -- qnatLawAssociative m n p
+instance YYSemigroup Int where
+  mappend m n  = m + n
+  lawAssociative m n p =  () -- qnatLawAssociative m n p

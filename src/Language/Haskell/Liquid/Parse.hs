@@ -41,6 +41,7 @@ import           Text.PrettyPrint.HughesPJ.Compat       ((<+>))
 import           Language.Fixpoint.Types                hiding (panic, SVar, DDecl, DataDecl, DataCtor (..), Error, R, Predicate)
 import           Language.Haskell.Liquid.GHC.Misc
 import           Language.Haskell.Liquid.Types          
+import           Language.Haskell.Liquid.Types.Names (functionComposisionSymbol)          
 import qualified Language.Fixpoint.Misc                 as Misc      
 import qualified Language.Haskell.Liquid.Misc           as Misc
 import qualified Language.Haskell.Liquid.Measure        as Measure
@@ -80,9 +81,11 @@ hsSpecificationP modName specComments specQuotes =
 
 initPStateWithList :: PState
 initPStateWithList 
-  = initPState { empList  = Just (EVar ("GHC.Types.[]" :: Symbol))
-               , singList = Just (\e -> EApp (EApp (EVar ("GHC.Types.:"  :: Symbol)) e) (EVar ("GHC.Types.[]" :: Symbol)))
+  = (initPState composeFun)
+               { empList    = Just (EVar ("GHC.Types.[]" :: Symbol))
+               , singList   = Just (\e -> EApp (EApp (EVar ("GHC.Types.:"  :: Symbol)) e) (EVar ("GHC.Types.[]" :: Symbol)))
                }
+  where composeFun = Just $ EVar functionComposisionSymbol
 
 --------------------------------------------------------------------------
 specSpecificationP  :: SourceName -> String -> Either Error (ModName, Measure.BareSpec)
@@ -258,6 +261,13 @@ btP = do
             PC _ t2 <- btP
             -- TODO:AZ return an error if s == PcExplicit
             return $ PC sb $ foldr (rFun dummySymbol) t2 (getClasses t1))
+         <|> 
+          (do 
+             spaces 
+             b <- locParserP infixSymbolP
+             spaces
+             PC _ t2 <- btP 
+             return $ PC sb $ (RApp (mkBTyCon b) [t1,t2] [] mempty))
          <|> return c)
 
 
@@ -562,8 +572,9 @@ bareAllP = do
   t <- bareTypeP
   case vs of
     Left ss  -> return $ foldr RAllS t ss
-    Right ps -> return $ foldr RAllT (foldr RAllP t ps) (makeRTVar <$> as)
+    Right ps -> return $ foldr rAllT (foldr RAllP t ps) (makeRTVar <$> as)
   where
+    rAllT a t = RAllT a t mempty
     inAngles =
       (
        (try  (Right <$> sepBy  predVarDefP comma))
@@ -1396,7 +1407,7 @@ tyBodyP ty
       Just bt | isPropBareType bt
                 -> P <$> predP
       _         -> E <$> exprP
-    where outTy (RAllT _ t)    = outTy t
+    where outTy (RAllT _ t _)  = outTy t
           outTy (RAllP _ t)    = outTy t
           outTy (RImpF _ _ t _)= Just t
           outTy (RFun _ _ t _) = Just t
@@ -1440,6 +1451,7 @@ binderP    = pwr    <$> parens (idP bad)
     badc c = (c == ':') || (c == ',') || bad c
     bad c  = isSpace c || c `elem` ("(,)" :: String)
     pwr s  = symbol $ "(" `mappend` s `mappend` ")"
+
 
 grabs :: ParsecT s u m a -> ParsecT s u m [a]
 grabs p = try (liftM2 (:) p (grabs p))
@@ -1531,7 +1543,7 @@ adtDataConP as = do
   return $ DataCtor x (tRepVars as tr) [] (tRepFields tr) (Just $ ty_res tr)
 
 tRepVars :: Symbolic a => [Symbol] -> RTypeRep c a r -> [Symbol]
-tRepVars as tr = case ty_vars tr of 
+tRepVars as tr = case fst <$> ty_vars tr of 
   [] -> as 
   vs -> symbol . ty_var_value <$> vs 
 
