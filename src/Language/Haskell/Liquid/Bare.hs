@@ -185,9 +185,29 @@ makeGhcSpec0 cfg src lmap mspecsNoClass = SP
 
 compileClasses :: GhcSrc -> Bare.Env -> (ModName, Ms.BareSpec)
                -> [(ModName, Ms.BareSpec)] -> Ms.BareSpec
-compileClasses src env (name, spec) rest  = spec <> clsSpec
+compileClasses src env (name, spec) rest  = spec {sigs = sigs'} <> clsSpec
   where clsSpec  = mempty {dataDecls = clsDecls, reflects = S.fromList methods}
-        clsDecls = Bare.makeClassDataDecl env (name, spec)
+        clsDecls = Bare.makeClassDataDecl' (M.toList refinedMethods)
+        
+        (refinedMethods, sigs') = foldr grabClassSig (mempty, mempty) (sigs spec)
+
+        grabClassSig :: (F.LocSymbol, ty) ->
+                        (M.HashMap Ghc.Class [(Ghc.Id, ty)], [(F.LocSymbol, ty)]) ->
+                        (M.HashMap Ghc.Class [(Ghc.Id, ty)], [(F.LocSymbol, ty)])
+        grabClassSig sig@(lsym, ref) (refs, sigs') =
+          case clsOp of
+            Nothing -> (refs, sig:sigs')
+            Just (cls, sig) -> (M.alter (merge sig) cls refs, sigs')
+          where clsOp = do
+                  var <- Bare.maybeResolveSym env name "grabClassSig" lsym
+                  cls <- Ghc.isClassOpId_maybe var
+                  pure (cls, (var, ref))
+
+                merge sig v = case v of
+                  Nothing -> Just [sig]
+                  Just vs -> Just (sig:vs)
+                
+        
         methods = F.tracepp "methods" [ F.symbol <$> GM.locNamedThing x |
                     (d, e) <- concatMap unRec (giCbs src)
                   , F.tracepp (F.showpp (F.symbol d)) (Ghc.isDFunId d)
@@ -200,7 +220,7 @@ compileClasses src env (name, spec) rest  = spec <> clsSpec
                   ]
 
         instClss :: [(Ghc.DFunId, Ghc.Class)]
-        instClss = GM.notracePpr "instClss" . fmap (\inst -> (Ghc.is_dfun inst, Ghc.is_cls inst)) .
+        instClss = fmap (\inst -> (Ghc.is_dfun inst, Ghc.is_cls inst)) .
                    mconcat .
                    Mb.maybeToList .
                    gsCls $
@@ -215,7 +235,8 @@ compileClasses src env (name, spec) rest  = spec <> clsSpec
           (dataNameSymbol.tycName $ d) >>=
           Ghc.tyConClass_maybe
         unRec (Ghc.Rec xes) = xes
-        unRec (Ghc.NonRec x e) = [(x,e)]          
+        unRec (Ghc.NonRec x e) = [(x,e)]
+
                         
         
 
@@ -529,7 +550,7 @@ makeSpecSig cfg name specs env sigEnv tycEnv measEnv cbs = SpSig
   where 
     dicts      = Bare.makeSpecDictionaries env sigEnv specs  
     mySpec     = M.lookupDefault mempty name specs
-    asmSigs    = Bare.tcSelVars tycEnv 
+    asmSigs    = F.tracepp "asmSigs" $ Bare.tcSelVars tycEnv 
               ++ makeAsmSigs env sigEnv name specs 
               ++ [ (x,t) | (_, x, t) <- concat $ map snd (Bare.meCLaws measEnv)]
     tySigs     = strengthenSigs . concat $ 
@@ -584,10 +605,10 @@ makeTySigs :: Bare.Env -> Bare.SigEnv -> ModName -> Ms.BareSpec
 makeTySigs env sigEnv name spec 
               = [ (x, cook x bt, z) | (x, bt, z) <- rawSigs ]
   where 
-    rawSigs   = Bare.resolveLocalBinds env expSigs 
-    expSigs   = makeTExpr  env name bareSigs rtEnv spec 
-    bareSigs  = bareTySigs env name                spec 
-    rtEnv     = Bare.sigRTEnv sigEnv 
+    rawSigs   = F.tracepp "rawSigs" $ Bare.resolveLocalBinds env expSigs 
+    expSigs   = F.tracepp "expSigs" $ makeTExpr  env name bareSigs rtEnv spec 
+    bareSigs  = F.tracepp "bareSigs" $ bareTySigs env name                spec 
+    rtEnv     = F.tracepp "rtEnv" $ Bare.sigRTEnv sigEnv 
     cook x bt = Bare.cookSpecType env sigEnv name (Bare.HsTV x) bt 
 
 bareTySigs :: Bare.Env -> ModName -> Ms.BareSpec -> [(Ghc.Var, LocBareType)]

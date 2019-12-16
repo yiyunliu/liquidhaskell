@@ -18,7 +18,7 @@ import           Language.Haskell.Liquid.Types.Types
 import           Language.Haskell.Liquid.Types.Variance
 import           Language.Haskell.Liquid.Types.Bounds 
 import           Language.Haskell.Liquid.GHC.API 
-import           Text.PrettyPrint.HughesPJ              (text, (<+>)) 
+import           Text.PrettyPrint.HughesPJ              (text, (<+>), vcat) 
 
 -------------------------------------------------------------------------
 -- | GHC Information:  Code & Spec --------------------------------------
@@ -203,7 +203,10 @@ data Spec ty bndr  = Spec
   } deriving (Generic, Show)
 
 instance (Show ty, Show bndr, F.PPrint ty, F.PPrint bndr) => F.PPrint (Spec ty bndr) where
-    pprintTidy k sp = text "dataDecls = " <+> pprintTidy k  (dataDecls sp)
+    pprintTidy k sp = vcat [ text "dataDecls = " <+> pprintTidy k  (dataDecls sp)
+                           , text "measures = " <+> pprintTidy k (measures sp)
+                           , text "impSigs = " <+> pprintTidy k (impSigs sp)
+                           , text "sigs = " <+> pprintTidy k (sigs sp)]
 
 
 isExportedVar :: GhcSrc -> Var -> Bool

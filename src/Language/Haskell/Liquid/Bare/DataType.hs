@@ -19,6 +19,7 @@ module Language.Haskell.Liquid.Bare.DataType
 
   -- * Type Classes
   , makeClassDataDecl
+  , makeClassDataDecl'
 
   ) where
 
@@ -386,7 +387,51 @@ makeConTypes env (name, spec)
 makeClassDataDecl :: Bare.Env -> (ModName, Ms.BareSpec) -> [DataDecl]
 makeClassDataDecl env (m, spec) = classDeclToDataDecl env m <$> Ms.classes spec
 
+makeClassDataDecl' :: [(Ghc.Class, [(Ghc.Id, LocBareType)])] -> [DataDecl]
+makeClassDataDecl' = fmap (uncurry classDeclToDataDecl')
+
+classDeclToDataDecl' :: Ghc.Class -> [(Ghc.Id, LocBareType)] -> DataDecl
+classDeclToDataDecl' cls refinedIds = F.tracepp "classDeclToDataDecl" $ DataDecl
+          { tycName   = DnName (F.symbol <$> GM.locNamedThing cls)
+          , tycTyVars = tyVars
+          , tycPVars  = []
+          , tycTyLabs = []
+          , tycDCons  = [dctor]
+          , tycSrcPos = F.loc . GM.locNamedThing $ cls
+          , tycSFun   = Nothing
+          , tycPropTy = Nothing
+          , tycKind   = DataUser}
+  -- YL: assume the class constraint is at the very front..
+  where dctor    = DataCtor
+          { dcName   = F.dummyLoc $ F.symbol classDc
+          -- YL: same as class tyvars??
+          , dcTyVars = tyVars
+          -- YL: what is theta?
+          , dcTheta  = []
+          , dcFields = fields
+          , dcResult = Nothing
+          }
+
+        tyVars = F.symbol <$> Ghc.classTyVars cls
+
+        fields = fmap attachRef classIds
+        attachRef sid
+          | Just ref <- L.lookup sid refinedIds
+          = (F.symbol sid, RT.subts tyVarSubst (F.val ref))
+          | otherwise
+          = (F.symbol sid, RT.bareOfType . dropPred . Ghc.varType $ sid)
+
+        tyVarSubst = [(GM.dropModuleUnique v, v) | v <- tyVars]
+
+        dropPred :: Ghc.Type -> Ghc.Type
+        dropPred (Ghc.ForAllTy _ (Ghc.FunTy _ τ')) = τ'
+        dropPred _ = impossible Nothing "classDeclToDataDecl': assumption was wrong"
+
+        -- YL: what is the type of superclass-dictionary selectors?
+        classIds = Ghc.classAllSelIds cls
+        classDc  = Ghc.classDataCon cls
   
+
 
 classDeclToDataDecl :: Bare.Env -> ModName -> RClass LocBareType -> DataDecl
 classDeclToDataDecl env m rcls = DataDecl
