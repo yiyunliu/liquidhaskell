@@ -425,6 +425,7 @@ classDeclToDataDecl' cls refinedIds = F.tracepp "classDeclToDataDecl" $ DataDecl
 
         dropPred :: Ghc.Type -> Ghc.Type
         dropPred (Ghc.ForAllTy _ (Ghc.FunTy _ τ')) = τ'
+        dropPred (Ghc.ForAllTy _ (Ghc.ForAllTy _ _)) = todo Nothing "multi-parameter type-class not supported"
         dropPred _ = impossible Nothing "classDeclToDataDecl': assumption was wrong"
 
         -- YL: what is the type of superclass-dictionary selectors?

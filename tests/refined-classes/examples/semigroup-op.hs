@@ -5,18 +5,6 @@ module Semigroup where
 import Prelude hiding (Semigroup, mappend)
 
 
-infixl 3 ==.
-
-(==.) :: a -> a -> a
-_ ==. x = x
-{-# INLINE (==.) #-}
-
-data QED = QED
-
-infixl 2 ***
-x *** QED = ()
-
-
 class YYSemigroup a where
     mappend :: a -> a -> a
     {-@ lawAssociative :: v:a -> v':a -> v'':a -> {mappend (mappend v v') v'' == mappend v (mappend v' v'')} @-}
@@ -32,9 +20,15 @@ newtype Op a = Op a
 mappendOp :: YYSemigroup a => Op a -> Op a -> Op a
 mappendOp (Op a) (Op a') = Op (mappend a' a)
 
+-- uncomment me to get a different error message
+-- {-@ lawAssociativeOp :: d:YYSemigroup a
+--   -> x:Op a
+--   -> y:Op a
+--   -> z:Op a
+--   -> {mappendOp d x (mappendOp d y z) == mappendOp d (mappendOp d x y) z} @-}
+-- lawAssociativeOp :: YYSemigroup a => Op a -> Op a -> Op a -> ()
+-- lawAssociativeOp (Op a) (Op a') (Op a'') = lawAssociative a'' a' a
 
-lawAssociativeOp :: YYSemigroup a => Op a -> Op a -> Op a -> ()
-lawAssociativeOp (Op a) (Op a') (Op a'') = lawAssociative a'' a' a
 
 
 instance (YYSemigroup a) => YYSemigroup (Op a) where

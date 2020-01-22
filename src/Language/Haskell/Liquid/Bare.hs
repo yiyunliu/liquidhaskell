@@ -98,9 +98,11 @@ saveLiftedSpec src sp = do
 -------------------------------------------------------------------------------------
 makeGhcSpec :: Config -> GhcSrc ->  LogicMap -> [(ModName, Ms.BareSpec)] -> GhcSpec
 -------------------------------------------------------------------------------------
-makeGhcSpec cfg src lmap mspecs0  
+makeGhcSpec cfg src lmap mspecs0
+  -- YL: Elaboration
            = checkThrow (Bare.checkGhcSpec mspecs src renv cbs sp)
-  where 
+  where
+    -- YL: Elaboration
     mspecs =  [ (m, checkThrow $ Bare.checkBareSpec m sp) | (m, sp) <- mspecs0, isTarget m ] 
            ++ [ (m, sp) | (m, sp) <- mspecs0, not (isTarget m)]
     sp     = makeGhcSpec0 cfg src lmap mspecs 
@@ -186,9 +188,11 @@ makeGhcSpec0 cfg src lmap mspecsNoClass = SP
 compileClasses :: GhcSrc -> Bare.Env -> (ModName, Ms.BareSpec)
                -> [(ModName, Ms.BareSpec)] -> Ms.BareSpec
 compileClasses src env (name, spec) rest  = spec {sigs = sigs'} <> clsSpec
-  where clsSpec  = mempty {dataDecls = clsDecls, reflects = S.fromList methods}
+  where clsSpec  = mempty {dataDecls = clsDecls, reflects = S.fromList methods-- , sigs = F.tracepp "refinedMethodSigs" refinedMethodSigs
+                          }
         clsDecls = Bare.makeClassDataDecl' (M.toList refinedMethods)
-        
+
+        -- class methods
         (refinedMethods, sigs') = foldr grabClassSig (mempty, mempty) (sigs spec)
 
         grabClassSig :: (F.LocSymbol, ty) ->
@@ -207,7 +211,7 @@ compileClasses src env (name, spec) rest  = spec {sigs = sigs'} <> clsSpec
                   Nothing -> Just [sig]
                   Just vs -> Just (sig:vs)
                 
-        
+        -- instance methods
         methods = F.tracepp "methods" [ F.symbol <$> GM.locNamedThing x |
                     (d, e) <- concatMap unRec (giCbs src)
                   , F.tracepp (F.showpp (F.symbol d)) (Ghc.isDFunId d)
@@ -219,12 +223,45 @@ compileClasses src env (name, spec) rest  = spec {sigs = sigs'} <> clsSpec
                   , GM.isMethod x
                   ]
 
+        refinedMethodSigs :: [(F.LocSymbol, F.Located BareType)]
+        refinedMethodSigs = concatMap refineInstance insts
+
+        refineInstance :: Ghc.ClsInst -> [(F.LocSymbol, F.Located BareType)]
+        refineInstance inst
+          | L.null is_tvs
+          = [(Mb.fromJust $ M.lookup (GM.dropModuleNamesAndUnique $ F.symbol methodId) clsMethodInst, plugType <$> ty) | (methodId, ty) <- methods]
+          | otherwise
+          = todo Nothing "instances with parameters are not supported"
+          where is_tvs = Ghc.is_tvs inst -- forall tvs.
+                is_tys = Ghc.is_tys inst -- Int
+                is_cls = Ghc.is_cls inst
+
+                -- hack. doesn't work when we have module name at the front
+                plugType :: BareType -> BareType
+                plugType = F.substa (\s -> Mb.fromMaybe s (F.val <$> M.lookup s clsMethodInst)) . subts (zip (GM.dropModuleNamesAndUnique . F.symbol <$> Ghc.classTyVars is_cls) (bareOfType <$> is_tys :: [BareType]))
+
+                methods
+                  | Just ms <- M.lookup is_cls refinedMethods
+                  = ms
+                  | otherwise
+                  = impossible Nothing "invariant violated"
+                instMethods = F.tracepp "instMethods" [ F.symbol <$> GM.locNamedThing x |
+                                (d, e) <- concatMap unRec (giCbs src)
+                              , d == Ghc.is_dfun inst
+                              , x <- freeVars mempty e
+                              , GM.isMethod x
+                              ]
+                -- mappend -> $cmappend#a1ox
+                clsMethodInst :: M.HashMap F.Symbol F.LocSymbol
+                clsMethodInst = M.fromList
+                  [((F.dropSym 2 . GM.dropModuleNamesAndUnique . F.val) m, m) | m <- instMethods]
+
+        insts :: [Ghc.ClsInst]
+        insts = mconcat . Mb.maybeToList . gsCls $ src
+
         instClss :: [(Ghc.DFunId, Ghc.Class)]
-        instClss = fmap (\inst -> (Ghc.is_dfun inst, Ghc.is_cls inst)) .
-                   mconcat .
-                   Mb.maybeToList .
-                   gsCls $
-                   src
+        instClss = fmap (\inst -> (GM.tracePpr ("inst variables" ++ (GM.showPpr $ Ghc.is_tvs inst)) $ Ghc.is_dfun inst, Ghc.is_cls inst)) $
+                   insts
         
         refinedClasses :: [Ghc.Class]
         refinedClasses = Mb.mapMaybe resolveClassMaybe clsDecls ++
@@ -236,9 +273,6 @@ compileClasses src env (name, spec) rest  = spec {sigs = sigs'} <> clsSpec
           Ghc.tyConClass_maybe
         unRec (Ghc.Rec xes) = xes
         unRec (Ghc.NonRec x e) = [(x,e)]
-
-                        
-        
 
 
 splitSpecs :: ModName -> [(ModName, Ms.BareSpec)] -> (Ms.BareSpec, Bare.ModSpecs) 
@@ -614,7 +648,7 @@ makeTySigs env sigEnv name spec
 bareTySigs :: Bare.Env -> ModName -> Ms.BareSpec -> [(Ghc.Var, LocBareType)]
 bareTySigs env name spec = checkDuplicateSigs 
   [ (v, t) | (x, t) <- Ms.sigs spec ++ Ms.localSigs spec  
-           , let v   = F.notracepp "LOOKUP-GHC-VAR" $ Bare.lookupGhcVar env name "rawTySigs" x 
+           , let v   = F.tracepp "LOOKUP-GHC-VAR" $ Bare.lookupGhcVar env name "rawTySigs" x 
   ] 
 
 -- checkDuplicateSigs :: [(Ghc.Var, LocSpecType)] -> [(Ghc.Var, LocSpecType)] 

@@ -76,7 +76,7 @@ import           Language.Haskell.Liquid.Bare.Misc
 import           Language.Haskell.Liquid.WiredIn 
 
 myTracepp :: (F.PPrint a) => String -> a -> a
-myTracepp = F.notracepp 
+myTracepp = F.tracepp 
 
 -------------------------------------------------------------------------------
 -- | Creating an environment 
