@@ -98,7 +98,7 @@ trueRefType (RImpF _ t t' _)
 trueRefType (RFun _ t t' _)
   = rFun <$> fresh <*> true t <*> true t'
 
-trueRefType (RApp c ts _  _) | isClass c
+trueRefType (RApp c ts _  _) | isNumCls c
   = rRCls c <$> mapM true ts
 
 trueRefType (RApp c ts rs r)
@@ -154,7 +154,7 @@ refreshRefType (RFun b t t' _)
   | b == F.dummySymbol = rFun <$> fresh <*> refresh t <*> refresh t'
   | otherwise          = rFun     b     <$> refresh t <*> refresh t'
 
-refreshRefType (RApp rc ts _ _) | isClass rc
+refreshRefType (RApp rc ts _ _) | isNumCls rc
   = return $ rRCls rc ts
 
 refreshRefType (RApp rc ts rs r)

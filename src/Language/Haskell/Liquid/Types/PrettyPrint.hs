@@ -176,51 +176,51 @@ type Prec = PprPrec
 ppr_rtype :: (OkRT c tv r) => PPEnv -> Prec -> RType c tv r -> Doc
 --------------------------------------------------------------------------------
 ppr_rtype bb p t@(RAllT _ _)
-  = ppr_forall bb p t
+  = ("RAllT" <+>) $ ppr_forall bb p t
 ppr_rtype bb p t@(RAllP _ _)
-  = ppr_forall bb p t
+  = ("RAllP" <+>) . ppr_forall bb p $ t
 ppr_rtype bb p t@(RAllS _ _)
-  = ppr_forall bb p t
+  = ("RAllS" <+>) . ppr_forall bb p $ t
 ppr_rtype _ _ (RVar a r)
-  = F.ppTy r $ pprint a
+  = ("RVar" <+>) . F.ppTy r $ pprint a
 ppr_rtype bb p t@(RImpF _ _ _ _)
-  = maybeParen p funPrec (ppr_rty_fun bb empty t)
+  = ("RImpF" <+>) . maybeParen p funPrec $ (ppr_rty_fun bb empty t)
 ppr_rtype bb p t@(RFun _ _ _ _)
-  = maybeParen p funPrec (ppr_rty_fun bb empty t)
+  = ("RFun" <+>) . maybeParen p funPrec $ (ppr_rty_fun bb empty t)
 ppr_rtype bb p (RApp c [t] rs r)
   | isList c
-  = F.ppTy r $ brackets (ppr_rtype bb p t) <-> ppReftPs bb p rs
+  = ("RApp" <+>) . F.ppTy r $ brackets (ppr_rtype bb p t) <-> ppReftPs bb p rs
 ppr_rtype bb p (RApp c ts rs r)
   | isTuple c
-  = F.ppTy r $ parens (intersperse comma (ppr_rtype bb p <$> ts)) <-> ppReftPs bb p rs
+  = ("RApp" <+>) . F.ppTy r $ parens (intersperse comma (ppr_rtype bb p <$> ts)) <-> ppReftPs bb p rs
 ppr_rtype bb p (RApp c ts rs r)
   | isEmpty rsDoc && isEmpty tsDoc
-  = F.ppTy r $ ppT c
+  = ("RApp" <+>) . F.ppTy r $ ppT c
   | otherwise
-  = F.ppTy r $ parens $ ppT c <+> rsDoc <+> tsDoc
+  = ("RApp" <+>) . F.ppTy r $ parens $ ppT c <+> rsDoc <+> tsDoc
   where
     rsDoc            = ppReftPs bb p rs
     tsDoc            = hsep (ppr_rtype bb p <$> ts)
     ppT              = ppTyConB bb
 
 ppr_rtype bb p t@(REx _ _ _)
-  = ppExists bb p t
+  = ("REx" <+>) . ppExists bb p $ t
 ppr_rtype bb p t@(RAllE _ _ _)
-  = ppAllExpr bb p t
+  = ("RAllE" <+>) . ppAllExpr bb p $ t
 ppr_rtype _ _ (RExprArg e)
-  = braces $ pprint e
+  = ("RExpArg" <+>) . braces $ pprint e
 ppr_rtype bb p (RAppTy t t' r)
-  = F.ppTy r $ ppr_rtype bb p t <+> ppr_rtype bb p t'
+  = ("RAppTy" <+>) . F.ppTy r $ ppr_rtype bb p t <+> ppr_rtype bb p t'
 ppr_rtype bb p (RRTy e _ OCons t)
-  = sep [braces (ppr_rsubtype bb p e) <+> "=>", ppr_rtype bb p t]
+  = ("RRTy" <+>) $ sep [braces (ppr_rsubtype bb p e) <+> "=>", ppr_rtype bb p t]
 ppr_rtype bb p (RRTy e r o t)
-  = sep [ppp (pprint o <+> ppe <+> pprint r), ppr_rtype bb p t]
+  = ("RRTy" <+>) $ sep [ppp (pprint o <+> ppe <+> pprint r), ppr_rtype bb p t]
   where
     ppe  = (hsep $ punctuate comma (ppxt <$> e)) <+> dcolon
     ppp  = \doc -> text "<<" <+> doc <+> text ">>"
     ppxt = \(x, t) -> pprint x <+> ":" <+> ppr_rtype bb p t
 ppr_rtype _ _ (RHole r)
-  = F.ppTy r $ text "_"
+  = ("RHole" <+>) . F.ppTy r $ text "_"
 
 ppTyConB :: TyConable c => PPEnv -> c -> Doc
 ppTyConB bb

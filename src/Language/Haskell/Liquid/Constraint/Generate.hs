@@ -1447,7 +1447,7 @@ funExpr :: CGEnv -> CoreExpr -> Maybe F.Expr
 
 -- reflectefd functions
 funExpr γ (Var v) | M.member v $ aenv γ
-  = F.EVar <$> (M.lookup v $ aenv γ)
+  = F.tracepp "funExpr" $ F.EVar <$> (M.lookup v $ aenv γ)
 
 -- local function arguments
 funExpr γ (Var v) | S.member v (fargs γ) || GM.isDataConId v

@@ -80,7 +80,7 @@ hsSpecificationP modName specComments specQuotes =
 
 initPStateWithList :: PState
 initPStateWithList 
-  = initPState { empList  = Just (EVar ("GHC.Types.[]" :: Symbol))
+  = (initPState Nothing) { empList  = Just (EVar ("GHC.Types.[]" :: Symbol))
                , singList = Just (\e -> EApp (EApp (EVar ("GHC.Types.:"  :: Symbol)) e) (EVar ("GHC.Types.[]" :: Symbol)))
                }
 
