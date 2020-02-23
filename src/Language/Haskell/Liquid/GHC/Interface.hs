@@ -450,7 +450,7 @@ processTargetModule cfg0 logicMap depGraph specEnv file typechecked bareSpec = d
           "let {infixr 1 <=>; True <=> False = False; _ <=> _ = True}"
           execOptions
   void $ execStmt
-          "let {infix 4 ==; _ == _ = undefined}"
+          "let {infix 4 ==; (==) :: a -> a -> Bool; _ == _ = undefined}"
           execOptions
   void $ execStmt
           "let {infix 4 /=; (/=) :: a -> a -> Bool; _ /= _ = undefined}"
