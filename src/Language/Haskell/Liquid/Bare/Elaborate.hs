@@ -541,7 +541,7 @@ elaborateSpecType' partialTp coreToLogic simplify t =
               dictbs
               (F.notracepp "nonTrivialContEE" . eliminateEta $ F.substa
                 (\x -> Mb.fromMaybe x (L.lookup x subst))
-                ee
+                (F.tracepp "elaborated" $ ee)
               )  -- (GM.dropModuleUnique <$> bs')
             pure (F.notracepp "result" ret)
                            -- (F.substa )

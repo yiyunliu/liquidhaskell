@@ -693,7 +693,7 @@ ofBareType env name l ps t = F.notracepp ("ofBareType:" ++ F.showpp name) $ eith
     -- fail                   = Misc.errorP "error-ofBareType" . F.showpp 
 
 ofBareTypeE :: Env -> ModName -> F.SourcePos -> Maybe [PVar BSort] -> BareType -> Either UserError SpecType 
-ofBareTypeE env name l ps t = ofBRType env name (resolveReft env name l ps t) l t 
+ofBareTypeE env name l ps t = F.tracepp "ofBareTypeE" $ ofBRType env name (const id) l t 
 
 resolveReft :: Env -> ModName -> F.SourcePos -> Maybe [PVar BSort] -> BareType -> [F.Symbol] -> RReft -> RReft 
 resolveReft env name l ps t bs
