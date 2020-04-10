@@ -448,12 +448,14 @@ elaborateSpecType' partialTp coreToLogic simplify t =
     -- RApp tycon args pargs reft
     RApp tycon args pargs ureft@(MkUReft reft@(F.Reft (vv, _)) p)
       | isClass tycon -> pure (t, [])
-      | otherwise -> elaborateReft
-        (reft, t)
-        (pure (RApp tycon args pargs ureft, []))
-        (\bs' ee ->
-          pure (RApp tycon args pargs (MkUReft (F.Reft (vv, ee)) p), bs')
-        )
+      | otherwise -> do
+        args' <- mapM (fmap fst . elaborateSpecType' partialTp coreToLogic simplify) args
+        elaborateReft
+          (reft, t)
+          (pure (RApp tycon args' pargs ureft, []))
+          (\bs' ee ->
+            pure (RApp tycon args' pargs (MkUReft (F.Reft (vv, ee)) p), bs')
+          )
     RAppTy arg res ureft@(MkUReft reft@(F.Reft (vv, _)) p) -> do
       (eArg, bs ) <- elaborateSpecType' partialTp coreToLogic simplify arg
       (eRes, bs') <- elaborateSpecType' partialTp coreToLogic simplify res
