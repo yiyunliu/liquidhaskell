@@ -56,7 +56,8 @@ import qualified Language.Haskell.Liquid.Bare.Class         as Bare
 import qualified Language.Haskell.Liquid.Bare.Check         as Bare 
 import qualified Language.Haskell.Liquid.Bare.Laws          as Bare 
 import qualified Language.Haskell.Liquid.Transforms.CoreToLogic as CoreToLogic
-import           Control.Arrow                    (second)
+import           Control.Arrow                              (second)
+import           Control.Applicative                        ((<|>))
 
 --------------------------------------------------------------------------------
 -- | De/Serializing Spec files -------------------------------------------------
@@ -166,9 +167,9 @@ makeGhcSpec0 cfg src lmap mspecsNoClass = do
     , gsVars   = makeSpecVars cfg src mySpec env measEnv
     , gsTerm   = makeSpecTerm cfg     mySpec env       name
     -- YL: shoudl I add the sigs here?
-    , gsLSpec  = makeLiftedSpec   src env refl sData elaboratedSig qual myRTE lSpec1 {
+    , gsLSpec  = F.tracepp "liftedSpec" $ makeLiftedSpec   src env refl sData elaboratedSig qual myRTE lSpec1 {
                      impSigs   = makeImports mspecs,
-                     expSigs   = [ (F.symbol v, F.sr_sort $ Bare.varSortedReft embs v) | v <- gsReflects refl ],
+                     expSigs   = [ F.tracepp "expSigs" (F.symbol v, F.sr_sort $ Bare.varSortedReft embs v) | v <- gsReflects refl ],
                      dataDecls = dataDecls mySpec2 
                      } 
     }
@@ -879,9 +880,10 @@ allAsmSigs env myName specs = Misc.groupList
       , v            <- Mb.maybeToList (resolveAsmVar env name must x) 
   ] 
 
-resolveAsmVar :: Bare.Env -> ModName -> Bool -> LocSymbol -> Maybe Ghc.Var 
+resolveAsmVar :: Bare.Env -> ModName -> Bool -> LocSymbol -> Maybe Ghc.Var
 resolveAsmVar env name True  lx = Just $ Bare.lookupGhcVar env name "resolveAsmVar-True"  lx
-resolveAsmVar env name False lx = Bare.maybeResolveSym     env name "resolveAsmVar-False" lx  
+resolveAsmVar env name False lx = Bare.maybeResolveSym     env name "resolveAsmVar-False" lx--  <|>
+                                  -- GM.maybeAuxVar (F.val lx)
 
 getAsmSigs :: ModName -> ModName -> Ms.BareSpec -> [(Bool, LocSymbol, LocBareType)]  
 getAsmSigs myName name spec 
