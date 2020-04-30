@@ -722,7 +722,7 @@ makeSpecSig cfg name specs env sigEnv tycEnv measEnv cbs = SpSig
     dicts      = Bare.makeSpecDictionaries env sigEnv specs  
     mySpec     = M.lookupDefault mempty name specs
     asmSigs    = (F.notracepp "tcSelVars" $ Bare.tcSelVars tycEnv )
-              ++ makeAsmSigs env sigEnv name specs 
+              ++ F.notracepp "imported-asm-sigs" (makeAsmSigs env sigEnv name specs )
               ++ [ (x,t) | (_, x, t) <- concat $ map snd (Bare.meCLaws measEnv)]
     tySigs     = strengthenSigs . concat $ 
                   [ [(v, (0, t)) | (v, t,_) <- mySigs                         ]   -- NOTE: these weights are to priortize 
@@ -798,13 +798,14 @@ checkDuplicateSigs xts = case Misc.uniqueByKey symXs  of
 
 
 makeAsmSigs :: Bare.Env -> Bare.SigEnv -> ModName -> Bare.ModSpecs -> [(Ghc.Var, LocSpecType)]
-makeAsmSigs env sigEnv myName specs = 
+makeAsmSigs env sigEnv myName specs = F.tracepp "makeAsmSigs"
+
   [ (x, t) | (name, x, bt) <- rawAsmSigs env myName specs
            , let t = Bare.cookSpecType env sigEnv name (Bare.LqTV x) bt
   ] 
 
 rawAsmSigs :: Bare.Env -> ModName -> Bare.ModSpecs -> [(ModName, Ghc.Var, LocBareType)]
-rawAsmSigs env myName specs = 
+rawAsmSigs env myName specs = F.tracepp "rawAsmSigs" $ 
   [ (m, v, t) | (v, sigs) <- allAsmSigs env myName specs 
               , let (m, t) = myAsmSig v sigs 
   ] 
@@ -873,7 +874,7 @@ takeUnique _ [x] = Just x
 takeUnique f xs  = Ex.throw (f xs) 
 
 allAsmSigs :: Bare.Env -> ModName -> Bare.ModSpecs -> [(Ghc.Var, [(Bool, ModName, LocBareType)])]
-allAsmSigs env myName specs = Misc.groupList
+allAsmSigs env myName specs = F.notracepp "allAsmSigs" $ Misc.groupList
   [ (v, (must, name, t))  
       | (name, spec) <- M.toList specs
       , (must, x, t) <- getAsmSigs myName name spec
@@ -882,8 +883,8 @@ allAsmSigs env myName specs = Misc.groupList
 
 resolveAsmVar :: Bare.Env -> ModName -> Bool -> LocSymbol -> Maybe Ghc.Var
 resolveAsmVar env name True  lx = Just $ Bare.lookupGhcVar env name "resolveAsmVar-True"  lx
-resolveAsmVar env name False lx = Bare.maybeResolveSym     env name "resolveAsmVar-False" lx--  <|>
-                                  -- GM.maybeAuxVar (F.val lx)
+resolveAsmVar env name False lx = F.notracepp "resolveAsmVar" $ Bare.maybeResolveSym     env name "resolveAsmVar-False" lx <|>
+                                  GM.maybeAuxVar (F.val lx)
 
 getAsmSigs :: ModName -> ModName -> Ms.BareSpec -> [(Bool, LocSymbol, LocBareType)]  
 getAsmSigs myName name spec 

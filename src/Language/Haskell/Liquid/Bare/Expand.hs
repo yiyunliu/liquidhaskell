@@ -484,23 +484,23 @@ cookSpecTypeE :: Bare.Env -> Bare.SigEnv -> ModName -> Bare.PlugTV Ghc.Var -> Lo
 -----------------------------------------------------------------------------------------
 cookSpecTypeE env sigEnv name x bt
   = id 
-  . F.tracepp "DEBUG"
+  . F.notracepp "DEBUG"
   . fmap (plugHoles sigEnv name x)
   . fmap (fmap (addTyConInfo   embs tyi))
   . fmap (Bare.txRefSort tyi embs)     
   . fmap (fmap txExpToBind)      -- What does this function DO
-  . F.tracepp "DEBUG2"
+  . F.notracepp "DEBUG2"
   . fmap (specExpandType rtEnv)                        
   . fmap (fmap (generalizeWith x))
-  . F.tracepp "DEBUG4"
+  . F.notracepp "DEBUG4"
   . fmap (maybePlug       sigEnv name x)
-  . F.tracepp "DEBUG3.5"
+  . F.notracepp "DEBUG3.5"
   -- . fmap (Bare.qualifyTop    env name l)
-  . F.tracepp "DEBUG3"
+  . F.notracepp "DEBUG3"
   . bareSpecType       env name
-  . F.tracepp "DEBUG5"
+  . F.notracepp "DEBUG5"
   . bareExpandType     rtEnv
-  . F.tracepp "DEBUG6"
+  . F.notracepp "DEBUG6"
   $ bt 
   where 
     _msg i = "cook-" ++ show i ++ " : " ++ F.showpp x

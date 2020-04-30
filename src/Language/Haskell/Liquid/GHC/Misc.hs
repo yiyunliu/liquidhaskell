@@ -187,7 +187,7 @@ maybeAuxVar s
   | otherwise = Nothing
   where (sym, uid) = splitModuleUnique s
         -- 'x' is chosen for no particular reason..
-        name = mkInternalName (mkUnique 'x' uid) occ noSrcSpan
+        name = mkInternalName (mkUniqueGrimily uid) occ noSrcSpan
         occ = mkVarOcc (T.unpack (symbolText sym))
 
 stringTyCon :: Char -> Int -> String -> TyCon

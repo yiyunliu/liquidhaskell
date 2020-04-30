@@ -14,13 +14,13 @@ module Language.Haskell.Liquid.Bare.Elaborate
 where
 
 import qualified Language.Fixpoint.Types       as F
-import Control.Arrow
+import           Control.Arrow
 import qualified Language.Haskell.Liquid.GHC.Misc
                                                as GM
 import           Language.Haskell.Liquid.Types.Visitors
 import           Language.Haskell.Liquid.Types.Types
 import           Language.Haskell.Liquid.Types.RefType
-                                                ( )
+                                                ( ofType )
 import qualified Data.List                     as L
 import qualified Data.HashMap.Strict           as M
 import qualified Data.HashSet                  as S
@@ -52,12 +52,12 @@ import           VarEnv                         ( lookupVarEnv
                                                 , lookupInScope
                                                 )
 import           CoreUtils                      ( mkTick )
-import qualified           Data.HashMap.Strict    as M
+import qualified CoreUtils                     as Utils
+import qualified Data.HashMap.Strict           as M
 
 lookupIdSubstAll :: O.SDoc -> M.HashMap Id CoreExpr -> Id -> CoreExpr
-lookupIdSubstAll doc env v
-  | Just e <- M.lookup v env         = e
-  | otherwise                           = Var v
+lookupIdSubstAll doc env v | Just e <- M.lookup v env = e
+                           | otherwise                = Var v
         -- Vital! See Note [Extending the Subst]
   -- | otherwise = WARN( True, text "CoreSubst.lookupIdSubst" <+> doc <+> ppr v
   --                           $$ ppr in_scope)
@@ -84,12 +84,10 @@ subst_expr_all doc subst expr = go expr
 
   go (Lam  bndr    body) = Lam bndr (subst_expr_all doc subst body)
 
-  go (Let bind body) = Let (mapBnd go bind) (subst_expr_all doc subst body)
+  go (Let  bind    body) = Let (mapBnd go bind) (subst_expr_all doc subst body)
 
-  go (Case scrut bndr ty alts) = Case (go scrut)
-                                      bndr
-                                      ty
-                                      (map (go_alt subst) alts)
+  go (Case scrut bndr ty alts) =
+    Case (go scrut) bndr ty (map (go_alt subst) alts)
 
   go_alt subst (con, bndrs, rhs) = (con, bndrs, subst_expr_all doc subst rhs)
 
@@ -111,10 +109,9 @@ buildDictSubst :: CoreProgram -> M.HashMap Id CoreExpr
 buildDictSubst = cata f
  where
   f Nil = M.empty
-  f (Cons b s)
-    | NonRec x e <- b, isDFunId x -- || isDictonaryId x
-    = M.insert x e s
-    | otherwise = s
+  f (Cons b s) | NonRec x e <- b, isDFunId x -- || isDictonaryId x
+                                             = M.insert x e s
+               | otherwise                   = s
 
 buildSimplifier :: CoreProgram -> CoreExpr -> Ghc CoreExpr
 buildSimplifier cbs e = pure e-- do
@@ -265,18 +262,19 @@ plugType t = refix . f
 -- YL: tweak this function to see if ghc accepts explicit dictionary binders
 -- returning both expressions and binders since ghc adds unique id to the expressions
 
-collectSpecTypeBinders :: SpecType -> [F.Symbol]
+-- | returns (lambda binders, forall binders)
+collectSpecTypeBinders :: SpecType -> ([F.Symbol], [F.Symbol])
 collectSpecTypeBinders = para $ \case
-  RFunF bind (tin, _) (_, bs) _ | isClassType tin -> bs
-                                | otherwise       -> bind : bs
-  RImpFF bind (tin, _) (_, bs) _ | isClassType tin -> bs
-                                 | otherwise       -> bind : bs
-  RAllEF  b _        (_, res) -> b : res
-  RAllTF  _ (_, res) _        -> res
-  RExF    b _        (_, res) -> b : res
-  RAppTyF _ (_, res) _        -> res
-  RRTyF _ _ _ (_, res)        -> res
-  _                           -> []
+  RFunF bind (tin, _) (_, (bs, abs)) _ | isClassType tin -> (bs, abs)
+                                       | otherwise       -> (bind : bs, abs)
+  RImpFF bind (tin, _) (_, (bs, abs)) _ | isClassType tin -> (bs, abs)
+                                        | otherwise       -> (bind : bs, abs)
+  RAllEF b _ (_, (bs, abs))  -> (b : bs, abs)
+  RAllTF (RTVar (RTV ab) _) (_, (bs, abs)) _ -> (bs, F.symbol ab : abs)
+  RExF b _ (_, (bs, abs))    -> (b : bs, abs)
+  RAppTyF _ (_, (bs, abs)) _ -> (bs, abs)
+  RRTyF _ _ _ (_, (bs, abs)) -> (bs, abs)
+  _                          -> ([], [])
 
 -- really should be fused with collectBinders. However, we need the binders
 -- to correctly convert fixpoint expressions to ghc expressions because of
@@ -429,7 +427,7 @@ elaborateSpecType' partialTp coreToLogic simplify t =
         (pure (RAllT (RTVar tv ty) eTout ureft, bs))
         (\bs' ee ->
           let (eeRenamed, canonicalBinders) =
-                  canonicalizeDictBinder bs (ee, bs')
+                canonicalizeDictBinder bs (ee, bs')
           in  pure
                 ( RAllT (RTVar tv ty) eTout (MkUReft (F.Reft (vv, eeRenamed)) p)
                 , canonicalBinders
@@ -449,7 +447,9 @@ elaborateSpecType' partialTp coreToLogic simplify t =
     RApp tycon args pargs ureft@(MkUReft reft@(F.Reft (vv, _)) p)
       | isClass tycon -> pure (t, [])
       | otherwise -> do
-        args' <- mapM (fmap fst . elaborateSpecType' partialTp coreToLogic simplify) args
+        args' <- mapM
+          (fmap fst . elaborateSpecType' partialTp coreToLogic simplify)
+          args
         elaborateReft
           (reft, t)
           (pure (RApp tycon args' pargs ureft, []))
@@ -466,7 +466,7 @@ elaborateSpecType' partialTp coreToLogic simplify t =
         (pure (RAppTy eArg eResRenamed ureft, canonicalBinders))
         (\bs'' ee ->
           let (eeRenamed, canonicalBinders') =
-                  canonicalizeDictBinder canonicalBinders (ee, bs'')
+                canonicalizeDictBinder canonicalBinders (ee, bs'')
           in  pure
                 ( RAppTy eArg eResRenamed (MkUReft (F.Reft (vv, eeRenamed)) p)
                 , canonicalBinders'
@@ -505,17 +505,28 @@ elaborateSpecType' partialTp coreToLogic simplify t =
         let
           querySpecType =
             plugType (rFun vv vvTy boolType) partialTp :: SpecType
-          origBinders = collectSpecTypeBinders querySpecType
+
+          -- we need to do the renaming to account for the different unique id picked by ghc during each evaluation
+          -- the type level renaming wouldn't be needed if we don't have casts in our expressions
+          (origBinders, origTyBinders) = F.tracepp "collectSpecTypeBinders"
+            $ collectSpecTypeBinders querySpecType
+
+
+
           hsExpr =
             buildHsExpr (fixExprToHsExpr (S.fromList origBinders) e)
                         querySpecType :: LHsExpr GhcPs
           exprWithTySigs =
             GM.notracePpr "exprWithTySigs" $ noLoc $ ExprWithTySig
-              (mkLHsSigWcType $ specTypeToLHsType
-                (F.notracepp "querySpecType" querySpecType)
+              (mkLHsSigWcType $ GM.tracePpr
+                ("specTypeToLhsType" ++ F.showpp querySpecType)
+                (specTypeToLHsType querySpecType)
               )
               hsExpr :: LHsExpr GhcPs
         (msgs, mbExpr) <- GM.elaborateHsExprInst exprWithTySigs
+
+        -- grab the forall variables from the type of mbExpr
+
         case mbExpr of
           Nothing -> panic
             Nothing
@@ -523,11 +534,17 @@ elaborateSpecType' partialTp coreToLogic simplify t =
             ++ GM.showPpr exprWithTySigs
             ++ "\n"
             ++ -- GM.showPpr
-                 (GM.showSDoc $ O.sep (pprErrMsgBagWithLoc (snd msgs)))
+               (GM.showSDoc $ O.sep (pprErrMsgBagWithLoc (snd msgs)))
             )
           Just eeWithLamsCore -> do
             eeWithLamsCore' <- simplify eeWithLamsCore
             let
+              (_, tyBinders) =
+                collectSpecTypeBinders
+                  . ofType
+                  . Utils.exprType
+                  $ eeWithLamsCore'
+              substTy = zip tyBinders origTyBinders
               eeWithLams =
                 coreToLogic (GM.notracePpr "eeWithLamsCore" eeWithLamsCore')
               (bs', ee) = F.notracepp "grabLams" $ grabLams ([], eeWithLams)
@@ -541,9 +558,16 @@ elaborateSpecType' partialTp coreToLogic simplify t =
                   "Oops, Ghc gave back more/less binders than I expected"
             ret <- nonTrivialCont
               dictbs
-              (F.notracepp "nonTrivialContEE" . eliminateEta $ F.substa
-                (\x -> Mb.fromMaybe x (L.lookup x subst))
-                (F.tracepp "elaborated" $ ee)
+              ( renameBinderCoerc (\x -> Mb.fromMaybe x (L.lookup x substTy))
+              . F.substa (\x -> Mb.fromMaybe x (L.lookup x subst))
+              $ F.tracepp
+                  (  "elaborated: subst "
+                  ++ F.showpp substTy
+                  ++ "  "
+                  ++ F.showpp
+                       (ofType $ Utils.exprType eeWithLamsCore' :: SpecType)
+                  )
+                  ee
               )  -- (GM.dropModuleUnique <$> bs')
             pure (F.notracepp "result" ret)
                            -- (F.substa )
@@ -557,6 +581,48 @@ elaborateSpecType' partialTp coreToLogic simplify t =
   -- dropBinderUnique :: [F.Symbol] -> F.Expr -> F.Expr
   -- dropBinderUnique binders = F.notracepp "ElaboratedExpr"
   --   . F.substa (\x -> if L.elem x binders then GM.dropModuleUnique x else x)
+
+renameBinderCoerc :: (F.Symbol -> F.Symbol) -> F.Expr -> F.Expr
+renameBinderCoerc f = rename
+ where
+  renameSort = renameBinderSort f
+  rename e'@(F.ESym _          ) = e'
+  rename e'@(F.ECon _          ) = e'
+  rename e'@(F.EVar _          ) = e'
+  rename (   F.EApp e0 e1      ) = F.EApp (rename e0) (rename e1)
+  rename (   F.ENeg e0         ) = F.ENeg (rename e0)
+  rename (   F.EBin bop e0 e1  ) = F.EBin bop (rename e0) (rename e1)
+  rename (   F.EIte e0  e1 e2  ) = F.EIte (rename e0) (rename e1) (rename e2)
+  rename (   F.ECst e' t       ) = F.ECst (rename e') (renameSort t)
+  -- rename (F.ELam (x, t) e') = F.ELam (x, renameSort t) (rename e')
+  rename (   F.PAnd es         ) = F.PAnd (rename <$> es)
+  rename (   F.POr  es         ) = F.POr (rename <$> es)
+  rename (   F.PNot e'         ) = F.PNot (rename e')
+  rename (   F.PImp e0 e1      ) = F.PImp (rename e0) (rename e1)
+  rename (   F.PIff e0 e1      ) = F.PIff (rename e0) (rename e1)
+  rename (   F.PAtom brel e0 e1) = F.PAtom brel (rename e0) (rename e1)
+  rename (F.ECoerc t0 t1 e') =
+    F.ECoerc (renameSort t0) (renameSort t1) (rename e')
+  rename e = panic
+    Nothing
+    ("renameBinderCoerc: Not sure how to handle the expression " ++ F.showpp e)
+
+
+
+renameBinderSort :: (F.Symbol -> F.Symbol) -> F.Sort -> F.Sort
+renameBinderSort f = rename
+ where
+  rename F.FInt             = F.FInt
+  rename F.FReal            = F.FReal
+  rename F.FNum             = F.FNum
+  rename F.FFrac            = F.FFrac
+  rename (   F.FObj s     ) = F.FObj (f s)
+  rename t'@(F.FVar _     ) = t'
+  rename (   F.FFunc t0 t1) = F.FFunc (rename t0) (rename t1)
+  rename (   F.FAbs  x  t') = F.FAbs x (rename t')
+  rename t'@(F.FTC _      ) = t'
+  rename (   F.FApp t0 t1 ) = F.FApp (rename t0) (rename t1)
+
 
 
 
@@ -673,16 +739,19 @@ specTypeToLHsType :: SpecType -> LHsType GhcPs
 -- surprised that the type application is necessary
 specTypeToLHsType =
   flip (ghylo (distPara @SpecType) distAna) (fmap pure . project) $ \case
-    RVarF (RTV tv) _ -> nlHsTyVar (symbolToRdrNameNs tvName (F.symbol tv)) -- (getRdrName tv)
+    RVarF (RTV tv) _ -> nlHsTyVar
+      (GM.tracePpr ("varRdr" ++ F.showpp (F.symbol tv)) $ getRdrName tv) --(symbolToRdrNameNs tvName (F.symbol tv)) 
     RFunF _ (tin, tin') (_, tout) _
       | isClassType tin -> noLoc $ HsQualTy NoExt (noLoc [tin']) tout
       | otherwise       -> nlHsFunTy tin' tout
     RImpFF _ (_, tin) (_, tout) _              -> nlHsFunTy tin tout
     RAllTF (ty_var_value -> (RTV tv)) (_, t) _ -> noLoc $ HsForAllTy
       NoExt
-      (userHsTyVarBndrs noSrcSpan
-                        [-- getRdrName tv
-                         (symbolToRdrNameNs tvName (F.symbol tv))]
+      (userHsTyVarBndrs
+        noSrcSpan
+        [GM.tracePpr ("allRdr" ++ F.showpp (F.symbol tv)) $ getRdrName tv
+                         -- (symbolToRdrNameNs tvName (F.symbol tv))
+                                                                         ]
       )
       t
     RAllPF _ (_, ty)                    -> ty
