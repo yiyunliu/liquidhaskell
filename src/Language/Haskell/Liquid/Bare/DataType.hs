@@ -19,7 +19,6 @@ module Language.Haskell.Liquid.Bare.DataType
   -- , makeTyConEmbeds
   
   -- * Type Classes
-  , makeClassDataDecl
   , makeClassDataDecl'
   , elaborateClassDcp
   , stripDataConPPred
@@ -391,9 +390,6 @@ makeConTypes env (name, spec)
     dcs  = Ms.dataDecls spec 
     vdcs = Ms.dvariance spec 
 
-makeClassDataDecl :: Bare.Env -> (ModName, Ms.BareSpec) -> [DataDecl]
-makeClassDataDecl env (m, spec) = classDeclToDataDecl env m <$> Ms.classes spec
-
 makeClassDataDecl' :: [(Ghc.Class, [(Ghc.Id, LocBareType)])] -> [DataDecl]
 makeClassDataDecl' = fmap (uncurry classDeclToDataDecl')
 
@@ -439,45 +435,6 @@ classDeclToDataDecl' cls refinedIds = F.notracepp "classDeclToDataDecl" $ DataDe
         classIds = Ghc.classAllSelIds cls
         classDc  = Ghc.classDataCon cls
   
-
-
-classDeclToDataDecl :: Bare.Env -> ModName -> RClass LocBareType -> DataDecl
-classDeclToDataDecl env m rcls = DataDecl
-          { tycName   = DnName (btc_tc . rcName $ rcls)
-          , tycTyVars = as
-          , tycPVars  = []
-          , tycDCons  = [dctor]
-          , tycSrcPos = F.loc . btc_tc . rcName $ rcls
-          , tycSFun   = Nothing
-          , tycPropTy = Nothing
-          , tycKind   = DataUser}
-          -- YL : fix it
-  where Just classTc   = (Bare.maybeResolveSym env m "makeClassDataDecl" . btc_tc . rcName $ rcls) >>= Ghc.tyConClass_maybe
-        classDc        = Ghc.classDataCon classTc
-        as             = F.symbol <$> rcTyVars rcls
-        dctor          = DataCtor
-          { dcName   = F.dummyLoc $ F.symbol classDc
-          , dcTyVars = as
-          , dcTheta  = []
-          , dcFields = (F.val *** F.val) <$> rcMethods rcls
-          , dcResult = Nothing}
-
--- makeClassDataConP :: Bare.Env
---                   -> (Ghc.Class, [(Ghc.Id, LocBareType)], [Ghc.ClsInst])
---                   -> DataConP
--- makeClassDataConP env (cls, sigs, insts) = _
---   where
---     -- YL: This function is partial. Fails when the class is a newtype
---     Just name = Ghc.nameModule_maybe (Ghc.getName cls)
---     c' = Ghc.classDataCon cls
---     -- resolved field signatures. need to automatically generate the missing ones
---     ts' = Bare.ofBareType env _modulename _loc_beg Nothing <$> _ts
---     -- result type
---     t0' = RT.ofType $ Ghc.dataConOrigResTy c'
---     _cfg = getConfig env
---     -- don't need this step
---     -- (yts, ot) = qualifyDataCtor (not isGadt) name dLoc (zip )
---     dLoc = F.Loc _loc_beg _loc_end
 
         
 elaborateClassDcp :: (Ghc.CoreExpr -> F.Expr) -> (Ghc.CoreExpr -> Ghc.Ghc Ghc.CoreExpr) -> DataConP -> Ghc.Ghc (DataConP , DataConP)
